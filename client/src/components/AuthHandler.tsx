@@ -24,7 +24,7 @@ export function AuthHandler() {
           
           const targetRoute = pendingFeature && featureRoutes[pendingFeature] 
             ? featureRoutes[pendingFeature] 
-            : '/dashboard'; // Default fallback
+            : '/home'; // Default fallback to home instead of dashboard
           
           setLocation(targetRoute);
         }
