@@ -1,0 +1,1679 @@
+CreateAI App - Complete Development Specification
+
+Project Overview
+Build a minimalist, Desktop and Mobile friendly PWA workspace for content creation, CRM sync, reporting, and KPIs. This browser-based application enables ideation and production of Podcasts, Blogs, and E-Books; automatically syncs meeting intelligence and voice updates into HubSpot; provides weekly/monthly performance summaries; and surfaces KPIs in a clean dashboard. The overall goal and purpose of the Lab portion of the app is to have AI generate content off of a) user prompts or b) based on the rule set for each blog and/or podcast. While there should be visibility into all of the steps the overall goal is to initiate content by a prompt or a button push (based on the content rules for that blog or podcast) and it be published to the endpoint (Wordpress, Transitor, etc) with zero human interaction. Eventually the app will support scheduling with an approval dashboard showing all content that was created the ability to quickly review and publish with one click.
+Tagline: A minimalist, workspace for content creation, CRM sync, reporting, and KPIs.
+
+Core Architecture
+
+Frontend Stack
+* React 18 with TypeScript
+* Tailwind CSS + shadcn/ui components
+* PWA with Workbox for offline support
+* Responsive Design: Bottom tab bar (mobile), split view (iPad), sidebar (desktop)
+* Offline Queues: Dexie.js for local storage, background sync on reconnect
+* Performance Targets: LCP ≤ 2.5s, route TTI ≤ 500ms
+* Touch Targets: 44-48px minimum, swipe actions for mobile
+
+Backend Stack
+* Node.js with Fastify framework
+* TypeScript throughout
+* Prisma ORM with PostgreSQL (Neon/Supabase)
+* Redis for queues, caching, and snapshots (Redis Streams)
+* Object Storage: Supabase Storage or Google Cloud Storage
+* pgvector extension for embeddings
+* OpenTelemetry for logging and monitoring
+
+AI & Integration Layer
+* Provider-agnostic AI router with fallback strategies
+* LLM Tools: summarize, extractCRMFields, contentDraft, socialVariants
+* Guardrails: Token budgets, PII scrubbing, banned phrases detection
+* OAuth 2.0/PKCE for external integrations
+* Webhook handlers with retry logic and dead letter queues
+
+Authentication & Organization Model
+Authentication
+* Google OIDC with PKCE flow
+* httpOnly cookies for sessions
+* Refresh token rotation
+* Optional WebAuthn for quick-lock on mobile
+* Session timeout: 24 hours with auto-refresh
+
+User Roles & Permissions
+* Owner: Full access, billing, user management
+* Admin: All features except billing and user deletion
+* Editor: Content creation, CRM sync, reporting
+* Contributor: Content creation only
+* Viewer: Read-only dashboard and reports
+
+Organization Structure
+interface Organization {
+  id: string;
+  name: string;
+  settings: OrgSettings;
+  billingPlan: 'starter' | 'professional' | 'enterprise';
+  createdAt: Date;
+  updatedAt: Date;
+}
+
+interface User {
+  id: string;
+  email: string;
+  name: string;
+  avatar?: string;
+  role: UserRole;
+  orgId: string;
+  integrations: UserIntegration[];
+  settings: UserSettings;
+}
+
+Core Modules
+
+1. The Lab (Content Creation)
+
+Podcasts
+Host Types: Single, Morning Show, Interview Host Profiles: ElevenLabs voice mapping, personality settings, SSML preferences
+Workflow States:
+OUTLINE → SCRIPT → VOICE_GENERATION → SHOW_NOTES → PUBLISHED → ARCHIVED
+Features:
+* Project templates with customizable settings
+* SSML-aware script generation with speaker tags
+* ElevenLabs TTS integration (MP3, 44.1kHz, 128kbps)
+* Audio stitching with cues (ffmpeg, -16 LUFS normalization)
+* Auto-publish to Transistor
+* WordPress post generation with Blubrry/PowerPress enclosure
+* Automated show notes from script/timeline
+* Episode analytics and performance tracking
+Error Handling:
+* TTS failure → retry with different voice or manual override
+* Upload failure → queue for retry with exponential backoff
+* Script generation timeout → save partial progress, allow manual completion
+
+Blogs
+Workflows:
+* Guided Flow: Prompt → Outline → Draft → SEO Review → WordPress Draft
+* Skip-to-Draft: Direct prompt to WordPress draft
+Features:
+* Project tone/guardrails and SEO defaults
+* Adobe Stock hero image suggestions and licensing
+* SEO optimization (meta tags, descriptions, internal linking)
+* Content structure (H1, H2/H3 hierarchy, TL;DR, callouts)
+* Tag suggestions and internal link recommendations
+* WordPress integration with featured image attachment
+* A/B testing for titles and meta descriptions (future)
+Content Quality Controls:
+* Readability score validation
+* Duplicate content detection
+* Brand voice consistency checks
+* SEO score with improvement suggestions
+E-Books (5-10 pages)
+Features:
+* Adaptable templates (page size, fonts, cover layouts)
+* Adobe Stock cover and inline image integration
+* AI-generated outline, chapters, summaries, and pull quotes
+* Export formats: PDF + EPUB
+* WordPress landing page with CTA buttons
+* Download tracking and lead capture
+* Newsletter conversion tracking
+
+2. Sync (AI-Assisted CRM)
+Meeting Intelligence (Outlook + Otter.ai → HubSpot)
+Process Flow:
+1. Ingest Outlook calendar (ICS subscription, Microsoft Graph API later)
+2. Fetch Otter.ai meeting summaries (API or email parsing)
+3. Match attendees by email to HubSpot contacts
+4. Auto-create contacts/companies if missing
+5. Generate meeting summary with key points and action items
+6. One-tap approval to log HubSpot meeting + notes
+7. Optional task creation with SLA tracking
+Data Privacy:
+* Summary-only retention by default
+* Optional transcript retention (30-day default)
+* User-configurable retention policies
+* GDPR compliance for EU users
+Voice Capture → CRM Updates
+Features:
+* Speech-to-text processing
+* Intent parsing for CRM actions (notes, tasks, stage changes)
+* Contact/Company/Deal search and updates
+* Offline queue with sync on reconnect
+* Hands-free operation with voice confirmations
+Supported Actions:
+* Add notes to contacts/companies/deals
+* Create follow-up tasks with due dates
+* Update deal stages and amounts
+* Schedule next meetings
+* Create new contacts with basic info
+
+3. Report (Performance Analytics)
+Dashboard Cards
+Current Data Cards:
+* Social Media (engagement, reach, clicks)
+* Website Traffic (GA4 integration)
+* Blog Performance (views, engagement, conversions)
+* Podcast Analytics (downloads, retention, subscribers)
+* Event Tracking (attendance, outcomes)
+Trending Indicators:
+* Period-over-period comparisons
+* Growth rate calculations
+* Performance alerts for significant changes
+Custom Report Builder
+Features:
+* Date range selection (Weekly/Monthly/Quarterly/Annual/Custom)
+* Fiscal calendar alignment for accurate quarters
+* Section selection (mix and match data sources)
+* Multiple output formats (in-app, email, PDF)
+* Scheduled report generation
+* Report sharing and collaboration
+Drill-down Capabilities:
+* Social: Platform tabs, top posts, engagement trends
+* Web: GA4 trends, landing pages, traffic sources
+* Blogs: Post performance, SEO rankings, conversion rates
+* Podcasts: Episode analytics, listener demographics
+* Events: Attendance tracking, ROI calculations
+
+4. Dashboard (Live KPIs)
+KPI Tiles
+CRM Metrics:
+* Pipeline value and velocity
+* Lead generation and conversion rates
+* Meeting booking and completion rates
+* Deal closure rates by source
+Marketing Metrics:
+* Website traffic and conversions
+* Social media engagement
+* Email marketing performance
+* Content performance scores
+Content Metrics:
+* Blog post views and engagement
+* Podcast downloads and retention
+* E-book downloads and conversions
+* Video content performance
+Performance Features:
+* Real-time updates from snapshot jobs
+* Staleness indicators (>24h badge)
+* Fast drill-downs (<1.5s load time)
+* Direct links to data sources
+* Customizable tile layouts
+* Mobile-optimized views
+
+Integration Specifications & Limits
+HubSpot CRM
+Scopes Required:
+* contacts (read/write)
+* companies (read/write)
+* deals (read/write)
+* timeline (write)
+* settings (read)
+API Limits:
+* Daily: 250,000 requests
+* Burst: 100 requests per 10 seconds
+* Search API: 5 requests per second
+Rate Limiting Strategy:
+* Implement exponential backoff
+* Queue non-urgent updates
+* Batch operations when possible
+* Cache frequently accessed data
+Health Monitoring:
+* Connection status checks every 15 minutes
+* API quota usage tracking (warn at 80%)
+* Webhook delivery success rates
+* Response time monitoring
+
+ElevenLabs (Text-to-Speech)
+API Limits:
+* Starter: 10,000 characters/month
+* Creator: 30,000 characters/month
+* Independent Publisher: 100,000 characters/month
+* Growing Business: 500,000 characters/month
+Features Used:
+* Voice synthesis with SSML support
+* Voice cloning (higher tiers)
+* Multiple voice profiles
+* Audio quality settings
+Rate Limiting:
+* 2 requests per second
+* Character count tracking per user
+* Queue management for bulk operations
+* Preview mode with shorter samples
+Health Monitoring:
+* Voice availability checks
+* Generation success rates
+* Audio quality validation
+* Character quota tracking
+
+Transistor (Podcast Hosting)
+API Limits:
+* Professional: 10,000 requests/month
+* Business: 25,000 requests/month
+Features:
+* Episode publishing
+* Analytics data retrieval
+* RSS feed management
+* Subscriber statistics
+Rate Limiting:
+* 60 requests per minute
+* Batch analytics requests
+* Cache episode data
+Health Monitoring:
+* Upload success rates
+* RSS feed validation
+* Analytics sync status
+* Storage usage tracking
+
+WordPress + Blubrry/PowerPress
+Integration Features:
+* Post creation and updates
+* Featured image attachment
+* Plugin compatibility (Blubrry/PowerPress)
+* SEO plugin integration (Yoast/RankMath)
+Rate Limiting:
+* Respect WordPress hosting limits
+* Queue bulk operations
+* Cache post metadata
+Health Monitoring:
+* Connection validation
+* Plugin compatibility checks
+* Post publication success rates
+
+Outlook Calendar
+Integration Methods:
+* Phase 1: ICS subscription
+* Phase 2: Microsoft Graph API
+Graph API Limits:
+* 10,000 requests per 10 minutes per application
+* Throttling based on resource units
+Health Monitoring:
+* Calendar sync status
+* Event parsing success rates
+* Attendee matching accuracy
+
+Otter.ai
+API Limits:
+* Pro: 6,000 minutes/month
+* Business: 6,000 minutes/month per user
+Integration Options:
+* Direct API integration
+* Email forward parsing
+* Webhook notifications
+Health Monitoring:
+* Transcription accuracy
+* Processing time tracking
+* Summary generation success
+
+Adobe Stock
+API Limits:
+* Standard: 5,000 requests/month
+* Premium: 25,000 requests/month
+Features:
+* Image search and preview
+* License management
+* Automated tagging
+* Size optimization
+Rate Limiting:
+* 60 requests per minute
+* Cache search results
+* Optimize for search refinement
+
+Google Analytics 4
+API Limits:
+* Core Reporting API: 100,000 requests/day
+* Real-time API: 10,000 requests/hour
+Metrics Tracked:
+* Website traffic and user behavior
+* Content performance
+* Conversion tracking
+* Goal completions
+Health Monitoring:
+* Data freshness validation
+* Report generation success
+* Quota usage tracking
+
+Social Media Platforms
+LinkedIn API
+Limits:
+* Community Management: 500 requests/day
+* Marketing Developer: 100,000 requests/day
+Twitter/X API
+Limits:
+* Basic: 10,000 requests/month
+* Pro: 1,000,000 requests/month
+Instagram Basic Display
+Limits:
+* 200 requests per hour per user
+
+Data Model
+Core Entities
+// Organizations and Users
+interface Organization {
+  id: string;
+  name: string;
+  settings: OrgSettings;
+  billingPlan: BillingPlan;
+  integrationLimits: IntegrationLimits;
+  createdAt: Date;
+  updatedAt: Date;
+}
+
+interface User {
+  id: string;
+  email: string;
+  name: string;
+  role: UserRole;
+  orgId: string;
+  integrations: UserIntegration[];
+  preferences: UserPreferences;
+  quotaUsage: QuotaUsage;
+}
+
+// Integrations and Health
+interface Integration {
+  id: string;
+  userId: string;
+  provider: IntegrationProvider;
+  status: 'connected' | 'error' | 'expired' | 'disabled';
+  scopes: string[];
+  credentials: EncryptedCredentials;
+  healthStatus: HealthStatus;
+  quotaUsage: QuotaUsage;
+  lastSync: Date;
+  createdAt: Date;
+  updatedAt: Date;
+}
+
+interface HealthStatus {
+  isHealthy: boolean;
+  lastCheck: Date;
+  responseTime?: number;
+  errorCount: number;
+  lastError?: string;
+  quotaUsage?: {
+    used: number;
+    limit: number;
+    resetDate: Date;
+  };
+}
+
+// Content Management
+interface ContentItem {
+  id: string;
+  type: 'podcast' | 'blog' | 'ebook';
+  orgId: string;
+  projectId: string;
+  title: string;
+  status: ContentStatus;
+  metadata: ContentMetadata;
+  versions: ContentVersion[];
+  assets: Asset[];
+  publishedRefs: PublishedReference[];
+  analytics: ContentAnalytics;
+  createdBy: string;
+  createdAt: Date;
+  updatedAt: Date;
+}
+
+interface ContentVersion {
+  id: string;
+  contentItemId: string;
+  version: number;
+  content: any; // JSON content specific to type
+  changeLog: string;
+  createdBy: string;
+  createdAt: Date;
+}
+
+// Podcast Specific
+interface PodcastProject {
+  id: string;
+  orgId: string;
+  name: string;
+  hostType: 'single' | 'morning_show' | 'interview';
+  hostProfiles: HostProfile[];
+  settings: PodcastSettings;
+  transistorShowId?: string;
+  wordpressSettings?: WordPressSettings;
+}
+
+interface Episode {
+  id: string;
+  projectId: string;
+  title: string;
+  status: EpisodeStatus;
+  outline?: string;
+  script?: ScriptData;
+  audioAssets: AudioAsset[];
+  showNotes?: string;
+  publishedRefs: PublishedReference[];
+  analytics: EpisodeAnalytics;
+}
+
+// CRM Sync
+interface MeetingCapture {
+  id: string;
+  orgId: string;
+  userId: string;
+  eventRef: string; // Outlook event ID
+  otterRef?: string;
+  attendees: MeetingAttendee[];
+  summary?: string;
+  keyPoints: string[];
+  actionItems: ActionItem[];
+  transcriptUrl?: string;
+  matched: CRMMatch;
+  status: 'pending' | 'approved' | 'snoozed' | 'rejected';
+  retentionPolicy: RetentionPolicy;
+  createdAt: Date;
+  updatedAt: Date;
+}
+
+interface VoiceUpdate {
+  id: string;
+  userId: string;
+  audioUrl: string;
+  transcript: string;
+  parsed: ParsedUpdate;
+  targetEntity: CRMEntity;
+  actions: CRMAction[];
+  status: 'pending' | 'approved' | 'completed' | 'failed';
+  syncLogId?: string;
+  createdAt: Date;
+}
+
+// Reporting and Analytics
+interface MetricSnapshot {
+  id: string;
+  orgId: string;
+  source: string;
+  metrics: Record<string, any>;
+  timestamp: Date;
+  createdAt: Date;
+}
+
+interface Report {
+  id: string;
+  orgId: string;
+  name: string;
+  sections: ReportSection[];
+  dateRange: DateRange;
+  fiscalCalendar?: FiscalCalendar;
+  schedule?: ReportSchedule;
+  outputs: ReportOutput[];
+  createdBy: string;
+  createdAt: Date;
+}
+
+// Error Handling and Resilience
+interface ErrorLog {
+  id: string;
+  orgId: string;
+  userId?: string;
+  operation: string;
+  error: SerializedError;
+  context: Record<string, any>;
+  severity: 'low' | 'medium' | 'high' | 'critical';
+  resolved: boolean;
+  createdAt: Date;
+}
+
+interface RetryQueue {
+  id: string;
+  operation: string;
+  payload: any;
+  attempts: number;
+  maxAttempts: number;
+  nextRetry: Date;
+  lastError?: string;
+  priority: number;
+  createdAt: Date;
+}
+API Surface
+Authentication & User Management
+// Auth Routes
+POST   /auth/google              // Initiate Google OAuth
+GET    /auth/callback            // OAuth callback
+POST   /auth/refresh             // Refresh access token
+POST   /auth/logout              // Logout and cleanup
+GET    /auth/me                  // Current user info
+
+// User Management
+GET    /users                    // List org users (admin only)
+POST   /users/invite             // Invite new user
+PUT    /users/:id/role           // Update user role
+DELETE /users/:id                // Remove user
+Integration Management
+// Integration Routes
+GET    /integrations             // List user integrations
+POST   /integrations/:provider/connect  // Initiate OAuth
+DELETE /integrations/:provider   // Disconnect integration
+GET    /integrations/:provider/status   // Health and quota status
+POST   /integrations/:provider/webhook  // Webhook endpoint
+GET    /integrations/health      // Overall health dashboard
+The Lab - Content Creation
+// Podcast Routes
+GET    /podcast/projects         // List projects
+POST   /podcast/projects         // Create project
+GET    /podcast/projects/:id/episodes  // List episodes
+POST   /podcast/episodes         // Create episode
+PUT    /podcast/episodes/:id/outline   // Update outline
+PUT    /podcast/episodes/:id/script    // Generate/update script
+POST   /podcast/episodes/:id/tts       // Generate audio
+POST   /podcast/episodes/:id/publish   // Publish episode
+GET    /podcast/episodes/:id/analytics // Episode analytics
+
+// Blog Routes
+GET    /blog/projects            // List blog projects
+POST   /blog/projects            // Create project
+POST   /blog/posts               // Create post
+PUT    /blog/posts/:id/outline   // Generate outline
+PUT    /blog/posts/:id/draft     // Generate draft
+POST   /blog/posts/:id/images/suggest  // Suggest images
+POST   /blog/posts/:id/images/attach   // Attach image
+POST   /blog/posts/:id/wordpress       // Push to WordPress
+GET    /blog/posts/:id/analytics       // Post analytics
+
+// E-Book Routes
+GET    /ebooks/projects          // List projects
+POST   /ebooks/projects          // Create project
+POST   /ebooks                   // Create e-book
+PUT    /ebooks/:id/outline       // Generate outline
+PUT    /ebooks/:id/chapters      // Generate chapters
+POST   /ebooks/:id/images/suggest // Suggest images
+POST   /ebooks/:id/export        // Export PDF/EPUB
+POST   /ebooks/:id/landing       // Create landing page
+GET    /ebooks/:id/analytics     // Download analytics
+Sync - CRM Integration
+// Meeting Sync Routes
+GET    /sync/meetings            // List captured meetings
+GET    /sync/meetings/:id        // Meeting details
+POST   /sync/meetings/:id/approve // Approve and sync to HubSpot
+POST   /sync/meetings/:id/snooze  // Snooze meeting
+PUT    /sync/meetings/:id/match   // Update CRM matching
+DELETE /sync/meetings/:id         // Delete meeting capture
+
+// Voice Update Routes
+POST   /sync/voice               // Upload voice update
+GET    /sync/voice/:id           // Voice update details
+POST   /sync/voice/:id/approve   // Approve and execute actions
+DELETE /sync/voice/:id           // Delete voice update
+
+// Sync Logs and History
+GET    /sync/logs                // Sync operation history
+GET    /sync/logs/:entityRef     // Entity-specific sync log
+POST   /sync/retry/:logId        // Retry failed sync
+Reporting and Analytics
+// Dashboard Cards
+GET    /report/cards             // Current data cards
+GET    /report/cards/:cardId     // Detailed card data
+GET    /report/cards/:cardId/drilldown // Drill-down data
+
+// Custom Reports
+POST   /report/generate          // Generate custom report
+GET    /reports                  // List user reports
+GET    /reports/:id              // Report details
+GET    /reports/:id/pdf          // Download PDF
+DELETE /reports/:id              // Delete report
+POST   /reports/:id/schedule     // Schedule recurring report
+Dashboard and KPIs
+// KPI Dashboard
+GET    /dashboard/kpis           // KPI tile data
+GET    /dashboard/series         // Time series data
+GET    /dashboard/top            // Top performers
+POST   /dashboard/customize      // Customize layout
+
+// Health and Status
+GET    /health                   // System health
+GET    /health/integrations      // Integration health status
+GET    /status                   // Service status page
+Error Handling & Resilience
+Integration Failure Handling
+interface FailureStrategy {
+  // Immediate Actions
+  fallbackBehavior: 'queue' | 'notify' | 'degrade' | 'block';
+  
+  // Retry Logic
+  retryPolicy: {
+    maxAttempts: number;
+    backoffStrategy: 'linear' | 'exponential' | 'fixed';
+    baseDelay: number;
+    maxDelay: number;
+  };
+  
+  // User Communication
+  notificationThreshold: number; // failures before notifying
+  statusPageUpdate: boolean;
+  userFallbackOptions: string[];
+}
+
+// Example Strategies
+const INTEGRATION_FAILURE_STRATEGIES = {
+  hubspot: {
+    fallbackBehavior: 'queue',
+    retryPolicy: {
+      maxAttempts: 3,
+      backoffStrategy: 'exponential',
+      baseDelay: 30000,
+      maxDelay: 300000
+    },
+    notificationThreshold: 2,
+    statusPageUpdate: true,
+    userFallbackOptions: ['manual_entry', 'csv_export', 'schedule_retry']
+  },
+  elevenlabs: {
+    fallbackBehavior: 'notify',
+    retryPolicy: {
+      maxAttempts: 2,
+      backoffStrategy: 'fixed',
+      baseDelay: 60000,
+      maxDelay: 120000
+    },
+    notificationThreshold: 1,
+    statusPageUpdate: true,
+    userFallbackOptions: ['manual_upload', 'alternative_voice', 'text_only']
+  }
+};
+Partial Sync Strategies
+* Optimistic Updates: Show success immediately, sync in background
+* Conflict Resolution: Last-write-wins with user notification for conflicts
+* Rollback Capabilities: Maintain operation history for undo functionality
+* Data Consistency: Eventual consistency with reconciliation jobs
+Content Workflow Error Recovery
+interface WorkflowRecovery {
+  savePartialProgress: boolean;
+  allowManualOverride: boolean;
+  fallbackToCache: boolean;
+  notifyUser: boolean;
+  rollbackStrategy: 'manual' | 'automatic' | 'none';
+}
+
+// Recovery Actions by Content Type
+const CONTENT_RECOVERY = {
+  podcast: {
+    scriptGeneration: 'save_partial_allow_edit',
+    ttsFailure: 'offer_alternative_voices',
+    uploadFailure: 'queue_with_notification',
+    publishFailure: 'rollback_to_draft'
+  },
+  blog: {
+    draftGeneration: 'save_outline_continue_manual',
+    imageFailure: 'offer_manual_selection',
+    seoFailure: 'proceed_without_optimization',
+    publishFailure: 'save_as_draft'
+  }
+};
+Rate Limiting & API Quotas
+User Quota Management
+interface QuotaConfig {
+  elevenlabs: {
+    charactersPerMonth: number;
+    warningThreshold: 0.8; // 80%
+    blockingThreshold: 0.95; // 95%
+    resetDate: Date;
+  };
+  adobeStock: {
+    requestsPerMonth: number;
+    downloadsPerMonth: number;
+    warningThreshold: 0.8;
+  };
+  hubspot: {
+    requestsPerDay: number;
+    burstLimit: number;
+    searchesPerSecond: number;
+  };
+}
+
+interface QuotaEnforcement {
+  preCheckRequired: boolean;
+  gracefulDegradation: string[];
+  userNotification: 'immediate' | 'daily_digest' | 'weekly';
+  adminNotification: boolean;
+}
+Graceful Degradation Strategies
+* ElevenLabs Quota Exceeded: Offer preview mode, manual audio upload
+* Adobe Stock Limit: Use free alternatives, manual image selection
+* HubSpot Rate Limit: Queue operations, batch requests
+* GA4 Quota: Use cached data, reduce update frequency
+Monitoring & Observability
+Health Check System
+interface HealthCheck {
+  name: string;
+  type: 'integration' | 'service' | 'database' | 'queue';
+  checkFunction: () => Promise<HealthResult>;
+  interval: number; // milliseconds
+  timeout: number;
+  criticalThreshold: number;
+  warningThreshold: number;
+}
+
+interface HealthResult {
+  status: 'healthy' | 'warning' | 'critical' | 'unknown';
+  responseTime: number;
+  message?: string;
+  metadata?: Record<string, any>;
+  timestamp: Date;
+}
+User-Facing Status Indicators
+* Integration Status Cards: Green/Yellow/Red with last sync time
+* Quota Usage Meters: Visual indicators with warnings
+* Operation Status: Real-time updates for long-running tasks
+* System Status Page: Public status for all integrations
+Performance Monitoring
+interface PerformanceMetrics {
+  // API Response Times
+  endpointLatency: Map<string, number[]>;
+  
+  // Integration Performance
+  integrationResponseTimes: Map<string, number[]>;
+  integrationSuccessRates: Map<string, number>;
+  
+  // Content Generation Times
+  scriptGenerationTime: number[];
+  ttsProcessingTime: number[];
+  imageSearchTime: number[];
+  
+  // User Experience
+  pageLoadTimes: Map<string, number[]>;
+  mobilePerformance: PerformanceData;
+  offlineQueueSize: number;
+}
+Security & Privacy Enhancements
+Field-Level Encryption
+interface EncryptionConfig {
+  fields: {
+    'user.email': 'aes-256-gcm';
+    'meeting.transcript': 'aes-256-gcm';
+    'integration.tokens': 'aes-256-gcm';
+    'voiceUpdate.transcript': 'aes-256-gcm';
+  };
+  keyRotation: {
+    frequency: 'quarterly';
+    gracePeriod: '30d';
+  };
+}
+Data Retention Policies
+interface RetentionPolicy {
+  transcripts: {
+    default: '30d';
+    userConfigurable: boolean;
+    options: ['7d', '30d', '90d', '1y', 'indefinite'];
+  };
+  meetingRecordings: {
+    default: '90d';
+    userConfigurable: boolean;
+  };
+  auditLogs: {
+    security: '7y';
+    operations: '1y';
+    debugging: '90d';
+  };
+  syncLogs: '1y';
+  contentVersions: 'indefinite';
+}
+Audit Trail
+interface AuditEvent {
+  id: string;
+  userId: string;
+  orgId: string;
+  action: string;
+  resource: string;
+  resourceId: string;
+  changes?: Record<string, any>;
+  ipAddress: string;
+  userAgent: string;
+  timestamp: Date;
+  severity: 'info' | 'warning' | 'critical';
+}
+
+// Audited Actions
+const AUDITED_ACTIONS = [
+  'content.publish',
+  'crm.sync',
+  'integration.connect',
+  'integration.disconnect',
+  'user.role_change',
+  'data.export',
+  'settings.change'
+];
+Development & Testing Strategy
+Local Development Setup
+# Environment Variables for Development
+ENVIRONMENT=development
+DATABASE_URL=postgresql://localhost:5432/launchbox_dev
+REDIS_URL=redis://localhost:6379
+STORAGE_BUCKET=local-storage
+
+# Integration Mocks
+MOCK_INTEGRATIONS=true
+ELEVENLABS_MOCK=true
+ADOBE_STOCK_MOCK=true
+HUBSPOT_SANDBOX=true
+
+# Feature Flags
+ENABLE_SKIP_TO_DRAFT=true
+ENABLE_ADOBE_STOCK=false
+ENABLE_AUTO_SYNC=false
+ENABLE_WEBHOOK_PROCESSING=true
+Mock Services
+interface MockService {
+  provider: string;
+  endpoints: MockEndpoint[];
+  responseDelay: number;
+  failureRate: number; // for testing resilience
+  quotaSimulation: boolean;
+}
+
+const MOCK_SERVICES = {
+  elevenlabs: {
+    endpoints: ['/v1/text-to-speech', '/v1/voices'],
+    responseDelay: 2000,
+    failureRate: 0.05, // 5% failure rate
+    quotaSimulation: true
+  },
+  hubspot: {
+    endpoints: ['/crm/v3/contacts', '/crm/v3/companies'],
+    responseDelay: 500,
+    failureRate: 0.02,
+    quotaSimulation: true
+  }
+};
+Testing Matrix
+// Test Categories
+const TEST_SUITES = {
+  unit: {
+    coverage: 80,
+    frameworks: ['Jest', 'Testing Library']
+  },
+  integration: {
+    coverage: 70,
+    mockExternalAPIs: true,
+    testOAuthFlows: true
+  },
+  e2e: {
+    framework: 'Playwright',
+    criticalPaths: [
+      'user_registration_and_setup',
+      'content_creation_workflows',
+      'crm_sync_operations',
+      'report_generation'
+    ],
+    mobileTestng: true,
+    offlineTesting: true
+  },
+  performance: {
+    framework: 'Lighthouse CI',
+    budgets: {
+      lcp: '2.5s',
+      fcp: '1.8s',
+      cls: '0.1',
+      fid: '100ms'
+    }
+  }
+};
+Data Migration & Backup
+Export Capabilities
+interface ExportOptions {
+  format: 'json' | 'csv' | 'pdf';
+  scope: 'user' | 'project' | 'organization';
+  includeAssets: boolean;
+  includePII: boolean;
+  dateRange?: DateRange;
+}
+
+const EXPORTABLE_DATA = {
+  content: ['blogs', 'podcasts', 'ebooks', 'assets'],
+  crm: ['contacts', 'meetings', 'sync_logs'],
+  analytics: ['reports', 'metrics', 'snapshots'],
+  settings: ['integrations', 'preferences', 'projects']
+};
+Backup Strategy
+interface BackupConfig {
+  frequency: 'daily' | 'weekly' | 'monthly';
+  retention: {
+    daily: '30d';
+    weekly: '12w';
+    monthly: '12m';
+  };
+  encryption: boolean;
+  compression: boolean;
+  verification: boolean;
+}
+
+const BACKUP_STRATEGY = {
+  database: {
+    frequency: 'daily',
+    method: 'pg_dump',
+    encryption: true,
+    compression: true,
+    storage: 'supabase-storage'
+  },
+  assets: {
+    frequency: 'daily',
+    method: 'incremental',
+    deduplication: true,
+    cloudSync: true
+  },
+  integrationData: {
+    frequency: 'weekly',
+    anonymized: true,
+    compliance: 'gdpr'
+  }
+};
+Schema Migration Strategy
+interface Migration {
+  version: string;
+  description: string;
+  up: () => Promise<void>;
+  down: () => Promise<void>;
+  rollbackSafe: boolean;
+  dataTransformation?: boolean;
+}
+
+const MIGRATION_GUIDELINES = {
+  backwards_compatibility: true,
+  zero_downtime: true,
+  rollback_tested: true,
+  data_validation: true,
+  performance_impact_assessed: true
+};
+Job Scheduling & Background Processing
+Job Types and Schedules
+interface JobDefinition {
+  name: string;
+  schedule: string; // cron expression
+  timezone: string;
+  priority: 'low' | 'normal' | 'high' | 'critical';
+  timeout: number;
+  maxRetries: number;
+  concurrency: number;
+}
+
+const SCHEDULED_JOBS = {
+  // Content Processing
+  'content.publish.scheduler': {
+    schedule: '* * * * *', // every minute
+    timezone: 'America/New_York',
+    priority: 'high',
+    timeout: 300000, // 5 minutes
+    maxRetries: 3
+  },
+  
+  // Metrics and Reporting
+  'metrics.snapshot.hourly': {
+    schedule: '0 * * * *', // every hour
+    priority: 'normal',
+    timeout: 600000, // 10 minutes
+    maxRetries: 2
+  },
+  
+  'report.weekly': {
+    schedule: '0 6 * * 0', // Sunday 6 AM ET
+    timezone: 'America/New_York',
+    priority: 'normal',
+    timeout: 1800000, // 30 minutes
+    maxRetries: 1
+  },
+  
+  'report.monthly': {
+    schedule: '0 6 1 * *', // 1st of month, 6 AM ET
+    timezone: 'America/New_York',
+    priority: 'normal',
+    timeout: 3600000, // 1 hour
+    maxRetries: 1
+  },
+  
+  // Integration Maintenance
+  'integrations.health_check': {
+    schedule: '*/15 * * * *', // every 15 minutes
+    priority: 'normal',
+    timeout: 60000, // 1 minute
+    maxRetries: 0
+  },
+  
+  'integrations.token_refresh': {
+    schedule: '0 2 * * *', // 2 AM daily
+    priority: 'critical',
+    timeout: 300000, // 5 minutes
+    maxRetries: 3
+  },
+  
+  'integrations.quota_reset': {
+    schedule: '0 0 1 * *', // 1st of month, midnight
+    priority: 'normal',
+    timeout: 60000,
+    maxRetries: 1
+  },
+  
+  // Data Maintenance
+  'cleanup.expired_sessions': {
+    schedule: '0 1 * * *', // 1 AM daily
+    priority: 'low',
+    timeout: 300000,
+    maxRetries: 1
+  },
+  
+  'cleanup.old_transcripts': {
+    schedule: '0 3 * * *', // 3 AM daily
+    priority: 'low',
+    timeout: 600000,
+    maxRetries: 1
+  },
+  
+  'backup.incremental': {
+    schedule: '0 4 * * *', // 4 AM daily
+    priority: 'critical',
+    timeout: 1800000, // 30 minutes
+    maxRetries: 2
+  }
+};
+Event-Driven Processing
+interface EventDefinition {
+  type: string;
+  triggers: string[];
+  handlers: EventHandler[];
+  retryPolicy: RetryPolicy;
+  deadLetterQueue: boolean;
+}
+
+const EVENT_HANDLERS = {
+  'content.published': {
+    triggers: ['podcast.published', 'blog.published', 'ebook.published'],
+    handlers: [
+      'analytics.track_publication',
+      'social.schedule_promotion',
+      'email.notify_subscribers'
+    ],
+    retryPolicy: {
+      maxAttempts: 3,
+      backoffStrategy: 'exponential'
+    },
+    deadLetterQueue: true
+  },
+  
+  'sync.meeting_captured': {
+    triggers: ['meeting.otter_received', 'meeting.calendar_parsed'],
+    handlers: [
+      'crm.match_attendees',
+      'ai.extract_action_items',
+      'notification.queue_approval'
+    ]
+  },
+  
+  'integration.quota_warning': {
+    triggers: ['quota.80_percent', 'quota.95_percent'],
+    handlers: [
+      'notification.notify_user',
+      'admin.alert_quota_limit',
+      'usage.suggest_optimization'
+    ]
+  }
+};
+Replit-Specific Implementation
+Project Structure
+launchbox-dashboard/
+├── .replit                     # Replit configuration
+├── replit.nix                  # Nix environment
+├── package.json                # Root dependencies
+├── apps/
+│   ├── web/                    # React PWA frontend
+│   │   ├── src/
+│   │   │   ├── components/     # Reusable UI components
+│   │   │   ├── pages/          # Route components
+│   │   │   ├── hooks/          # Custom React hooks
+│   │   │   ├── services/       # API clients
+│   │   │   ├── stores/         # State management
+│   │   │   ├── utils/          # Utility functions
+│   │   │   └── types/          # TypeScript types
+│   │   ├── public/
+│   │   ├── package.json
+│   │   └── vite.config.ts
+│   └── api/                    # Node.js backend
+│       ├── src/
+│       │   ├── routes/         # API route handlers
+│       │   ├── services/       # Business logic
+│       │   ├── integrations/   # External API clients
+│       │   ├── jobs/           # Background job handlers
+│       │   ├── middleware/     # Express/Fastify middleware
+│       │   ├── utils/          # Utility functions
+│       │   └── types/          # TypeScript types
+│       ├── prisma/
+│       │   ├── schema.prisma
+│       │   └── migrations/
+│       ├── package.json
+│       └── server.ts
+├── packages/
+│   ├── shared/                 # Shared types and utilities
+│   │   ├── src/
+│   │   │   ├── types/          # Common TypeScript types
+│   │   │   ├── utils/          # Shared utility functions
+│   │   │   └── constants/      # Application constants
+│   │   └── package.json
+│   └── ui/                     # Shared UI components
+│       ├── src/
+│       │   ├── components/     # Base UI components
+│       │   └── styles/         # Tailwind configurations
+│       └── package.json
+├── scripts/
+│   ├── setup.sh               # Initial setup script
+│   ├── seed.ts                # Database seeding
+│   ├── migrate.ts             # Database migrations
+│   └── deploy.sh              # Deployment script
+├── docs/
+│   ├── api.md                 # API documentation
+│   ├── integrations.md        # Integration guides
+│   └── deployment.md          # Deployment guide
+└── .env.example               # Environment variables template
+Replit Configuration
+# .replit
+run = "npm run dev"
+language = "nodejs"
+
+[deployment]
+build = "npm run build"
+run = "npm start"
+
+[env]
+NODE_VERSION = "18"
+
+[nix]
+channel = "stable-22_11"
+
+[languages.javascript]
+pattern = "**/{*.js,*.jsx,*.ts,*.tsx}"
+syntax = "javascript"
+
+[languages.javascript.languageServer]
+start = ["typescript-language-server", "--stdio"]
+
+[packager]
+language = "nodejs"
+
+[packager.features]
+enabledForHosting = false
+packageSearch = true
+guessImports = true
+
+[debugger]
+support = true
+
+[unitTest]
+language = "nodejs"
+
+[gitHubImport]
+requiredFiles = [".replit", "replit.nix"]
+
+[secrets]
+# Secrets will be configured in Replit UI
+Environment Variables (Replit Secrets)
+# Core Application
+NODE_ENV=production
+APP_URL=https://your-repl-name.your-username.repl.co
+DATABASE_URL=postgresql://user:password@host:port/database
+REDIS_URL=redis://host:port
+STORAGE_BUCKET_URL=https://your-storage-endpoint
+JWT_SECRET=your-jwt-secret-key
+ENCRYPTION_KEY=your-encryption-key
+
+# Google Authentication
+GOOGLE_CLIENT_ID=your-google-client-id
+GOOGLE_CLIENT_SECRET=your-google-client-secret
+
+# HubSpot Integration
+HUBSPOT_CLIENT_ID=your-hubspot-client-id
+HUBSPOT_CLIENT_SECRET=your-hubspot-client-secret
+HUBSPOT_DEVELOPER_API_KEY=your-hubspot-api-key
+
+# ElevenLabs
+ELEVENLABS_API_KEY=your-elevenlabs-api-key
+ELEVENLABS_WEBHOOK_SECRET=your-webhook-secret
+
+# Transistor
+TRANSISTOR_API_KEY=your-transistor-api-key
+
+# WordPress
+WORDPRESS_API_BASE_URL=https://your-wordpress-site.com/wp-json/wp/v2
+WORDPRESS_USERNAME=your-wp-username
+WORDPRESS_APP_PASSWORD=your-wp-app-password
+
+# Otter.ai
+OTTER_API_KEY=your-otter-api-key
+
+# Adobe Stock
+ADOBE_CLIENT_ID=your-adobe-client-id
+ADOBE_CLIENT_SECRET=your-adobe-client-secret
+
+# Google Analytics
+GA4_PROPERTY_ID=your-ga4-property-id
+GA4_SERVICE_ACCOUNT_KEY=your-service-account-json
+
+# Social Media
+LINKEDIN_CLIENT_ID=your-linkedin-client-id
+LINKEDIN_CLIENT_SECRET=your-linkedin-client-secret
+TWITTER_API_KEY=your-twitter-api-key
+TWITTER_API_SECRET=your-twitter-api-secret
+INSTAGRAM_APP_ID=your-instagram-app-id
+
+# Email Service (for notifications)
+SENDGRID_API_KEY=your-sendgrid-api-key
+FROM_EMAIL=noreply@yourdomain.com
+
+# Feature Flags
+ENABLE_SKIP_TO_DRAFT=true
+ENABLE_ADOBE_STOCK=true
+ENABLE_AUTO_SYNC=false
+ENABLE_WEBHOOK_PROCESSING=true
+ENABLE_REAL_TIME_FEATURES=true
+
+# Monitoring
+SENTRY_DSN=your-sentry-dsn
+OPENTELEMETRY_ENDPOINT=your-otel-endpoint
+Package.json Scripts
+{
+  "name": "launchbox-dashboard",
+  "version": "1.0.0",
+  "scripts": {
+    "dev": "concurrently \"npm run dev:api\" \"npm run dev:web\"",
+    "dev:api": "cd apps/api && npm run dev",
+    "dev:web": "cd apps/web && npm run dev",
+    "build": "npm run build:shared && npm run build:api && npm run build:web",
+    "build:shared": "cd packages/shared && npm run build",
+    "build:api": "cd apps/api && npm run build",
+    "build:web": "cd apps/web && npm run build",
+    "start": "cd apps/api && npm start",
+    "test": "npm run test:shared && npm run test:api && npm run test:web",
+    "test:shared": "cd packages/shared && npm test",
+    "test:api": "cd apps/api && npm test",
+    "test:web": "cd apps/web && npm test",
+    "lint": "eslint . --ext .ts,.tsx,.js,.jsx",
+    "lint:fix": "eslint . --ext .ts,.tsx,.js,.jsx --fix",
+    "type-check": "tsc --noEmit",
+    "db:migrate": "cd apps/api && npx prisma migrate deploy",
+    "db:seed": "cd apps/api && npx tsx scripts/seed.ts",
+    "db:studio": "cd apps/api && npx prisma studio",
+    "setup": "bash scripts/setup.sh"
+  },
+  "devDependencies": {
+    "@types/node": "^18.0.0",
+    "@typescript-eslint/eslint-plugin": "^5.0.0",
+    "@typescript-eslint/parser": "^5.0.0",
+    "concurrently": "^7.6.0",
+    "eslint": "^8.0.0",
+    "eslint-config-prettier": "^8.5.0",
+    "eslint-plugin-prettier": "^4.2.1",
+    "prettier": "^2.8.0",
+    "typescript": "^4.9.0"
+  }
+}
+Initial Setup Script
+#!/bin/bash
+# scripts/setup.sh
+
+echo "🚀 Setting up LaunchBox Dashboard App..."
+
+# Check if required environment variables are set
+check_env_var() {
+    if [ -z "${!1}" ]; then
+        echo "❌ Missing required environment variable: $1"
+        echo "Please set this in the Replit Secrets tab"
+        exit 1
+    fi
+}
+
+echo "📋 Checking environment variables..."
+check_env_var "DATABASE_URL"
+check_env_var "REDIS_URL"
+check_env_var "GOOGLE_CLIENT_ID"
+check_env_var "GOOGLE_CLIENT_SECRET"
+
+echo "📦 Installing dependencies..."
+npm install
+
+echo "🏗️  Building shared packages..."
+npm run build:shared
+
+echo "🗄️  Setting up database..."
+cd apps/api
+npx prisma generate
+npx prisma migrate deploy
+
+echo "🌱 Seeding database..."
+npx tsx scripts/seed.ts
+
+echo "🎉 Setup complete! Run 'npm run dev' to start the development server."
+
+# Health check
+echo "🏥 Running health checks..."
+node -e "
+const https = require('https');
+const url = process.env.DATABASE_URL;
+if (url.includes('postgresql://')) {
+  console.log('✅ Database URL format looks correct');
+} else {
+  console.log('⚠️  Database URL format may be incorrect');
+}
+"
+
+echo "
+🚀 Next steps:
+1. Configure your integrations in the Replit Secrets tab
+2. Run 'npm run dev' to start development
+3. Visit your Repl URL to access the application
+4. Check the logs for any startup issues
+"
+Database Seeding Script
+// scripts/seed.ts
+import { PrismaClient } from '@prisma/client';
+
+const prisma = new PrismaClient();
+
+async function seed() {
+  console.log('🌱 Seeding database...');
+
+  // Create default organization
+  const org = await prisma.organization.upsert({
+    where: { id: 'default-org' },
+    update: {},
+    create: {
+      id: 'default-org',
+      name: 'Penn State Great Valley LaunchBox',
+      settings: {
+        timezone: 'America/New_York',
+        fiscalYearStart: 'january',
+        defaultContentSettings: {
+          blog: {
+            tone: 'professional',
+            seoOptimized: true
+          },
+          podcast: {
+            quality: 'high',
+            format: 'mp3'
+          }
+        }
+      },
+      billingPlan: 'professional'
+    }
+  });
+
+  // Create default user (will be replaced by OAuth)
+  const user = await prisma.user.upsert({
+    where: { email: 'admin@launchbox.psu.edu' },
+    update: {},
+    create: {
+      email: 'admin@launchbox.psu.edu',
+      name: 'LaunchBox Admin',
+      role: 'OWNER',
+      orgId: org.id,
+      settings: {
+        notifications: {
+          email: true,
+          inApp: true,
+          quotaWarnings: true
+        },
+        preferences: {
+          theme: 'system',
+          language: 'en',
+          timezone: 'America/New_York'
+        }
+      }
+    }
+  });
+
+  // Create default podcast project
+  await prisma.podcastProject.upsert({
+    where: { id: 'default-podcast' },
+    update: {},
+    create: {
+      id: 'default-podcast',
+      orgId: org.id,
+      name: 'LaunchBox Insights',
+      hostType: 'SINGLE',
+      settings: {
+        defaultDuration: 1800, // 30 minutes
+        introMusic: true,
+        outroMusic: true,
+        showNotesTemplate: 'default'
+      }
+    }
+  });
+
+  // Create default blog project
+  await prisma.blogProject.upsert({
+    where: { id: 'default-blog' },
+    update: {},
+    create: {
+      id: 'default-blog',
+      orgId: org.id,
+      name: 'LaunchBox Blog',
+      settings: {
+        tone: 'professional',
+        targetLength: 1500,
+        seoOptimized: true,
+        autoSocialSharing: false
+      }
+    }
+  });
+
+  // Create sample KPI snapshots
+  const now = new Date();
+  await prisma.metricSnapshot.createMany({
+    data: [
+      {
+        orgId: org.id,
+        source: 'website',
+        metrics: {
+          pageViews: 1250,
+          uniqueVisitors: 890,
+          bounceRate: 0.35,
+          avgSessionDuration: 185
+        },
+        timestamp: now
+      },
+      {
+        orgId: org.id,
+        source: 'social',
+        metrics: {
+          linkedinFollowers: 2400,
+          linkedinEngagement: 0.045,
+          twitterFollowers: 1800,
+          twitterEngagement: 0.032
+        },
+        timestamp: now
+      },
+      {
+        orgId: org.id,
+        source: 'content',
+        metrics: {
+          blogPosts: 15,
+          podcastEpisodes: 8,
+          ebooksDownloaded: 145,
+          totalContentViews: 8900
+        },
+        timestamp: now
+      }
+    ]
+  });
+
+  console.log('✅ Database seeded successfully!');
+  console.log(`📊 Created organization: ${org.name}`);
+  console.log(`👤 Created user: ${user.email}`);
+  console.log('🎯 Created sample projects and KPI data');
+}
+
+seed()
+  .catch((e) => {
+    console.error('❌ Seeding failed:', e);
+    process.exit(1);
+  })
+  .finally(async () => {
+    await prisma.$disconnect();
+  });
+Performance Optimization
+Frontend Performance
+// Performance budgets and monitoring
+const PERFORMANCE_BUDGETS = {
+  // Core Web Vitals
+  lcp: 2500, // ms
+  fcp: 1800, // ms
+  cls: 0.1,
+  fid: 100, // ms
+  
+  // Bundle sizes
+  mainBundle: 200, // KB
+  vendorBundle: 300, // KB
+  cssBundle: 50, // KB
+  
+  // Resource counts
+  totalRequests: 50,
+  imageRequests: 20,
+  fontRequests: 4
+};
+
+// Code splitting strategy
+const CODE_SPLITTING = {
+  routes: 'lazy', // Route-based splitting
+  components: 'selective', // Heavy components only
+  libraries: 'separate', // Vendor bundles
+  features: 'module', // Feature-based modules
+};
+
+// Caching strategy
+const CACHING_STRATEGY = {
+  staticAssets: '1y',
+  apiResponses: '5m',
+  userPreferences: 'localStorage',
+  offlineData: 'indexedDB',
+  images: 'cache-first',
+  analytics: 'network-first'
+};
+Backend Performance
+// Database optimization
+const DB_OPTIMIZATION = {
+  indexing: {
+    // Critical indexes for performance
+    user_org_id: 'btree',
+    content_status_created: 'btree',
+    integration_provider_user: 'btree',
+    metric_snapshot_timestamp: 'btree',
+    audit_log_timestamp: 'btree'
+  },
+  
+  queryOptimization: {
+    enableQueryPlan: true,
+    slowQueryLogging: true,
+    connectionPooling: {
+      min: 5,
+      max: 20,
+      idle: 10000 // ms
+    }
+  },
+  
+  caching: {
+    redis: {
+      keyExpiry: {
+        userSessions: 86400, // 24h
+        integrationHealth: 900, // 15m
+        kpiSnapshots: 3600, // 1h
+        reportData: 1800 // 30m
+      }
+    }
+  }
+};
+
+// API optimization
+const API_OPTIMIZATION = {
+  responseCompression: true,
+  etags: true,
+  responseHeaders: {
+    'Cache-Control': 'public, max-age=300',
+    'X-Content-Type-Options': 'nosniff',
+    'X-Frame-Options': 'DENY'
+  },
+  ratelimiting: {
+    windowMs: 900000, // 15 minutes
+    max: 1000, // requests per window
+    standardHeaders: true,
+    legacyHeaders: false
+  }
+};
+Mobile-First Implementation Details
+PWA Configuration
+// vite.config.ts - PWA setup
+import { VitePWA } from 'vite-plugin-pwa';
+
+const pwaConfig = VitePWA({
+  registerType: 'autoUpdate',
+  workbox: {
+    globPatterns: ['**/*.{js,css,html,ico,png,svg,woff2}'],
+    runtimeCaching: [
+      {
+        urlPattern: /^https:\/\/api\./,
+        handler: 'NetworkFirst',
+        options: {
+          cacheName: 'api-cache',
+          networkTimeoutSeconds: 10,
+          cacheableResponse: {
+            statuses: [0, 200]
+          }
+        }
+      },
+      {
+        urlPattern: /\.(png|jpg|jpeg|svg|gif|webp)$/,
+        handler: 'CacheFirst',
+        options: {
+          cacheName: 'images-cache',
+          expiration: {
+            maxEntries: 100,
+            maxAgeSeconds: 60 * 60 * 24 * 30 // 30 days
+          }
+        }
+      }
+    ]
+  },
+  manifest: {
+    name: 'LaunchBox Dashboard',
+    short_name: 'LaunchBox',
+    description: 'Content creation and CRM sync workspace',
+    theme_color: '#1f2937',
+    background_color: '#ffffff',
+    display: 'standalone',
+    orientation: 'portrait-primary',
+    scope: '/',
+    start_url: '/',
+    icons: [
+      {
+        src: '/icons/icon-192.png',
+        sizes: '192x192',
+        type: 'image/png'
+      },
+      {
+        src: '/icons/icon-512.png',
+        sizes: '512x512',
+        type: 'image/png'
+      }
+    ]
+  }
+});
+Responsive Design System
+// Tailwind configuration for mobile-first design
+const responsiveBreakpoints = {
+  'xs': '475px',  // Small phones
+  'sm': '640px',  // Large phones
+  'md': '768px',  // Tablets
+  'lg': '1024px', // Small laptops
+  'xl': '1280px', // Large laptops
+  '2xl': '1536px' // Desktop
+};
+
+// Touch-friendly component specifications
+const touchTargets = {
+  minSize: '44px',
+  recommended: '48px',
+  spacing: '8px',
+  tapGap: '2px'
+};
+
+// Mobile-specific interactions
+const mobileInteractions = {
+  swipeActions: ['approve', 'snooze', 'delete'],
+  pullToRefresh: ['dashboard', 'reports', 'sync-queue'],
+  infiniteScroll: ['content-list', 'sync-logs', 'analytics'],
+  offlineFirst: ['content-creation', 'voice-updates', 'draft-saving']
+};
