@@ -2,7 +2,7 @@ import { initializeApp } from "firebase/app";
 import { getAuth, signInWithRedirect, GoogleAuthProvider, getRedirectResult, signOut, onAuthStateChanged, User } from "firebase/auth";
 
 const firebaseConfig = {
-  apiKey: import.meta.env.VITE_FIREBASE_API_KEY,
+  apiKey: "AIzaSyBYwnoz1g1GcKG78XfUkQ_XyYndpBf7Tv8",
   authDomain: "createai-2f54c.firebaseapp.com",
   projectId: "createai-2f54c",
   storageBucket: "createai-2f54c.firebasestorage.app",
