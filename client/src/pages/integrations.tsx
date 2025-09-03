@@ -167,6 +167,18 @@ export default function Integrations() {
   return (
     <div className="max-w-4xl mx-auto p-6">
       <div className="mb-8">
+        <div className="flex items-center space-x-4 mb-4">
+          <Button 
+            variant="ghost" 
+            size="sm"
+            onClick={() => window.history.back()}
+            className="flex items-center space-x-2"
+            data-testid="button-back"
+          >
+            <i className="fas fa-arrow-left"></i>
+            <span>Back</span>
+          </Button>
+        </div>
         <h1 className="text-3xl font-bold text-gray-900 mb-2">Integrations</h1>
         <p className="text-gray-600">
           Connect external services to automate your content creation workflow
