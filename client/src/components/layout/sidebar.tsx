@@ -8,6 +8,7 @@ import labIcon from '@assets/generated_images/The_Lab_AI_content_creation_icon_f
 import syncIcon from '@assets/generated_images/CRM_synchronization_workflow_icon_8587610e.png'
 import reportsIcon from '@assets/generated_images/Analytics_reports_dashboard_icon_aa8cffd8.png'
 import dashboardIcon from '@assets/generated_images/KPI_dashboard_interface_icon_1c62cc62.png'
+import createAILogo from '@assets/generated_images/createai_logo.png'
 
 const navigation = [
   { name: 'The Lab', href: '/lab', icon: labIcon },
@@ -31,11 +32,12 @@ export default function Sidebar() {
     <div className="fixed inset-y-0 left-0 z-50 w-64 bg-card border-r border-border hidden lg:flex flex-col">
       {/* Logo */}
       <div className="flex items-center h-16 px-6 border-b border-border">
-        <Link href="/" className="flex items-center space-x-3" data-testid="link-home">
-          <div className="w-8 h-8 gradient-bg rounded-lg flex items-center justify-center">
-            <i className="fas fa-robot text-white text-sm"></i>
-          </div>
-          <span className="font-bold text-xl text-foreground">CreateAI</span>
+        <Link href="/" className="flex items-center" data-testid="link-home">
+          <img 
+            src={createAILogo} 
+            alt="CreateAI" 
+            className="h-8 w-auto"
+          />
         </Link>
       </div>
 
