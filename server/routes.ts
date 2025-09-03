@@ -331,6 +331,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
             
             if (tokenResponse.ok) {
               const tokenData = await tokenResponse.json();
+              console.log('Bigin token response:', tokenData);
+              
               // Test the access token by calling Bigin API
               const biginResponse = await fetch('https://www.zohoapis.com/bigin/v1/Contacts?fields=Last_Name', {
                 headers: {
@@ -339,15 +341,21 @@ export async function registerRoutes(app: Express): Promise<Server> {
                 }
               });
               
+              console.log('Bigin API response status:', biginResponse.status);
+              const biginResponseText = await biginResponse.text();
+              console.log('Bigin API response:', biginResponseText);
+              
               if (biginResponse.ok) {
                 testResult = { success: true, message: 'Bigin by Zoho credentials are valid and working!', error: '' };
                 await storage.upsertUserIntegration({ ...integration, status: 'connected' as any });
               } else {
-                testResult = { success: false, message: '', error: 'Bigin API access failed - check permissions' };
+                testResult = { success: false, message: '', error: `Bigin API error: ${biginResponse.status} - ${biginResponseText}` };
                 await storage.upsertUserIntegration({ ...integration, status: 'error' as any });
               }
             } else {
-              testResult = { success: false, message: '', error: 'Invalid Bigin Client ID or Client Secret' };
+              const tokenErrorText = await tokenResponse.text();
+              console.log('Token request failed:', tokenErrorText);
+              testResult = { success: false, message: '', error: `OAuth failed: ${tokenResponse.status} - ${tokenErrorText}` };
               await storage.upsertUserIntegration({ ...integration, status: 'error' as any });
             }
             break;
