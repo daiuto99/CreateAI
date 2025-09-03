@@ -130,20 +130,20 @@ export default function Landing() {
             </p>
           </button>
 
-          {/* CRM Sync */}
+          {/* Sync */}
           <button 
-            onClick={() => handleFeatureClick('CRM Sync', '/sync')}
+            onClick={() => handleFeatureClick('Sync', '/sync')}
             className="text-center border border-gray-200 rounded-lg p-8 hover:border-blue-300 hover:shadow-lg transition-all duration-200 cursor-pointer"
           >
             <div className="mb-6">
               <img 
                 src={syncIcon} 
-                alt="CRM Sync" 
+                alt="Sync" 
                 className="w-[110px] h-[110px] mx-auto"
                 style={{ backgroundColor: 'transparent' }}
               />
             </div>
-            <h3 className="text-xl font-semibold text-gray-900 mb-4">CRM Sync</h3>
+            <h3 className="text-xl font-semibold text-gray-900 mb-4">Sync</h3>
             <p className="text-sm text-gray-600 leading-relaxed">
               Automatically sync meeting intelligence and voice updates into HubSpot CRM
             </p>

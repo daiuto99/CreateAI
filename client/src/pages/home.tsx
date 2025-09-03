@@ -78,17 +78,17 @@ export default function Home() {
             </p>
           </div>
 
-          {/* CRM Sync */}
+          {/* Sync */}
           <div className="text-center">
             <div className="mb-6">
               <img 
                 src={syncIcon} 
-                alt="CRM Sync" 
+                alt="Sync" 
                 className="w-[110px] h-[110px] mx-auto"
                 style={{ backgroundColor: 'transparent' }}
               />
             </div>
-            <h3 className="text-xl font-semibold text-gray-900 mb-4">CRM Sync</h3>
+            <h3 className="text-xl font-semibold text-gray-900 mb-4">Sync</h3>
             <p className="text-sm text-gray-600 leading-relaxed">
               Automatically sync meeting intelligence and voice updates into HubSpot CRM
             </p>

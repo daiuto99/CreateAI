@@ -29,8 +29,8 @@ export default function Dashboard() {
     }
   }, [isAuthenticated, isLoading, toast]);
 
-  // Get user's first organization
-  const organizationId = user?.organizations?.[0]?.id;
+  // Get user's first organization  
+  const organizationId = user?.uid; // Use uid as organizationId for now
 
   const { data: projects = [] } = useQuery<ContentProject[]>({
     queryKey: ['/api/content-projects', organizationId],

@@ -45,7 +45,7 @@ export default function Sync() {
       <main className="lg:ml-64 pb-20 lg:pb-0">
         <Header 
           title="Sync" 
-          subtitle="AI-assisted CRM integration and meeting intelligence"
+          subtitle="AI-assisted integration and meeting intelligence"
           action={
             <Button data-testid="button-setup-integrations">
               <i className="fas fa-cog w-4 h-4 mr-2"></i>

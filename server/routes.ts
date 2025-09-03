@@ -253,7 +253,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  // CRM Sync routes
+  // Sync routes
   app.post('/api/crm/extract-fields', isAuthenticated, async (req, res) => {
     try {
       const { text } = req.body;

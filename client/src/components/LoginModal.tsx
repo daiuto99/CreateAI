@@ -22,7 +22,7 @@ export function LoginModal({ isOpen, onClose, featureName }: LoginModalProps) {
         localStorage.removeItem('pendingFeature');
         const featureRoutes: Record<string, string> = {
           'The Lab': '/lab',
-          'CRM Sync': '/sync',
+          'Sync': '/sync',
           'Reports': '/reports',
           'Dashboard': '/dashboard'
         };

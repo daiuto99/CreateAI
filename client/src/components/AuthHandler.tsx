@@ -17,7 +17,7 @@ export function AuthHandler() {
           // Map feature names to routes
           const featureRoutes: Record<string, string> = {
             'The Lab': '/lab',
-            'CRM Sync': '/sync',
+            'Sync': '/sync',
             'Reports': '/reports',
             'Dashboard': '/dashboard'
           };

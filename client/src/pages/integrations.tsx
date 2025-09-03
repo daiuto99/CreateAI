@@ -169,7 +169,7 @@ export default function Integrations() {
       <div className="mb-8">
         <div className="flex items-center space-x-4 mb-4">
           <Button 
-            variant="ghost" 
+            variant="outline" 
             size="sm"
             onClick={() => window.history.back()}
             className="flex items-center space-x-2"
