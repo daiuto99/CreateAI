@@ -123,6 +123,70 @@ export default function Dashboard() {
             />
           </div>
 
+          {/* Integration Status Overview */}
+          {integrations.length > 0 && (
+            <Card className="mb-8">
+              <CardHeader>
+                <CardTitle>Integration Status</CardTitle>
+                <CardDescription>
+                  Monitor the health of your connected services
+                </CardDescription>
+              </CardHeader>
+              <CardContent>
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                  {integrations.map((integration) => (
+                    <div 
+                      key={integration.id} 
+                      className="flex items-center justify-between p-3 border border-border rounded-lg"
+                    >
+                      <div className="flex items-center space-x-3">
+                        <div className={`w-3 h-3 rounded-full ${
+                          integration.status === 'connected' 
+                            ? 'bg-green-500' 
+                            : integration.status === 'error'
+                            ? 'bg-red-500'
+                            : 'bg-yellow-500'
+                        }`}></div>
+                        <div>
+                          <p className="font-medium capitalize">{integration.provider}</p>
+                          <p className="text-sm text-muted-foreground">
+                            {integration.status === 'connected' && 'Working properly'}
+                            {integration.status === 'error' && 'Connection failed'}
+                            {integration.status === 'setup_required' && 'Needs verification'}
+                            {integration.status === 'expired' && 'Credentials expired'}
+                            {integration.status === 'disabled' && 'Currently disabled'}
+                          </p>
+                        </div>
+                      </div>
+                      <span className={`px-2 py-1 text-xs font-medium rounded-full ${
+                        integration.status === 'connected' 
+                          ? 'bg-green-100 text-green-800' 
+                          : integration.status === 'error'
+                          ? 'bg-red-100 text-red-800'
+                          : 'bg-yellow-100 text-yellow-800'
+                      }`}>
+                        {integration.status === 'connected' && 'Connected'}
+                        {integration.status === 'error' && 'Error'}
+                        {integration.status === 'setup_required' && 'Needs Testing'}
+                        {integration.status === 'expired' && 'Expired'}
+                        {integration.status === 'disabled' && 'Disabled'}
+                      </span>
+                    </div>
+                  ))}
+                </div>
+                
+                <div className="mt-4 pt-4 border-t border-border">
+                  <Button variant="outline" size="sm" asChild>
+                    <a href="/integrations">
+                      <i className="fas fa-cog w-4 h-4 mr-2"></i>
+                      Manage Integrations
+                    </a>
+                  </Button>
+                </div>
+              </CardContent>
+            </Card>
+          )}
+
           <Tabs defaultValue="crm" className="space-y-6">
             <TabsList className="grid w-full grid-cols-4">
               <TabsTrigger value="crm" data-testid="tab-crm">CRM Metrics</TabsTrigger>

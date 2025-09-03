@@ -253,6 +253,91 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  app.post('/api/integrations/test', isAuthenticated, async (req: any, res) => {
+    try {
+      const userId = req.user.claims.sub;
+      const { provider } = req.body;
+
+      if (!provider) {
+        return res.status(400).json({ message: "Provider is required" });
+      }
+
+      // Get the integration for this user and provider
+      const integrations = await storage.getUserIntegrations(userId);
+      const integration = integrations.find(i => i.provider === provider);
+
+      if (!integration || !integration.credentials) {
+        return res.status(404).json({ message: "Integration not found or no credentials stored" });
+      }
+
+      let testResult = { success: false, message: '', error: '' };
+
+      try {
+        switch (provider) {
+          case 'openai':
+            // Test OpenAI API key
+            const credentials = integration.credentials as any;
+            const openaiResponse = await fetch('https://api.openai.com/v1/models', {
+              headers: {
+                'Authorization': `Bearer ${credentials.apiKey}`,
+              }
+            });
+            if (openaiResponse.ok) {
+              testResult = { success: true, message: 'OpenAI API key is valid and working!', error: '' };
+              await storage.upsertUserIntegration({ ...integration, status: 'connected' as any });
+            } else {
+              const error = await openaiResponse.text();
+              testResult = { success: false, message: '', error: 'Invalid OpenAI API key' };
+              await storage.upsertUserIntegration({ ...integration, status: 'error' as any });
+            }
+            break;
+
+          case 'elevenlabs':
+            // Test ElevenLabs API key
+            const elevenCreds = integration.credentials as any;
+            const elevenlabsResponse = await fetch('https://api.elevenlabs.io/v1/user', {
+              headers: {
+                'xi-api-key': elevenCreds.apiKey,
+              }
+            });
+            if (elevenlabsResponse.ok) {
+              testResult = { success: true, message: 'ElevenLabs API key is valid and working!', error: '' };
+              await storage.upsertUserIntegration({ ...integration, status: 'connected' as any });
+            } else {
+              testResult = { success: false, message: '', error: 'Invalid ElevenLabs API key' };
+              await storage.upsertUserIntegration({ ...integration, status: 'error' as any });
+            }
+            break;
+
+          case 'hubspot':
+            // Test HubSpot API key
+            const hubspotCreds = integration.credentials as any;
+            const hubspotResponse = await fetch(`https://api.hubapi.com/contacts/v1/lists?hapikey=${hubspotCreds.apiKey}&count=1`);
+            if (hubspotResponse.ok) {
+              testResult = { success: true, message: 'HubSpot API key is valid and working!', error: '' };
+              await storage.upsertUserIntegration({ ...integration, status: 'connected' as any });
+            } else {
+              testResult = { success: false, message: '', error: 'Invalid HubSpot API key' };
+              await storage.upsertUserIntegration({ ...integration, status: 'error' as any });
+            }
+            break;
+
+          default:
+            testResult = { success: false, message: '', error: 'Connection testing not implemented for this provider yet' };
+        }
+      } catch (error) {
+        console.error(`Error testing ${provider} connection:`, error);
+        testResult = { success: false, message: '', error: 'Connection test failed due to network error' };
+        await storage.upsertUserIntegration({ ...integration, status: 'error' as any });
+      }
+
+      res.json(testResult);
+    } catch (error) {
+      console.error("Error testing integration:", error);
+      res.status(500).json({ message: "Failed to test integration" });
+    }
+  });
+
   // Sync routes
   app.post('/api/crm/extract-fields', isAuthenticated, async (req, res) => {
     try {

@@ -107,22 +107,62 @@ export default function Integrations() {
 
   const connectMutation = useMutation({
     mutationFn: async (data: { provider: string; credentials: Record<string, string> }) => {
+      // First save the credentials
       const response = await fetch('/api/integrations', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(data),
       });
-      if (!response.ok) throw new Error('Failed to connect service');
-      return response.json();
+      if (!response.ok) throw new Error('Failed to save credentials');
+      
+      // Then test the connection
+      const testResponse = await fetch('/api/integrations/test', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ provider: data.provider }),
+      });
+      
+      const testResult = await testResponse.json();
+      return { integration: await response.json(), testResult };
     },
-    onSuccess: () => {
+    onSuccess: ({ testResult }) => {
       queryClient.invalidateQueries({ queryKey: ['/api/integrations'] });
-      toast({ title: 'Service connected successfully!' });
+      if (testResult.success) {
+        toast({ title: 'Service connected and verified!', description: testResult.message });
+      } else {
+        toast({ 
+          title: 'Credentials saved but connection failed', 
+          description: testResult.error,
+          variant: 'destructive' 
+        });
+      }
       setIsModalOpen(false);
       setFormData({});
     },
     onError: (error) => {
       toast({ title: 'Failed to connect service', description: error.message, variant: 'destructive' });
+    },
+  });
+
+  const testConnectionMutation = useMutation({
+    mutationFn: async (provider: string) => {
+      const response = await fetch('/api/integrations/test', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ provider }),
+      });
+      return response.json();
+    },
+    onSuccess: (result) => {
+      if (result.success) {
+        toast({ title: 'Connection test successful!', description: result.message });
+        queryClient.invalidateQueries({ queryKey: ['/api/integrations'] });
+      } else {
+        toast({ title: 'Connection test failed', description: result.error, variant: 'destructive' });
+      }
+    },
+    onError: (error) => {
+      toast({ title: 'Test failed', description: error.message, variant: 'destructive' });
     },
   });
 
@@ -137,6 +177,17 @@ export default function Integrations() {
       case 'expired': return 'bg-yellow-100 text-yellow-800';
       case 'disabled': return 'bg-gray-100 text-gray-800';
       default: return 'bg-blue-100 text-blue-800';
+    }
+  };
+
+  const getStatusText = (status: string) => {
+    switch (status) {
+      case 'connected': return 'Connected';
+      case 'error': return 'Connection Error';
+      case 'expired': return 'Credentials Expired';
+      case 'disabled': return 'Disabled';
+      case 'setup_required': return 'Needs Testing';
+      default: return 'Setup Required';
     }
   };
 
@@ -203,7 +254,7 @@ export default function Integrations() {
                   </div>
                   {integration && (
                     <Badge className={getStatusColor(integration.status)}>
-                      {integration.status.replace('_', ' ')}
+                      {getStatusText(integration.status)}
                     </Badge>
                   )}
                 </div>
@@ -221,8 +272,15 @@ export default function Integrations() {
                       </span>
                     </div>
                     <div className="flex space-x-2">
-                      <Button variant="outline" size="sm" className="flex-1">
-                        Test Connection
+                      <Button 
+                        variant="outline" 
+                        size="sm" 
+                        className="flex-1"
+                        onClick={() => testConnectionMutation.mutate(provider)}
+                        disabled={testConnectionMutation.isPending}
+                        data-testid={`button-test-${provider}`}
+                      >
+                        {testConnectionMutation.isPending ? 'Testing...' : 'Test Connection'}
                       </Button>
                       <Button variant="outline" size="sm" className="flex-1">
                         Disconnect
