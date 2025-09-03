@@ -9,6 +9,14 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from 
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 import { useToast } from '@/hooks/use-toast';
 
+// Import service logos
+import openaiLogo from '@assets/generated_images/OpenAI_logo_icon_26f0ac6b.png';
+import hubspotLogo from '@assets/generated_images/HubSpot_logo_icon_6812bfe9.png';
+import wordpressLogo from '@assets/generated_images/WordPress_logo_icon_dbf0d637.png';
+import transistorLogo from '@assets/generated_images/Transistor_FM_logo_a21a829a.png';
+import elevenlabsLogo from '@assets/generated_images/ElevenLabs_logo_icon_1425c4b2.png';
+import adobeStockLogo from '@assets/generated_images/Adobe_Stock_logo_620d5679.png';
+
 interface Integration {
   id: string;
   provider: string;
@@ -24,8 +32,7 @@ interface Integration {
 interface ServiceConfig {
   name: string;
   description: string;
-  icon: string;
-  color: string;
+  logo: string;
   helpText: string;
   fields: Array<{
     key: string;
@@ -40,8 +47,7 @@ const serviceConfigs: Record<string, ServiceConfig> = {
   openai: {
     name: 'OpenAI',
     description: 'AI-powered content generation for blogs, podcasts, and ebooks',
-    icon: 'fas fa-robot',
-    color: 'bg-green-500',
+    logo: openaiLogo,
     helpText: 'Create an API key at platform.openai.com → API keys. You\'ll need a paid OpenAI account with available credits.',
     fields: [
       { key: 'apiKey', label: 'API Key', type: 'password', placeholder: 'sk-...', required: true }
@@ -50,8 +56,7 @@ const serviceConfigs: Record<string, ServiceConfig> = {
   hubspot: {
     name: 'HubSpot',
     description: 'Sync meeting intelligence and voice updates into your CRM',
-    icon: 'fas fa-building',
-    color: 'bg-orange-500',
+    logo: hubspotLogo,
     helpText: 'Go to HubSpot Settings → Integrations → Private Apps → Create app. Generate a token with "Read" permissions for contacts and companies.',
     fields: [
       { key: 'apiKey', label: 'Private App Token', type: 'password', placeholder: 'pat-...', required: true },
@@ -61,8 +66,7 @@ const serviceConfigs: Record<string, ServiceConfig> = {
   wordpress: {
     name: 'WordPress',
     description: 'Automatically publish blog posts to your WordPress site',
-    icon: 'fab fa-wordpress',
-    color: 'bg-blue-600',
+    logo: wordpressLogo,
     helpText: 'In WordPress admin: Users → Profile → Application Passwords → Add New. Enter a name and copy the generated password (format: xxxx xxxx xxxx xxxx).',
     fields: [
       { key: 'siteUrl', label: 'Site URL', type: 'url', placeholder: 'https://yoursite.com', required: true },
@@ -73,8 +77,7 @@ const serviceConfigs: Record<string, ServiceConfig> = {
   transistor: {
     name: 'Transistor FM',
     description: 'Upload and distribute podcasts with automated publishing',
-    icon: 'fas fa-microphone',
-    color: 'bg-purple-500',
+    logo: transistorLogo,
     helpText: 'Log into Transistor.fm → Settings → API Access → Generate new API key. You\'ll need a Transistor account with an active podcast.',
     fields: [
       { key: 'apiKey', label: 'API Key', type: 'password', placeholder: 'Your API key', required: true }
@@ -83,8 +86,7 @@ const serviceConfigs: Record<string, ServiceConfig> = {
   elevenlabs: {
     name: 'ElevenLabs',
     description: 'Generate realistic voices for podcasts and audio content',
-    icon: 'fas fa-volume-up',
-    color: 'bg-indigo-500',
+    logo: elevenlabsLogo,
     helpText: 'Visit elevenlabs.io → Profile (top right) → API Key tab → Copy your API key. You need an ElevenLabs account (free tier available).',
     fields: [
       { key: 'apiKey', label: 'API Key', type: 'password', placeholder: 'Your ElevenLabs API key', required: true }
@@ -93,8 +95,7 @@ const serviceConfigs: Record<string, ServiceConfig> = {
   adobe_stock: {
     name: 'Adobe Stock',
     description: 'Access millions of high-quality images and assets',
-    icon: 'fas fa-image',
-    color: 'bg-red-500',
+    logo: adobeStockLogo,
     helpText: 'Create an Adobe Developer account → Console → Create Project → Add API (Creative SDK) → Generate credentials. Requires Adobe Stock subscription.',
     fields: [
       { key: 'clientId', label: 'Client ID', type: 'text', placeholder: 'Your Adobe client ID', required: true },
@@ -254,12 +255,15 @@ export default function Integrations() {
             <Card key={provider} className="relative">
               <CardHeader className="pb-4">
                 <div className="flex items-center space-x-4">
-                  <div className={`w-12 h-12 rounded-lg ${config.color} flex items-center justify-center text-white`}>
-                    <i className={`${config.icon} text-xl`}></i>
+                  <div className="w-12 h-12 flex items-center justify-center">
+                    <img 
+                      src={config.logo} 
+                      alt={`${config.name} logo`} 
+                      className="w-10 h-10 rounded object-contain"
+                    />
                   </div>
                   <div className="flex-1">
                     <div className="flex items-center space-x-2">
-                      <CardTitle className="text-xl font-semibold">{config.name}</CardTitle>
                       <TooltipProvider>
                         <Tooltip>
                           <TooltipTrigger asChild>
