@@ -37,7 +37,7 @@ export default function Lab() {
   const { user: authUser, isAuthenticated, isLoading } = useAuth();
   const user = authUser as User;
   const queryClient = useQueryClient();
-  const [activeTab, setActiveTab] = useState<'podcast' | 'blog' | 'ebook'>('podcast');
+  // Removed activeTab since we no longer have content type tabs
   const [newProjectOpen, setNewProjectOpen] = useState(false);
 
   const form = useForm<ProjectFormData>({
@@ -68,7 +68,7 @@ export default function Lab() {
   const organizationId = user?.organizations?.[0]?.organization?.id;
 
   const { data: projects = [], isLoading: projectsLoading } = useQuery<ContentProject[]>({
-    queryKey: ['/api/content-projects', organizationId, activeTab],
+    queryKey: ['/api/content-projects', organizationId],
     enabled: !!organizationId,
     retry: false,
   });
@@ -135,7 +135,7 @@ export default function Lab() {
     createProjectMutation.mutate(data);
   };
 
-  const filteredProjects = projects?.filter(p => p.type === activeTab) || [];
+  const filteredProjects = projects || [];
 
   return (
     <div className="min-h-screen bg-background">
@@ -286,45 +286,7 @@ export default function Lab() {
         />
         
         <div className="p-6">
-          {/* Content Type Tabs */}
-          <div className="flex space-x-1 rounded-lg bg-muted p-1 w-fit mb-8">
-            <button
-              onClick={() => setActiveTab('podcast')}
-              className={`flex items-center px-4 py-2 rounded-md font-medium transition-colors ${
-                activeTab === 'podcast' 
-                  ? 'bg-background text-foreground shadow-sm' 
-                  : 'text-muted-foreground hover:text-foreground'
-              }`}
-              data-testid="tab-podcast"
-            >
-              <i className="fas fa-microphone w-4 h-4 mr-2"></i>
-              Podcasts
-            </button>
-            <button
-              onClick={() => setActiveTab('blog')}
-              className={`flex items-center px-4 py-2 rounded-md font-medium transition-colors ${
-                activeTab === 'blog' 
-                  ? 'bg-background text-foreground shadow-sm' 
-                  : 'text-muted-foreground hover:text-foreground'
-              }`}
-              data-testid="tab-blog"
-            >
-              <i className="fas fa-blog w-4 h-4 mr-2"></i>
-              Blogs
-            </button>
-            <button
-              onClick={() => setActiveTab('ebook')}
-              className={`flex items-center px-4 py-2 rounded-md font-medium transition-colors ${
-                activeTab === 'ebook' 
-                  ? 'bg-background text-foreground shadow-sm' 
-                  : 'text-muted-foreground hover:text-foreground'
-              }`}
-              data-testid="tab-ebook"
-            >
-              <i className="fas fa-book w-4 h-4 mr-2"></i>
-              E-Books
-            </button>
-          </div>
+          {/* Content Type Tabs Removed - Now using unified project creation */}
 
           {/* Content Projects */}
           <div className="mb-8">
@@ -366,11 +328,11 @@ export default function Lab() {
                   <i className="fas fa-flask text-4xl text-muted-foreground mb-4"></i>
                   <h3 className="text-lg font-semibold text-foreground mb-2">No projects yet</h3>
                   <p className="text-muted-foreground text-center mb-4">
-                    Create your first {activeTab} project to get started with AI-powered content creation
+                    Create your first project to get started with AI-powered content creation
                   </p>
                   <Button onClick={() => setNewProjectOpen(true)} data-testid="button-create-first-project">
                     <i className="fas fa-plus mr-2"></i>
-                    Create Your First {activeTab.charAt(0).toUpperCase() + activeTab.slice(1)}
+                    Create Your First Project
                   </Button>
                 </CardContent>
               </Card>
