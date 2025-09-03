@@ -1,5 +1,5 @@
 import { initializeApp } from "firebase/app";
-import { getAuth, signInWithRedirect, GoogleAuthProvider, getRedirectResult, signOut, onAuthStateChanged, User } from "firebase/auth";
+import { getAuth, signInWithRedirect, signInWithPopup, GoogleAuthProvider, getRedirectResult, signOut, onAuthStateChanged, User } from "firebase/auth";
 
 const firebaseConfig = {
   apiKey: "AIzaSyBYwnoz1g1GcKG78XfUkQ_XyYndpBf7Tv8",
@@ -26,9 +26,9 @@ setPersistence(auth, browserLocalPersistence).catch((error) => {
 // Initialize Google Auth Provider
 const provider = new GoogleAuthProvider();
 
-// Function to sign in with Google
+// Function to sign in with Google (using popup for better reliability in dev)
 export const signInWithGoogle = () => {
-  return signInWithRedirect(auth, provider);
+  return signInWithPopup(auth, provider);
 };
 
 // Function to handle redirect result

@@ -11,12 +11,31 @@ interface LoginModalProps {
 export function LoginModal({ isOpen, onClose, featureName }: LoginModalProps) {
   const handleGoogleSignIn = async () => {
     try {
-      console.log('Starting Google sign-in...');
-      await signInWithGoogle();
-      console.log('Sign-in redirect initiated');
+      console.log('Starting Google sign-in popup...');
+      const result = await signInWithGoogle();
+      console.log('Sign-in successful:', result.user.email);
+      
+      // Close modal on successful sign-in
+      onClose();
+      
+      // Handle feature redirect if needed
+      const pendingFeature = localStorage.getItem('pendingFeature');
+      if (pendingFeature) {
+        localStorage.removeItem('pendingFeature');
+        const featureRoutes: Record<string, string> = {
+          'The Lab': '/lab',
+          'CRM Sync': '/sync',
+          'Reports': '/reports',
+          'Dashboard': '/dashboard'
+        };
+        const targetRoute = featureRoutes[pendingFeature];
+        if (targetRoute) {
+          window.location.href = targetRoute;
+        }
+      }
     } catch (error) {
       console.error('Sign-in error:', error);
-      alert('Sign-in error: ' + error);
+      alert('Sign-in failed: ' + (error as any).message);
     }
   };
 
