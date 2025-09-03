@@ -3,6 +3,7 @@ import labIcon from '@assets/generated_images/The_Lab_AI_content_creation_icon_f
 import syncIcon from '@assets/generated_images/CRM_synchronization_workflow_icon_8587610e.png'
 import reportsIcon from '@assets/generated_images/Analytics_reports_dashboard_icon_aa8cffd8.png'
 import dashboardIcon from '@assets/generated_images/KPI_dashboard_interface_icon_1c62cc62.png'
+import { signInWithGoogle } from '@/lib/firebase'
 
 export default function Landing() {
   return (
@@ -32,7 +33,7 @@ export default function Landing() {
         <div className="mt-16 grid grid-cols-4 gap-12">
           {/* The Lab */}
           <button 
-            onClick={() => window.location.href = '/api/login?redirect=/lab'}
+            onClick={() => signInWithGoogle()}
             className="text-center border border-gray-200 rounded-lg p-8 hover:border-blue-300 hover:shadow-lg transition-all duration-200 cursor-pointer"
           >
             <div className="mb-6">
@@ -51,7 +52,7 @@ export default function Landing() {
 
           {/* CRM Sync */}
           <button 
-            onClick={() => window.location.href = '/api/login?redirect=/sync'}
+            onClick={() => signInWithGoogle()}
             className="text-center border border-gray-200 rounded-lg p-8 hover:border-blue-300 hover:shadow-lg transition-all duration-200 cursor-pointer"
           >
             <div className="mb-6">
@@ -70,7 +71,7 @@ export default function Landing() {
 
           {/* Reports */}
           <button 
-            onClick={() => window.location.href = '/api/login?redirect=/reports'}
+            onClick={() => signInWithGoogle()}
             className="text-center border border-gray-200 rounded-lg p-8 hover:border-blue-300 hover:shadow-lg transition-all duration-200 cursor-pointer"
           >
             <div className="mb-6">
@@ -89,7 +90,7 @@ export default function Landing() {
 
           {/* Dashboard */}
           <button 
-            onClick={() => window.location.href = '/api/login?redirect=/dashboard'}
+            onClick={() => signInWithGoogle()}
             className="text-center border border-gray-200 rounded-lg p-8 hover:border-blue-300 hover:shadow-lg transition-all duration-200 cursor-pointer"
           >
             <div className="mb-6">
