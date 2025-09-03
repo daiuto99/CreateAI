@@ -10,8 +10,23 @@ export function AuthHandler() {
       try {
         const result = await handleRedirectResult();
         if (result) {
-          // User successfully signed in, redirect to dashboard by default
-          setLocation('/dashboard');
+          // User successfully signed in, check for stored feature preference
+          const pendingFeature = localStorage.getItem('pendingFeature');
+          localStorage.removeItem('pendingFeature'); // Clean up
+          
+          // Map feature names to routes
+          const featureRoutes: Record<string, string> = {
+            'The Lab': '/lab',
+            'CRM Sync': '/sync',
+            'Reports': '/reports',
+            'Dashboard': '/dashboard'
+          };
+          
+          const targetRoute = pendingFeature && featureRoutes[pendingFeature] 
+            ? featureRoutes[pendingFeature] 
+            : '/dashboard'; // Default fallback
+          
+          setLocation(targetRoute);
         }
       } catch (error) {
         console.error('Error handling auth redirect:', error);
