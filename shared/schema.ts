@@ -108,7 +108,7 @@ export const contentItems = pgTable("content_items", {
 
 // Integration provider enum
 export const integrationProviderEnum = pgEnum('integration_provider', [
-  'hubspot', 'wordpress', 'transistor', 'elevenlabs', 'openai', 'adobe_stock'
+  'bigin', 'wordpress', 'transistor', 'elevenlabs', 'openai', 'adobe_stock'
 ]);
 
 // Integration status enum
