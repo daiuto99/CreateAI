@@ -31,12 +31,12 @@ export default function Sidebar() {
   return (
     <div className="fixed inset-y-0 left-0 z-50 w-64 bg-card border-r border-border hidden lg:flex flex-col">
       {/* Logo */}
-      <div className="flex items-center h-16 px-6 border-b border-border">
+      <div className="flex items-center h-24 px-6 border-b border-border">
         <Link href="/" className="flex items-center" data-testid="link-home">
           <img 
             src={createAILogo} 
             alt="CreateAI" 
-            className="h-8 w-auto"
+            className="h-32 w-auto"
           />
         </Link>
       </div>
