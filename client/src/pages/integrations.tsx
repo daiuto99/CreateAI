@@ -263,9 +263,9 @@ export default function Integrations() {
                       <TooltipProvider>
                         <Tooltip>
                           <TooltipTrigger asChild>
-                            <Button variant="ghost" size="sm" className="w-6 h-6 p-0 text-gray-400 hover:text-gray-600">
-                              <i className="fas fa-question-circle text-sm"></i>
-                            </Button>
+                            <button className="w-5 h-5 rounded-full bg-gray-200 hover:bg-gray-300 flex items-center justify-center text-gray-600 hover:text-gray-800 transition-colors">
+                              <span className="text-xs font-bold">?</span>
+                            </button>
                           </TooltipTrigger>
                           <TooltipContent side="top" className="max-w-sm">
                             <p className="text-sm">{config.helpText}</p>
