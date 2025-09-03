@@ -237,6 +237,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.post('/api/integrations', isAuthenticated, async (req: any, res) => {
     try {
       const userId = req.user.claims.sub;
+      console.log("Raw request body:", req.body);
+      
       const integrationData = insertUserIntegrationSchema.parse({
         ...req.body,
         userId
@@ -246,6 +248,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       res.json(integration);
     } catch (error) {
       if (error instanceof z.ZodError) {
+        console.error("Validation errors:", error.errors);
         return res.status(400).json({ message: "Invalid integration data", errors: error.errors });
       }
       console.error("Error creating integration:", error);
