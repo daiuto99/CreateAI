@@ -1,6 +1,12 @@
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 
+// Import custom icons
+import labIcon from '@assets/generated_images/The_Lab_AI_content_creation_icon_f26cd1d3.png'
+import syncIcon from '@assets/generated_images/CRM_synchronization_workflow_icon_8587610e.png'
+import reportsIcon from '@assets/generated_images/Analytics_reports_dashboard_icon_aa8cffd8.png'
+import dashboardIcon from '@assets/generated_images/KPI_dashboard_interface_icon_1c62cc62.png'
+
 export default function Landing() {
   return (
     <div className="min-h-screen bg-background">
@@ -55,7 +61,7 @@ export default function Landing() {
           <Card className="text-center">
             <CardHeader>
               <div className="w-16 h-16 gradient-bg rounded-lg flex items-center justify-center mx-auto mb-4">
-                <i className="fas fa-flask text-white text-xl"></i>
+                <img src={labIcon} alt="The Lab icon" className="w-6 h-6" />
               </div>
               <CardTitle>The Lab</CardTitle>
             </CardHeader>
@@ -69,7 +75,7 @@ export default function Landing() {
           <Card className="text-center">
             <CardHeader>
               <div className="w-16 h-16 bg-blue-500 rounded-lg flex items-center justify-center mx-auto mb-4">
-                <i className="fas fa-sync text-white text-xl"></i>
+                <img src={syncIcon} alt="CRM Sync icon" className="w-6 h-6" />
               </div>
               <CardTitle>CRM Sync</CardTitle>
             </CardHeader>
@@ -83,7 +89,7 @@ export default function Landing() {
           <Card className="text-center">
             <CardHeader>
               <div className="w-16 h-16 bg-green-500 rounded-lg flex items-center justify-center mx-auto mb-4">
-                <i className="fas fa-chart-line text-white text-xl"></i>
+                <img src={reportsIcon} alt="Reports icon" className="w-6 h-6" />
               </div>
               <CardTitle>Reports</CardTitle>
             </CardHeader>
@@ -97,7 +103,7 @@ export default function Landing() {
           <Card className="text-center">
             <CardHeader>
               <div className="w-16 h-16 bg-purple-500 rounded-lg flex items-center justify-center mx-auto mb-4">
-                <i className="fas fa-tachometer-alt text-white text-xl"></i>
+                <img src={dashboardIcon} alt="Dashboard icon" className="w-6 h-6" />
               </div>
               <CardTitle>Dashboard</CardTitle>
             </CardHeader>

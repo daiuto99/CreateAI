@@ -2,11 +2,17 @@ import { Link, useLocation } from "wouter";
 import { Button } from "@/components/ui/button";
 import { useAuth } from "@/hooks/useAuth";
 
+// Import custom icons
+import labIcon from '@assets/generated_images/The_Lab_AI_content_creation_icon_f26cd1d3.png'
+import syncIcon from '@assets/generated_images/CRM_synchronization_workflow_icon_8587610e.png'
+import reportsIcon from '@assets/generated_images/Analytics_reports_dashboard_icon_aa8cffd8.png'
+import dashboardIcon from '@assets/generated_images/KPI_dashboard_interface_icon_1c62cc62.png'
+
 const navigation = [
-  { name: 'The Lab', href: '/lab', icon: 'fas fa-flask' },
-  { name: 'Sync', href: '/sync', icon: 'fas fa-sync' },
-  { name: 'Reports', href: '/reports', icon: 'fas fa-chart-line' },
-  { name: 'Dashboard', href: '/dashboard', icon: 'fas fa-tachometer-alt' },
+  { name: 'The Lab', href: '/lab', icon: labIcon },
+  { name: 'Sync', href: '/sync', icon: syncIcon },
+  { name: 'Reports', href: '/reports', icon: reportsIcon },
+  { name: 'Dashboard', href: '/dashboard', icon: dashboardIcon },
 ];
 
 const mockProjects = [
@@ -45,7 +51,7 @@ export default function Sidebar() {
                       : 'text-muted-foreground hover:bg-accent hover:text-accent-foreground'
                   }`}
                 >
-                  <i className={`${item.icon} w-5 h-5 mr-3`}></i>
+                  <img src={item.icon} alt={`${item.name} icon`} className="w-5 h-5 mr-3" />
                   {item.name}
                 </div>
               </Link>
