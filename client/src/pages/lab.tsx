@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import { Link } from "wouter";
 import { useAuth } from "@/hooks/useAuth";
 import type { User } from "@/types";
 import { useToast } from "@/hooks/use-toast";
@@ -122,10 +123,12 @@ export default function Lab() {
                   <p className="text-muted-foreground text-center mb-4">
                     Create your first project to get started with AI-powered content creation
                   </p>
-                  <Button onClick={() => setNewProjectOpen(true)} data-testid="button-create-first-project">
-                    <i className="fas fa-plus mr-2"></i>
-                    Create Your First Project
-                  </Button>
+                  <Link href="/home">
+                    <Button data-testid="button-create-first-project">
+                      <i className="fas fa-plus mr-2"></i>
+                      Create Your First Project
+                    </Button>
+                  </Link>
                 </CardContent>
               </Card>
             )}
