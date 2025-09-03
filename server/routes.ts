@@ -325,14 +325,14 @@ export async function registerRoutes(app: Express): Promise<Server> {
                 'grant_type': 'client_credentials',
                 'client_id': biginCreds.clientId,
                 'client_secret': biginCreds.clientSecret,
-                'scope': 'ZohoBigin.modules.READ'
+                'scope': 'ZohoBigin.modules.contacts.READ'
               })
             });
             
             if (tokenResponse.ok) {
               const tokenData = await tokenResponse.json();
               // Test the access token by calling Bigin API
-              const biginResponse = await fetch('https://www.zohoapis.com/bigin/v1/Contacts', {
+              const biginResponse = await fetch('https://www.zohoapis.com/bigin/v1/Contacts?fields=Last_Name', {
                 headers: {
                   'Authorization': `Zoho-oauthtoken ${tokenData.access_token}`,
                   'Content-Type': 'application/json'
