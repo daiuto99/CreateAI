@@ -57,10 +57,10 @@ const serviceConfigs: Record<string, ServiceConfig> = {
     name: 'Bigin by Zoho',
     description: 'Sync meeting intelligence and voice updates into your CRM',
     logo: biginLogo,
-    helpText: 'Go to Bigin Settings → Developer Space → Server-based Applications → Create app. Generate an access token with "Read" and "Write" permissions for contacts and deals.',
+    helpText: 'Go to Bigin Settings → Developer Space → Server-based Applications → Create app. Copy the Client ID and Client Secret from your created application.',
     fields: [
-      { key: 'apiKey', label: 'Access Token', type: 'password', placeholder: '1000.xxx...', required: true },
-      { key: 'orgId', label: 'Organization ID', type: 'text', placeholder: 'Your Bigin org ID', required: true }
+      { key: 'clientId', label: 'Client ID', type: 'text', placeholder: '1000.74UPTQQD6M8RZUGC3LZ1467PODC...', required: true },
+      { key: 'clientSecret', label: 'Client Secret', type: 'password', placeholder: '6153dcaa9a3c249eab5ae23c2d20a396bc1...', required: true }
     ]
   },
   wordpress: {

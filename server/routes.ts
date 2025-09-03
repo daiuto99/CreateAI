@@ -310,19 +310,41 @@ export async function registerRoutes(app: Express): Promise<Server> {
             break;
 
           case 'bigin':
-            // Test Bigin by Zoho API key
+            // Test Bigin by Zoho OAuth credentials
             const biginCreds = integration.credentials as any;
-            const biginResponse = await fetch(`https://www.zohoapis.com/bigin/v1/Contacts`, {
+            // Test by getting an access token using client credentials
+            const tokenResponse = await fetch('https://accounts.zoho.com/oauth/v2/token', {
+              method: 'POST',
               headers: {
-                'Authorization': `Zoho-oauthtoken ${biginCreds.apiKey}`,
-                'Content-Type': 'application/json'
-              }
+                'Content-Type': 'application/x-www-form-urlencoded'
+              },
+              body: new URLSearchParams({
+                'grant_type': 'client_credentials',
+                'client_id': biginCreds.clientId,
+                'client_secret': biginCreds.clientSecret,
+                'scope': 'ZohoBigin.modules.READ'
+              })
             });
-            if (biginResponse.ok) {
-              testResult = { success: true, message: 'Bigin by Zoho API key is valid and working!', error: '' };
-              await storage.upsertUserIntegration({ ...integration, status: 'connected' as any });
+            
+            if (tokenResponse.ok) {
+              const tokenData = await tokenResponse.json();
+              // Test the access token by calling Bigin API
+              const biginResponse = await fetch('https://www.zohoapis.com/bigin/v1/Contacts', {
+                headers: {
+                  'Authorization': `Zoho-oauthtoken ${tokenData.access_token}`,
+                  'Content-Type': 'application/json'
+                }
+              });
+              
+              if (biginResponse.ok) {
+                testResult = { success: true, message: 'Bigin by Zoho credentials are valid and working!', error: '' };
+                await storage.upsertUserIntegration({ ...integration, status: 'connected' as any });
+              } else {
+                testResult = { success: false, message: '', error: 'Bigin API access failed - check permissions' };
+                await storage.upsertUserIntegration({ ...integration, status: 'error' as any });
+              }
             } else {
-              testResult = { success: false, message: '', error: 'Invalid Bigin by Zoho API key' };
+              testResult = { success: false, message: '', error: 'Invalid Bigin Client ID or Client Secret' };
               await storage.upsertUserIntegration({ ...integration, status: 'error' as any });
             }
             break;
