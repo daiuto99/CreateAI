@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import { useAuth } from "@/hooks/useAuth";
+import type { User } from "@/types";
 import { useToast } from "@/hooks/use-toast";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import type { ContentProject, UserIntegration } from "@shared/schema";
@@ -33,7 +34,8 @@ type ProjectFormData = z.infer<typeof projectSchema>;
 
 export default function Lab() {
   const { toast } = useToast();
-  const { user, isAuthenticated, isLoading } = useAuth();
+  const { user: authUser, isAuthenticated, isLoading } = useAuth();
+  const user = authUser as User;
   const queryClient = useQueryClient();
   const [activeTab, setActiveTab] = useState<'podcast' | 'blog' | 'ebook'>('podcast');
   const [newProjectOpen, setNewProjectOpen] = useState(false);
@@ -63,7 +65,7 @@ export default function Lab() {
   }, [isAuthenticated, isLoading, toast]);
 
   // Get user's first organization
-  const organizationId = user?.organizations?.[0]?.id;
+  const organizationId = user?.organizations?.[0]?.organization?.id;
 
   const { data: projects = [], isLoading: projectsLoading } = useQuery<ContentProject[]>({
     queryKey: ['/api/content-projects', organizationId, activeTab],
@@ -79,6 +81,9 @@ export default function Lab() {
 
   const createProjectMutation = useMutation({
     mutationFn: async (data: ProjectFormData) => {
+      if (!organizationId) {
+        throw new Error('No organization found. Please contact support.');
+      }
       const response = await apiRequest('POST', '/api/content-projects', {
         ...data,
         organizationId,

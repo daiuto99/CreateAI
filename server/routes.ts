@@ -103,6 +103,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       res.json(project);
     } catch (error) {
       if (error instanceof z.ZodError) {
+        console.error("Validation errors:", error.errors);
         return res.status(400).json({ message: "Invalid project data", errors: error.errors });
       }
       console.error("Error creating content project:", error);
