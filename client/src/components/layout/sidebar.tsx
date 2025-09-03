@@ -14,6 +14,7 @@ const navigation = [
   { name: 'Sync', href: '/sync', icon: syncIcon },
   { name: 'Reports', href: '/reports', icon: reportsIcon },
   { name: 'Dashboard', href: '/dashboard', icon: dashboardIcon },
+  { name: 'Settings', href: '/integrations', icon: 'fas fa-cog' },
 ];
 
 const mockProjects = [
@@ -52,7 +53,11 @@ export default function Sidebar() {
                       : 'text-muted-foreground hover:bg-accent hover:text-accent-foreground'
                   }`}
                 >
-                  <img src={item.icon} alt={`${item.name} icon`} className="w-5 h-5 mr-3" />
+                  {typeof item.icon === 'string' && item.icon.startsWith('fas') ? (
+                    <i className={`${item.icon} w-5 h-5 mr-3`}></i>
+                  ) : (
+                    <img src={item.icon as string} alt={`${item.name} icon`} className="w-5 h-5 mr-3" />
+                  )}
                   {item.name}
                 </div>
               </Link>

@@ -1,0 +1,289 @@
+import { useState, useEffect } from 'react';
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import { Button } from '@/components/ui/button';
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { Badge } from '@/components/ui/badge';
+import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
+import { useToast } from '@/hooks/use-toast';
+
+interface Integration {
+  id: string;
+  provider: string;
+  status: 'connected' | 'error' | 'expired' | 'disabled' | 'setup_required';
+  credentials?: any;
+  settings?: any;
+  lastSync?: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
+interface ServiceConfig {
+  name: string;
+  description: string;
+  icon: string;
+  color: string;
+  fields: Array<{
+    key: string;
+    label: string;
+    type: 'text' | 'password' | 'url';
+    placeholder: string;
+    required: boolean;
+  }>;
+}
+
+const serviceConfigs: Record<string, ServiceConfig> = {
+  openai: {
+    name: 'OpenAI',
+    description: 'AI-powered content generation for blogs, podcasts, and ebooks',
+    icon: 'fas fa-robot',
+    color: 'bg-green-500',
+    fields: [
+      { key: 'apiKey', label: 'API Key', type: 'password', placeholder: 'sk-...', required: true }
+    ]
+  },
+  hubspot: {
+    name: 'HubSpot',
+    description: 'Sync meeting intelligence and voice updates into your CRM',
+    icon: 'fas fa-building',
+    color: 'bg-orange-500',
+    fields: [
+      { key: 'apiKey', label: 'Private App Token', type: 'password', placeholder: 'pat-...', required: true },
+      { key: 'portalId', label: 'Portal ID', type: 'text', placeholder: '12345678', required: true }
+    ]
+  },
+  wordpress: {
+    name: 'WordPress',
+    description: 'Automatically publish blog posts to your WordPress site',
+    icon: 'fab fa-wordpress',
+    color: 'bg-blue-600',
+    fields: [
+      { key: 'siteUrl', label: 'Site URL', type: 'url', placeholder: 'https://yoursite.com', required: true },
+      { key: 'username', label: 'Username', type: 'text', placeholder: 'admin', required: true },
+      { key: 'applicationPassword', label: 'Application Password', type: 'password', placeholder: 'xxxx xxxx xxxx xxxx', required: true }
+    ]
+  },
+  transistor: {
+    name: 'Transistor FM',
+    description: 'Upload and distribute podcasts with automated publishing',
+    icon: 'fas fa-microphone',
+    color: 'bg-purple-500',
+    fields: [
+      { key: 'apiKey', label: 'API Key', type: 'password', placeholder: 'Your API key', required: true }
+    ]
+  },
+  elevenlabs: {
+    name: 'ElevenLabs',
+    description: 'Generate realistic voices for podcasts and audio content',
+    icon: 'fas fa-volume-up',
+    color: 'bg-indigo-500',
+    fields: [
+      { key: 'apiKey', label: 'API Key', type: 'password', placeholder: 'Your ElevenLabs API key', required: true }
+    ]
+  },
+  adobe_stock: {
+    name: 'Adobe Stock',
+    description: 'Access millions of high-quality images and assets',
+    icon: 'fas fa-image',
+    color: 'bg-red-500',
+    fields: [
+      { key: 'clientId', label: 'Client ID', type: 'text', placeholder: 'Your Adobe client ID', required: true },
+      { key: 'clientSecret', label: 'Client Secret', type: 'password', placeholder: 'Your Adobe client secret', required: true }
+    ]
+  }
+};
+
+export default function Integrations() {
+  const { toast } = useToast();
+  const queryClient = useQueryClient();
+  const [selectedService, setSelectedService] = useState<string | null>(null);
+  const [formData, setFormData] = useState<Record<string, string>>({});
+  const [isModalOpen, setIsModalOpen] = useState(false);
+
+  const { data: integrations = [], isLoading } = useQuery<Integration[]>({
+    queryKey: ['/api/integrations'],
+  });
+
+  const connectMutation = useMutation({
+    mutationFn: async (data: { provider: string; credentials: Record<string, string> }) => {
+      const response = await fetch('/api/integrations', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(data),
+      });
+      if (!response.ok) throw new Error('Failed to connect service');
+      return response.json();
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['/api/integrations'] });
+      toast({ title: 'Service connected successfully!' });
+      setIsModalOpen(false);
+      setFormData({});
+    },
+    onError: (error) => {
+      toast({ title: 'Failed to connect service', description: error.message, variant: 'destructive' });
+    },
+  });
+
+  const getIntegrationByProvider = (provider: string) => {
+    return integrations.find(integration => integration.provider === provider);
+  };
+
+  const getStatusColor = (status: string) => {
+    switch (status) {
+      case 'connected': return 'bg-green-100 text-green-800';
+      case 'error': return 'bg-red-100 text-red-800';
+      case 'expired': return 'bg-yellow-100 text-yellow-800';
+      case 'disabled': return 'bg-gray-100 text-gray-800';
+      default: return 'bg-blue-100 text-blue-800';
+    }
+  };
+
+  const handleConnect = (provider: string) => {
+    setSelectedService(provider);
+    setFormData({});
+    setIsModalOpen(true);
+  };
+
+  const handleSubmit = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!selectedService) return;
+
+    connectMutation.mutate({
+      provider: selectedService,
+      credentials: formData,
+    });
+  };
+
+  if (isLoading) {
+    return (
+      <div className="flex items-center justify-center h-64">
+        <div className="text-center">Loading integrations...</div>
+      </div>
+    );
+  }
+
+  return (
+    <div className="max-w-4xl mx-auto p-6">
+      <div className="mb-8">
+        <h1 className="text-3xl font-bold text-gray-900 mb-2">Integrations</h1>
+        <p className="text-gray-600">
+          Connect external services to automate your content creation workflow
+        </p>
+      </div>
+
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+        {Object.entries(serviceConfigs).map(([provider, config]) => {
+          const integration = getIntegrationByProvider(provider);
+          const isConnected = integration?.status === 'connected';
+
+          return (
+            <Card key={provider} className="relative">
+              <CardHeader className="pb-4">
+                <div className="flex items-center space-x-4">
+                  <div className={`w-12 h-12 rounded-lg ${config.color} flex items-center justify-center text-white`}>
+                    <i className={`${config.icon} text-xl`}></i>
+                  </div>
+                  <div className="flex-1">
+                    <CardTitle className="text-xl font-semibold">{config.name}</CardTitle>
+                    <p className="text-sm text-gray-600 mt-1">{config.description}</p>
+                  </div>
+                  {integration && (
+                    <Badge className={getStatusColor(integration.status)}>
+                      {integration.status.replace('_', ' ')}
+                    </Badge>
+                  )}
+                </div>
+              </CardHeader>
+              <CardContent>
+                {isConnected ? (
+                  <div className="space-y-3">
+                    <div className="flex items-center justify-between text-sm">
+                      <span className="text-gray-600">Last synced:</span>
+                      <span className="font-medium">
+                        {integration?.lastSync 
+                          ? new Date(integration.lastSync).toLocaleDateString()
+                          : 'Never'
+                        }
+                      </span>
+                    </div>
+                    <div className="flex space-x-2">
+                      <Button variant="outline" size="sm" className="flex-1">
+                        Test Connection
+                      </Button>
+                      <Button variant="outline" size="sm" className="flex-1">
+                        Disconnect
+                      </Button>
+                    </div>
+                  </div>
+                ) : (
+                  <Button 
+                    onClick={() => handleConnect(provider)}
+                    className="w-full"
+                    data-testid={`button-connect-${provider}`}
+                  >
+                    Connect {config.name}
+                  </Button>
+                )}
+              </CardContent>
+            </Card>
+          );
+        })}
+      </div>
+
+      {/* Connection Modal */}
+      <Dialog open={isModalOpen} onOpenChange={setIsModalOpen}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle>
+              Connect {selectedService ? serviceConfigs[selectedService]?.name : ''}
+            </DialogTitle>
+          </DialogHeader>
+          
+          {selectedService && (
+            <form onSubmit={handleSubmit} className="space-y-4">
+              {serviceConfigs[selectedService].fields.map((field) => (
+                <div key={field.key} className="space-y-2">
+                  <Label htmlFor={field.key}>
+                    {field.label}
+                    {field.required && <span className="text-red-500 ml-1">*</span>}
+                  </Label>
+                  <Input
+                    id={field.key}
+                    type={field.type}
+                    placeholder={field.placeholder}
+                    value={formData[field.key] || ''}
+                    onChange={(e) => setFormData(prev => ({
+                      ...prev,
+                      [field.key]: e.target.value
+                    }))}
+                    required={field.required}
+                  />
+                </div>
+              ))}
+              
+              <div className="flex space-x-2 pt-4">
+                <Button
+                  type="button"
+                  variant="outline"
+                  onClick={() => setIsModalOpen(false)}
+                  className="flex-1"
+                >
+                  Cancel
+                </Button>
+                <Button 
+                  type="submit" 
+                  className="flex-1"
+                  disabled={connectMutation.isPending}
+                >
+                  {connectMutation.isPending ? 'Connecting...' : 'Connect'}
+                </Button>
+              </div>
+            </form>
+          )}
+        </DialogContent>
+      </Dialog>
+    </div>
+  );
+}

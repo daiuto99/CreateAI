@@ -12,6 +12,7 @@ import Lab from "@/pages/lab";
 import Sync from "@/pages/sync";
 import Reports from "@/pages/reports";
 import Dashboard from "@/pages/dashboard";
+import Integrations from "@/pages/integrations";
 
 function Router() {
   const { isAuthenticated, isLoading } = useAuth();
@@ -31,6 +32,7 @@ function Router() {
             <Route path="/sync" component={Sync} />
             <Route path="/reports" component={Reports} />
             <Route path="/dashboard" component={Dashboard} />
+            <Route path="/integrations" component={Integrations} />
           </>
         )}
         
