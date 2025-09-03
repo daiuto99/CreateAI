@@ -8,8 +8,12 @@ export function AuthHandler() {
   useEffect(() => {
     const handleAuthRedirect = async () => {
       try {
+        console.log('Checking for auth redirect result...');
         const result = await handleRedirectResult();
+        console.log('Redirect result:', result);
+        
         if (result) {
+          console.log('User signed in successfully:', result.user.email);
           // User successfully signed in, check for stored feature preference
           const pendingFeature = localStorage.getItem('pendingFeature');
           localStorage.removeItem('pendingFeature'); // Clean up
@@ -26,10 +30,14 @@ export function AuthHandler() {
             ? featureRoutes[pendingFeature] 
             : '/dashboard'; // Default fallback
           
+          console.log('Redirecting to:', targetRoute);
           setLocation(targetRoute);
+        } else {
+          console.log('No redirect result found');
         }
       } catch (error) {
         console.error('Error handling auth redirect:', error);
+        alert('Auth redirect error: ' + error);
       }
     };
 

@@ -11,9 +11,12 @@ interface LoginModalProps {
 export function LoginModal({ isOpen, onClose, featureName }: LoginModalProps) {
   const handleGoogleSignIn = async () => {
     try {
+      console.log('Starting Google sign-in...');
       await signInWithGoogle();
+      console.log('Sign-in redirect initiated');
     } catch (error) {
       console.error('Sign-in error:', error);
+      alert('Sign-in error: ' + error);
     }
   };
 

@@ -13,8 +13,15 @@ import { signOutUser } from '@/lib/firebase'
 export default function Landing() {
   const [isLoginModalOpen, setIsLoginModalOpen] = useState(false)
   const [selectedFeature, setSelectedFeature] = useState<string | null>(null)
-  const { user, isAuthenticated } = useAuth()
+  const { user, isAuthenticated, isLoading } = useAuth()
   const [, setLocation] = useLocation()
+
+  // Debug logging
+  console.log('Landing page render:', { 
+    user: user ? { email: user.email, displayName: user.displayName } : null, 
+    isAuthenticated, 
+    isLoading 
+  })
 
   const openLoginModal = (featureName?: string) => {
     setSelectedFeature(featureName || null)
