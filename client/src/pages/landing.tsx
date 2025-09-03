@@ -5,6 +5,7 @@ import labIcon from '@assets/generated_images/The_Lab_AI_content_creation_icon_f
 import syncIcon from '@assets/generated_images/CRM_synchronization_workflow_icon_8587610e.png'
 import reportsIcon from '@assets/generated_images/Analytics_reports_dashboard_icon_aa8cffd8.png'
 import dashboardIcon from '@assets/generated_images/KPI_dashboard_interface_icon_1c62cc62.png'
+import createAILogo from '@assets/generated_images/createai_logo.png'
 import { LoginModal } from '@/components/LoginModal'
 import { Button } from '@/components/ui/button'
 import { useAuth } from '@/hooks/useAuth'
@@ -91,9 +92,11 @@ export default function Landing() {
       <div className="max-w-6xl mx-auto px-6 py-20">
         {/* Main Title */}
         <div className="text-center mb-8">
-          <h1 className="text-6xl font-bold text-gray-900 mb-6">
-            CreateAI
-          </h1>
+          <img 
+            src={createAILogo} 
+            alt="CreateAI" 
+            className="w-96 h-auto mx-auto mb-6"
+          />
           <p className="text-lg text-gray-600 max-w-2xl mx-auto leading-relaxed">
             Generate podcasts, blogs, and e-books with AI assistance. Sync with your CRM automatically. Track performance with beautiful analytics.
           </p>
