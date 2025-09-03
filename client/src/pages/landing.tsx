@@ -18,7 +18,12 @@ export default function Landing() {
 
   // Debug logging
   console.log('Landing page render:', { 
-    user: user ? { email: user.email, displayName: user.displayName } : null, 
+    user: user ? { 
+      email: user.email, 
+      displayName: user.displayName,
+      photoURL: user.photoURL,
+      uid: user.uid
+    } : null, 
     isAuthenticated, 
     isLoading 
   })
@@ -56,9 +61,21 @@ export default function Landing() {
       <div className="absolute top-6 right-6">
         {isAuthenticated ? (
           <div className="flex items-center space-x-4">
-            <span className="text-gray-700">
-              Welcome, {user?.displayName || user?.email || 'User'}!
-            </span>
+            {user?.photoURL && (
+              <img 
+                src={user.photoURL} 
+                alt="Profile" 
+                className="w-8 h-8 rounded-full"
+              />
+            )}
+            <div className="text-right">
+              <div className="text-sm font-medium text-gray-900">
+                {user?.displayName || 'User'}
+              </div>
+              <div className="text-xs text-gray-500">
+                {user?.email}
+              </div>
+            </div>
             <Button 
               onClick={handleSignOut}
               className="bg-gray-600 hover:bg-gray-700 text-white px-4 py-2"
