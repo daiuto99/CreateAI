@@ -1,0 +1,104 @@
+import { Link, useLocation } from "wouter";
+import { Button } from "@/components/ui/button";
+import { useAuth } from "@/hooks/useAuth";
+
+const navigation = [
+  { name: 'The Lab', href: '/lab', icon: 'fas fa-flask' },
+  { name: 'Sync', href: '/sync', icon: 'fas fa-sync' },
+  { name: 'Reports', href: '/reports', icon: 'fas fa-chart-line' },
+  { name: 'Dashboard', href: '/dashboard', icon: 'fas fa-tachometer-alt' },
+];
+
+const mockProjects = [
+  { name: 'Tech Talk Weekly', href: '/lab/projects/tech-talk', icon: 'fas fa-microphone' },
+  { name: 'Marketing Blog', href: '/lab/projects/marketing-blog', icon: 'fas fa-blog' },
+  { name: 'AI Guide 2024', href: '/lab/projects/ai-guide', icon: 'fas fa-book' },
+];
+
+export default function Sidebar() {
+  const [location] = useLocation();
+  const { user } = useAuth();
+
+  return (
+    <div className="fixed inset-y-0 left-0 z-50 w-64 bg-card border-r border-border hidden lg:flex flex-col">
+      {/* Logo */}
+      <div className="flex items-center h-16 px-6 border-b border-border">
+        <Link href="/" className="flex items-center space-x-3" data-testid="link-home">
+          <div className="w-8 h-8 gradient-bg rounded-lg flex items-center justify-center">
+            <i className="fas fa-robot text-white text-sm"></i>
+          </div>
+          <span className="font-bold text-xl text-foreground">CreateAI</span>
+        </Link>
+      </div>
+
+      {/* Navigation */}
+      <nav className="flex-1 px-4 py-6 space-y-2">
+        <div className="space-y-1">
+          {navigation.map((item) => {
+            const isActive = location === item.href || (item.href !== '/' && location.startsWith(item.href));
+            return (
+              <Link key={item.name} href={item.href} data-testid={`link-${item.name.toLowerCase().replace(' ', '-')}`}>
+                <div
+                  className={`flex items-center px-3 py-2 text-sm font-medium rounded-lg transition-colors ${
+                    isActive
+                      ? 'bg-primary/10 text-primary'
+                      : 'text-muted-foreground hover:bg-accent hover:text-accent-foreground'
+                  }`}
+                >
+                  <i className={`${item.icon} w-5 h-5 mr-3`}></i>
+                  {item.name}
+                </div>
+              </Link>
+            );
+          })}
+        </div>
+
+        {/* Projects Section */}
+        <div className="pt-6">
+          <p className="px-3 text-xs font-semibold text-muted-foreground uppercase tracking-wider">
+            Projects
+          </p>
+          <div className="mt-2 space-y-1">
+            {mockProjects.map((project) => (
+              <Link key={project.name} href={project.href} data-testid={`link-project-${project.name.toLowerCase().replace(/\s+/g, '-')}`}>
+                <div className="flex items-center px-3 py-2 text-sm rounded-lg text-muted-foreground hover:bg-accent hover:text-accent-foreground transition-colors">
+                  <i className={`${project.icon} w-4 h-4 mr-3`}></i>
+                  {project.name}
+                </div>
+              </Link>
+            ))}
+          </div>
+        </div>
+      </nav>
+
+      {/* User Profile */}
+      <div className="p-4 border-t border-border">
+        <div className="flex items-center space-x-3">
+          <img
+            src={user?.profileImageUrl || "https://images.unsplash.com/photo-1472099645785-5658abf4ff4e?ixlib=rb-4.0.3&ixid=MnwxMjA3fDB8MHxwaG90by1wYWdlfHx8fGVufDB8fHx8&auto=format&fit=crop&w=100&h=100"}
+            alt="User avatar"
+            className="w-8 h-8 rounded-full object-cover"
+            data-testid="img-user-avatar"
+          />
+          <div className="flex-1 min-w-0">
+            <p className="text-sm font-medium text-foreground truncate" data-testid="text-user-name">
+              {user?.firstName || user?.email || 'User'}
+            </p>
+            <p className="text-xs text-muted-foreground truncate" data-testid="text-user-role">
+              {user?.organizations?.[0]?.role || 'Member'}
+            </p>
+          </div>
+          <Button
+            variant="ghost"
+            size="sm"
+            onClick={() => window.location.href = '/api/logout'}
+            className="text-muted-foreground hover:text-foreground p-2"
+            data-testid="button-logout"
+          >
+            <i className="fas fa-sign-out-alt w-4 h-4"></i>
+          </Button>
+        </div>
+      </div>
+    </div>
+  );
+}
