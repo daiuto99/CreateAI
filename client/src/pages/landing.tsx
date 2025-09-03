@@ -16,17 +16,6 @@ export default function Landing() {
   const { user, isAuthenticated, isLoading } = useAuth()
   const [, setLocation] = useLocation()
 
-  // Debug logging
-  console.log('Landing page render:', { 
-    user: user ? { 
-      email: user.email, 
-      displayName: user.displayName,
-      photoURL: user.photoURL,
-      uid: user.uid
-    } : null, 
-    isAuthenticated, 
-    isLoading 
-  })
 
   const openLoginModal = (featureName?: string) => {
     setSelectedFeature(featureName || null)
@@ -61,29 +50,15 @@ export default function Landing() {
       <div className="absolute top-6 right-6">
         {isAuthenticated ? (
           <div className="flex items-center space-x-4">
-            {user?.photoURL && (
-              <div className="relative">
-                <img 
-                  src={user.photoURL} 
-                  alt="Profile" 
-                  className="w-8 h-8 rounded-full"
-                  onError={(e) => {
-                    console.log('Profile image failed to load:', user.photoURL);
-                    (e.target as HTMLImageElement).style.display = 'none';
-                  }}
-                  onClick={() => {
-                    console.log('Current photoURL:', user.photoURL);
-                    console.log('Full user object:', user);
-                  }}
-                />
-                <div className="absolute -bottom-1 -right-1 text-xs bg-red-500 text-white rounded-full w-4 h-4 flex items-center justify-center cursor-pointer"
-                     onClick={() => {
-                       console.log('Debug - photoURL:', user.photoURL);
-                       alert('PhotoURL: ' + user.photoURL);
-                     }}
-                     title="Debug photo URL">
-                  ?
-                </div>
+            {user?.photoURL ? (
+              <img 
+                src={user.photoURL} 
+                alt="Profile" 
+                className="w-8 h-8 rounded-full"
+              />
+            ) : (
+              <div className="w-8 h-8 rounded-full bg-blue-600 flex items-center justify-center text-white text-sm font-medium">
+                {(user?.displayName?.charAt(0) || user?.email?.charAt(0) || '?').toUpperCase()}
               </div>
             )}
             <div className="text-right">

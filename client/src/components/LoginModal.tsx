@@ -11,9 +11,7 @@ interface LoginModalProps {
 export function LoginModal({ isOpen, onClose, featureName }: LoginModalProps) {
   const handleGoogleSignIn = async () => {
     try {
-      console.log('Starting Google sign-in popup...');
       const result = await signInWithGoogle();
-      console.log('Sign-in successful:', result.user.email);
       
       // Close modal on successful sign-in
       onClose();
