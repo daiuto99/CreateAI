@@ -73,7 +73,7 @@ export class OpenAIService {
         keyTakeaways: result.keyTakeaways || [],
       };
     } catch (error) {
-      throw new Error(`Failed to generate content outline: ${error.message}`);
+      throw new Error(`Failed to generate content outline: ${error instanceof Error ? error.message : 'Unknown error'}`);
     }
   }
 
@@ -107,7 +107,7 @@ export class OpenAIService {
 
       return JSON.parse(response.choices[0].message.content!);
     } catch (error) {
-      throw new Error(`Failed to generate blog draft: ${error.message}`);
+      throw new Error(`Failed to generate blog draft: ${error instanceof Error ? error.message : 'Unknown error'}`);
     }
   }
 
@@ -134,7 +134,7 @@ export class OpenAIService {
 
       return JSON.parse(response.choices[0].message.content!);
     } catch (error) {
-      throw new Error(`Failed to generate podcast script: ${error.message}`);
+      throw new Error(`Failed to generate podcast script: ${error instanceof Error ? error.message : 'Unknown error'}`);
     }
   }
 
@@ -174,7 +174,7 @@ export class OpenAIService {
 
       return JSON.parse(response.choices[0].message.content!);
     } catch (error) {
-      throw new Error(`Failed to generate ebook chapter: ${error.message}`);
+      throw new Error(`Failed to generate ebook chapter: ${error instanceof Error ? error.message : 'Unknown error'}`);
     }
   }
 
@@ -207,7 +207,7 @@ export class OpenAIService {
 
       return JSON.parse(response.choices[0].message.content!);
     } catch (error) {
-      throw new Error(`Failed to extract CRM fields: ${error.message}`);
+      throw new Error(`Failed to extract CRM fields: ${error instanceof Error ? error.message : 'Unknown error'}`);
     }
   }
 
@@ -293,7 +293,11 @@ export class OpenAIService {
       }
     };
 
-    return basePrompts[type]?.[stage] || "You are a helpful content creation assistant.";
+    const typePrompts = basePrompts[type];
+    if (typePrompts && stage in typePrompts) {
+      return typePrompts[stage as keyof typeof typePrompts];
+    }
+    return "You are a helpful content creation assistant.";
   }
 }
 

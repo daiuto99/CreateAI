@@ -75,11 +75,16 @@ export class DatabaseStorage implements IStorage {
 
   // Organization operations
   async getUserOrganizations(userId: string): Promise<(UserOrganization & { organization: Organization })[]> {
-    return await db
+    const result = await db
       .select()
       .from(userOrganizations)
       .innerJoin(organizations, eq(userOrganizations.organizationId, organizations.id))
       .where(eq(userOrganizations.userId, userId));
+    
+    return result.map(row => ({ 
+      ...row.user_organizations, 
+      organization: row.organizations 
+    }));
   }
 
   async createOrganization(orgData: InsertOrganization, ownerId: string): Promise<Organization> {
@@ -102,20 +107,17 @@ export class DatabaseStorage implements IStorage {
 
   // Content operations
   async getContentProjects(organizationId: string, type?: string): Promise<ContentProject[]> {
-    let query = db
-      .select()
-      .from(contentProjects)
-      .where(eq(contentProjects.organizationId, organizationId))
-      .orderBy(desc(contentProjects.updatedAt));
+    const conditions = [eq(contentProjects.organizationId, organizationId)];
     
     if (type) {
-      query = query.where(and(
-        eq(contentProjects.organizationId, organizationId),
-        eq(contentProjects.type, type as any)
-      ));
+      conditions.push(eq(contentProjects.type, type as any));
     }
     
-    return await query;
+    return await db
+      .select()
+      .from(contentProjects)
+      .where(and(...conditions))
+      .orderBy(desc(contentProjects.updatedAt));
   }
 
   async createContentProject(project: InsertContentProject): Promise<ContentProject> {
@@ -186,20 +188,17 @@ export class DatabaseStorage implements IStorage {
 
   // Analytics operations
   async getAnalyticsSnapshots(organizationId: string, source?: string): Promise<AnalyticsSnapshot[]> {
-    let query = db
-      .select()
-      .from(analyticsSnapshots)
-      .where(eq(analyticsSnapshots.organizationId, organizationId))
-      .orderBy(desc(analyticsSnapshots.timestamp));
+    const conditions = [eq(analyticsSnapshots.organizationId, organizationId)];
     
     if (source) {
-      query = query.where(and(
-        eq(analyticsSnapshots.organizationId, organizationId),
-        eq(analyticsSnapshots.source, source)
-      ));
+      conditions.push(eq(analyticsSnapshots.source, source));
     }
     
-    return await query;
+    return await db
+      .select()
+      .from(analyticsSnapshots)
+      .where(and(...conditions))
+      .orderBy(desc(analyticsSnapshots.timestamp));
   }
 
   async createAnalyticsSnapshot(snapshot: InsertAnalyticsSnapshot): Promise<AnalyticsSnapshot> {

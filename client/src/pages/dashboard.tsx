@@ -2,6 +2,7 @@ import { useEffect } from "react";
 import { useAuth } from "@/hooks/useAuth";
 import { useToast } from "@/hooks/use-toast";
 import { useQuery } from "@tanstack/react-query";
+import type { ContentProject, UserIntegration } from "@shared/schema";
 import Sidebar from "@/components/layout/sidebar";
 import MobileNav from "@/components/layout/mobile-nav";
 import Header from "@/components/layout/header";
@@ -31,19 +32,19 @@ export default function Dashboard() {
   // Get user's first organization
   const organizationId = user?.organizations?.[0]?.id;
 
-  const { data: projects = [] } = useQuery({
+  const { data: projects = [] } = useQuery<ContentProject[]>({
     queryKey: ['/api/content-projects', organizationId],
     enabled: !!organizationId,
     retry: false,
   });
 
-  const { data: integrations = [] } = useQuery({
+  const { data: integrations = [] } = useQuery<UserIntegration[]>({
     queryKey: ['/api/integrations'],
     enabled: !!user,
     retry: false,
   });
 
-  const { data: analytics = [] } = useQuery({
+  const { data: analytics = [] } = useQuery<any[]>({
     queryKey: ['/api/analytics/snapshots', organizationId],
     enabled: !!organizationId,
     retry: false,
@@ -61,9 +62,9 @@ export default function Dashboard() {
   }
 
   const activeProjects = projects.length;
-  const publishedContent = projects.filter((p: any) => p.status === 'published').length;
-  const totalContent = projects.reduce((acc: number, p: any) => acc + (p.itemCount || 0), 0);
-  const connectedIntegrations = integrations.filter((i: any) => i.status === 'connected').length;
+  const publishedContent = projects.filter(p => p.status === 'published').length;
+  const totalContent = projects.reduce((acc: number, p) => acc + (p.metadata as any)?.itemCount || 0, 0);
+  const connectedIntegrations = integrations.filter(i => i.status === 'connected').length;
 
   return (
     <div className="min-h-screen bg-background">
@@ -326,7 +327,7 @@ export default function Dashboard() {
                     <div className="space-y-4">
                       <div className="flex items-center justify-between">
                         <span className="text-sm font-medium">API Response Time</span>
-                        <span className="text-sm text-muted-foreground" data-testid="text-api-response">< 200ms</span>
+                        <span className="text-sm text-muted-foreground" data-testid="text-api-response">&lt; 200ms</span>
                       </div>
                       <div className="w-full bg-secondary rounded-full h-2">
                         <div className="bg-green-500 h-2 rounded-full" style={{ width: '85%' }}></div>
@@ -342,10 +343,10 @@ export default function Dashboard() {
 
                       <div className="flex items-center justify-between">
                         <span className="text-sm font-medium">Integration Health</span>
-                        <span className="text-sm text-muted-foreground" data-testid="text-integration-health">{connectedIntegrations}/{integrations.length} Connected</span>
+                        <span className="text-sm text-muted-foreground" data-testid="text-integration-health">{connectedIntegrations}/{integrations?.length || 0} Connected</span>
                       </div>
                       <div className="w-full bg-secondary rounded-full h-2">
-                        <div className="bg-purple-500 h-2 rounded-full" style={{ width: integrations.length > 0 ? `${(connectedIntegrations / integrations.length) * 100}%` : '0%' }}></div>
+                        <div className="bg-purple-500 h-2 rounded-full" style={{ width: (integrations?.length || 0) > 0 ? `${(connectedIntegrations / (integrations?.length || 1)) * 100}%` : '0%' }}></div>
                       </div>
                     </div>
                   </CardContent>

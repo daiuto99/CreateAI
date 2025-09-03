@@ -2,8 +2,8 @@ import { useEffect, useState } from "react";
 import { useAuth } from "@/hooks/useAuth";
 import { useToast } from "@/hooks/use-toast";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import { apiRequest } from "@/lib/queryClient";
-import { isUnauthorizedError } from "@/lib/authUtils";
+import type { ContentProject, UserIntegration } from "@shared/schema";
+import { isUnauthorizedError, apiRequest } from "@/lib/queryClient";
 import Sidebar from "@/components/layout/sidebar";
 import MobileNav from "@/components/layout/mobile-nav";
 import Header from "@/components/layout/header";
@@ -65,13 +65,13 @@ export default function Lab() {
   // Get user's first organization
   const organizationId = user?.organizations?.[0]?.id;
 
-  const { data: projects = [], isLoading: projectsLoading } = useQuery({
+  const { data: projects = [], isLoading: projectsLoading } = useQuery<ContentProject[]>({
     queryKey: ['/api/content-projects', organizationId, activeTab],
     enabled: !!organizationId,
     retry: false,
   });
 
-  const { data: integrations = [] } = useQuery({
+  const { data: integrations = [] } = useQuery<UserIntegration[]>({
     queryKey: ['/api/integrations'],
     enabled: !!user,
     retry: false,
@@ -130,7 +130,7 @@ export default function Lab() {
     createProjectMutation.mutate(data);
   };
 
-  const filteredProjects = projects.filter((p: any) => p.type === activeTab);
+  const filteredProjects = projects?.filter(p => p.type === activeTab) || [];
 
   return (
     <div className="min-h-screen bg-background">
@@ -384,7 +384,7 @@ export default function Lab() {
           <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
             <StatsCard
               title="Active Projects"
-              value={projects.length}
+              value={projects?.length || 0}
               change="+0 this week"
               icon="fas fa-project-diagram"
               color="primary"
@@ -392,7 +392,7 @@ export default function Lab() {
             
             <StatsCard
               title="Published"
-              value={projects.filter((p: any) => p.status === 'published').length}
+              value={projects?.filter(p => p.status === 'published').length || 0}
               change="+0 this month"
               icon="fas fa-check-circle"
               color="green"
@@ -400,7 +400,7 @@ export default function Lab() {
             
             <StatsCard
               title="Total Content"
-              value={projects.reduce((acc: number, p: any) => acc + (p.itemCount || 0), 0)}
+              value={projects?.reduce((acc: number, p) => acc + ((p.metadata as any)?.itemCount || 0), 0) || 0}
               change="+0% growth"
               icon="fas fa-file-alt"
               color="blue"
