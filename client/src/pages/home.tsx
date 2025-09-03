@@ -7,7 +7,7 @@ import labIcon from '@assets/generated_images/The_Lab_AI_content_creation_icon_f
 import syncIcon from '@assets/generated_images/CRM_synchronization_workflow_icon_8587610e.png'
 import reportsIcon from '@assets/generated_images/Analytics_reports_dashboard_icon_aa8cffd8.png'
 import dashboardIcon from '@assets/generated_images/KPI_dashboard_interface_icon_1c62cc62.png'
-import createAILogo from '@assets/generated_images/CreateAI_Logo_1756919949044.png'
+import createAILogo from '@assets/generated_images/createai_logo.png'
 
 export default function Home() {
   const { toast } = useToast();
