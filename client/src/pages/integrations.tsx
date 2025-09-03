@@ -6,6 +6,7 @@ import { Badge } from '@/components/ui/badge';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 import { useToast } from '@/hooks/use-toast';
 
 interface Integration {
@@ -19,11 +20,13 @@ interface Integration {
   updatedAt: string;
 }
 
+
 interface ServiceConfig {
   name: string;
   description: string;
   icon: string;
   color: string;
+  helpText: string;
   fields: Array<{
     key: string;
     label: string;
@@ -39,6 +42,7 @@ const serviceConfigs: Record<string, ServiceConfig> = {
     description: 'AI-powered content generation for blogs, podcasts, and ebooks',
     icon: 'fas fa-robot',
     color: 'bg-green-500',
+    helpText: 'Create an API key at platform.openai.com → API keys. You\'ll need a paid OpenAI account with available credits.',
     fields: [
       { key: 'apiKey', label: 'API Key', type: 'password', placeholder: 'sk-...', required: true }
     ]
@@ -48,6 +52,7 @@ const serviceConfigs: Record<string, ServiceConfig> = {
     description: 'Sync meeting intelligence and voice updates into your CRM',
     icon: 'fas fa-building',
     color: 'bg-orange-500',
+    helpText: 'Go to HubSpot Settings → Integrations → Private Apps → Create app. Generate a token with "Read" permissions for contacts and companies.',
     fields: [
       { key: 'apiKey', label: 'Private App Token', type: 'password', placeholder: 'pat-...', required: true },
       { key: 'portalId', label: 'Portal ID', type: 'text', placeholder: '12345678', required: true }
@@ -58,6 +63,7 @@ const serviceConfigs: Record<string, ServiceConfig> = {
     description: 'Automatically publish blog posts to your WordPress site',
     icon: 'fab fa-wordpress',
     color: 'bg-blue-600',
+    helpText: 'In WordPress admin: Users → Profile → Application Passwords → Add New. Enter a name and copy the generated password (format: xxxx xxxx xxxx xxxx).',
     fields: [
       { key: 'siteUrl', label: 'Site URL', type: 'url', placeholder: 'https://yoursite.com', required: true },
       { key: 'username', label: 'Username', type: 'text', placeholder: 'admin', required: true },
@@ -69,6 +75,7 @@ const serviceConfigs: Record<string, ServiceConfig> = {
     description: 'Upload and distribute podcasts with automated publishing',
     icon: 'fas fa-microphone',
     color: 'bg-purple-500',
+    helpText: 'Log into Transistor.fm → Settings → API Access → Generate new API key. You\'ll need a Transistor account with an active podcast.',
     fields: [
       { key: 'apiKey', label: 'API Key', type: 'password', placeholder: 'Your API key', required: true }
     ]
@@ -78,6 +85,7 @@ const serviceConfigs: Record<string, ServiceConfig> = {
     description: 'Generate realistic voices for podcasts and audio content',
     icon: 'fas fa-volume-up',
     color: 'bg-indigo-500',
+    helpText: 'Visit elevenlabs.io → Profile (top right) → API Key tab → Copy your API key. You need an ElevenLabs account (free tier available).',
     fields: [
       { key: 'apiKey', label: 'API Key', type: 'password', placeholder: 'Your ElevenLabs API key', required: true }
     ]
@@ -87,6 +95,7 @@ const serviceConfigs: Record<string, ServiceConfig> = {
     description: 'Access millions of high-quality images and assets',
     icon: 'fas fa-image',
     color: 'bg-red-500',
+    helpText: 'Create an Adobe Developer account → Console → Create Project → Add API (Creative SDK) → Generate credentials. Requires Adobe Stock subscription.',
     fields: [
       { key: 'clientId', label: 'Client ID', type: 'text', placeholder: 'Your Adobe client ID', required: true },
       { key: 'clientSecret', label: 'Client Secret', type: 'password', placeholder: 'Your Adobe client secret', required: true }
@@ -249,7 +258,21 @@ export default function Integrations() {
                     <i className={`${config.icon} text-xl`}></i>
                   </div>
                   <div className="flex-1">
-                    <CardTitle className="text-xl font-semibold">{config.name}</CardTitle>
+                    <div className="flex items-center space-x-2">
+                      <CardTitle className="text-xl font-semibold">{config.name}</CardTitle>
+                      <TooltipProvider>
+                        <Tooltip>
+                          <TooltipTrigger asChild>
+                            <Button variant="ghost" size="sm" className="w-6 h-6 p-0 text-gray-400 hover:text-gray-600">
+                              <i className="fas fa-question-circle text-sm"></i>
+                            </Button>
+                          </TooltipTrigger>
+                          <TooltipContent side="top" className="max-w-sm">
+                            <p className="text-sm">{config.helpText}</p>
+                          </TooltipContent>
+                        </Tooltip>
+                      </TooltipProvider>
+                    </div>
                     <p className="text-sm text-gray-600 mt-1">{config.description}</p>
                   </div>
                   {integration && (
