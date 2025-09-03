@@ -10,6 +10,7 @@ import {
   pgEnum,
   boolean,
   serial,
+  uniqueIndex,
 } from "drizzle-orm/pg-core";
 import { relations } from "drizzle-orm";
 import { createInsertSchema } from "drizzle-zod";
@@ -127,7 +128,10 @@ export const userIntegrations = pgTable("user_integrations", {
   lastSync: timestamp("last_sync"),
   createdAt: timestamp("created_at").defaultNow(),
   updatedAt: timestamp("updated_at").defaultNow(),
-});
+}, (table) => ({
+  // Unique constraint: each user can only have one integration per provider
+  userProviderUnique: uniqueIndex("user_provider_unique").on(table.userId, table.provider),
+}));
 
 // Analytics snapshots
 export const analyticsSnapshots = pgTable("analytics_snapshots", {
