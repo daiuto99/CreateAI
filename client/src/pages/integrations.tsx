@@ -10,12 +10,12 @@ import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/comp
 import { useToast } from '@/hooks/use-toast';
 
 // Import service logos
-import openaiLogo from '@assets/generated_images/OpenAI_logo_icon_26f0ac6b.png';
-import hubspotLogo from '@assets/generated_images/HubSpot_official_logo_design_e6c7049f.png';
-import wordpressLogo from '@assets/generated_images/WordPress_logo_icon_dbf0d637.png';
-import transistorLogo from '@assets/generated_images/Transistor_FM_logo_a21a829a.png';
-import elevenlabsLogo from '@assets/generated_images/ElevenLabs_logo_icon_1425c4b2.png';
-import adobeStockLogo from '@assets/generated_images/Adobe_Stock_logo_620d5679.png';
+import openaiLogo from '@assets/openai_1756919666153.png';
+import hubspotLogo from '@assets/hubspot_1756919666153.png';
+import wordpressLogo from '@assets/wordPress_1756919666154.png';
+import transistorLogo from '@assets/transister_1756919666154.jpg';
+import elevenlabsLogo from '@assets/elevenlabs_1756919666154.png';
+import adobeStockLogo from '@assets/Adobe_1756919666154.png';
 
 interface Integration {
   id: string;
@@ -253,6 +253,11 @@ export default function Integrations() {
 
           return (
             <Card key={provider} className="relative">
+              {/* Service name in upper right corner */}
+              <div className="absolute top-3 right-3 text-xs font-medium text-gray-500">
+                {config.name}
+              </div>
+              
               <CardHeader className="pb-4">
                 <div className="flex items-center space-x-4">
                   <div className="w-[70px] h-[70px] flex items-center justify-center">
