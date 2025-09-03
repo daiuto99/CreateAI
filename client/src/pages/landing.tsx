@@ -62,11 +62,29 @@ export default function Landing() {
         {isAuthenticated ? (
           <div className="flex items-center space-x-4">
             {user?.photoURL && (
-              <img 
-                src={user.photoURL} 
-                alt="Profile" 
-                className="w-8 h-8 rounded-full"
-              />
+              <div className="relative">
+                <img 
+                  src={user.photoURL} 
+                  alt="Profile" 
+                  className="w-8 h-8 rounded-full"
+                  onError={(e) => {
+                    console.log('Profile image failed to load:', user.photoURL);
+                    (e.target as HTMLImageElement).style.display = 'none';
+                  }}
+                  onClick={() => {
+                    console.log('Current photoURL:', user.photoURL);
+                    console.log('Full user object:', user);
+                  }}
+                />
+                <div className="absolute -bottom-1 -right-1 text-xs bg-red-500 text-white rounded-full w-4 h-4 flex items-center justify-center cursor-pointer"
+                     onClick={() => {
+                       console.log('Debug - photoURL:', user.photoURL);
+                       alert('PhotoURL: ' + user.photoURL);
+                     }}
+                     title="Debug photo URL">
+                  ?
+                </div>
+              </div>
             )}
             <div className="text-right">
               <div className="text-sm font-medium text-gray-900">
