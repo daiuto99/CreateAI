@@ -31,7 +31,7 @@ export default function Landing() {
         {/* Features Grid */}
         <div className="mt-16 grid grid-cols-4 gap-12">
           {/* The Lab */}
-          <div className="text-center">
+          <div className="text-center border border-gray-200 rounded-lg p-8">
             <div className="mb-6">
               <img 
                 src={labIcon} 
@@ -47,7 +47,7 @@ export default function Landing() {
           </div>
 
           {/* CRM Sync */}
-          <div className="text-center">
+          <div className="text-center border border-gray-200 rounded-lg p-8">
             <div className="mb-6">
               <img 
                 src={syncIcon} 
@@ -63,7 +63,7 @@ export default function Landing() {
           </div>
 
           {/* Reports */}
-          <div className="text-center">
+          <div className="text-center border border-gray-200 rounded-lg p-8">
             <div className="mb-6">
               <img 
                 src={reportsIcon} 
@@ -79,7 +79,7 @@ export default function Landing() {
           </div>
 
           {/* Dashboard */}
-          <div className="text-center">
+          <div className="text-center border border-gray-200 rounded-lg p-8">
             <div className="mb-6">
               <img 
                 src={dashboardIcon} 
