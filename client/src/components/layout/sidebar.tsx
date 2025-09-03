@@ -1,6 +1,7 @@
 import { Link, useLocation } from "wouter";
 import { Button } from "@/components/ui/button";
 import { useAuth } from "@/hooks/useAuth";
+import { signOutUser } from "@/lib/firebase";
 
 // Import custom icons
 import labIcon from '@assets/generated_images/The_Lab_AI_content_creation_icon_f26cd1d3.png'
@@ -80,24 +81,30 @@ export default function Sidebar() {
       {/* User Profile */}
       <div className="p-4 border-t border-border">
         <div className="flex items-center space-x-3">
-          <img
-            src={user?.profileImageUrl || "https://images.unsplash.com/photo-1472099645785-5658abf4ff4e?ixlib=rb-4.0.3&ixid=MnwxMjA3fDB8MHxwaG90by1wYWdlfHx8fGVufDB8fHx8&auto=format&fit=crop&w=100&h=100"}
-            alt="User avatar"
-            className="w-8 h-8 rounded-full object-cover"
-            data-testid="img-user-avatar"
-          />
+          {user?.photoURL ? (
+            <img
+              src={user.photoURL}
+              alt="User avatar"
+              className="w-8 h-8 rounded-full object-cover"
+              data-testid="img-user-avatar"
+            />
+          ) : (
+            <div className="w-8 h-8 rounded-full bg-blue-600 flex items-center justify-center text-white text-sm font-medium">
+              {(user?.displayName?.charAt(0) || user?.email?.charAt(0) || '?').toUpperCase()}
+            </div>
+          )}
           <div className="flex-1 min-w-0">
             <p className="text-sm font-medium text-foreground truncate" data-testid="text-user-name">
-              {user?.firstName || user?.email || 'User'}
+              {user?.displayName || user?.email || 'User'}
             </p>
             <p className="text-xs text-muted-foreground truncate" data-testid="text-user-role">
-              {user?.organizations?.[0]?.role || 'Member'}
+              Member
             </p>
           </div>
           <Button
             variant="ghost"
             size="sm"
-            onClick={() => window.location.href = '/api/logout'}
+            onClick={() => signOutUser()}
             className="text-muted-foreground hover:text-foreground p-2"
             data-testid="button-logout"
           >
