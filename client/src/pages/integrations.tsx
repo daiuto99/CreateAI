@@ -11,7 +11,7 @@ import { useToast } from '@/hooks/use-toast';
 
 // Import service logos
 import openaiLogo from '@assets/generated_images/OpenAI_logo_icon_26f0ac6b.png';
-import hubspotLogo from '@assets/generated_images/HubSpot_logo_icon_6812bfe9.png';
+import hubspotLogo from '@assets/generated_images/HubSpot_official_logo_design_e6c7049f.png';
 import wordpressLogo from '@assets/generated_images/WordPress_logo_icon_dbf0d637.png';
 import transistorLogo from '@assets/generated_images/Transistor_FM_logo_a21a829a.png';
 import elevenlabsLogo from '@assets/generated_images/ElevenLabs_logo_icon_1425c4b2.png';
@@ -255,11 +255,11 @@ export default function Integrations() {
             <Card key={provider} className="relative">
               <CardHeader className="pb-4">
                 <div className="flex items-center space-x-4">
-                  <div className="w-12 h-12 flex items-center justify-center">
+                  <div className="w-[70px] h-[70px] flex items-center justify-center">
                     <img 
                       src={config.logo} 
                       alt={`${config.name} logo`} 
-                      className="w-10 h-10 rounded object-contain"
+                      className="w-[70px] h-[70px] rounded object-contain"
                     />
                   </div>
                   <div className="flex-1">
