@@ -20,17 +20,20 @@ function Router() {
     <>
       <AuthHandler />
       <Switch>
-        {isLoading || !isAuthenticated ? (
-          <Route path="/" component={Landing} />
-        ) : (
+        {/* Landing page always accessible */}
+        <Route path="/" component={Landing} />
+        
+        {/* Protected routes - only accessible when authenticated */}
+        {isAuthenticated && (
           <>
-            <Route path="/" component={Home} />
+            <Route path="/home" component={Home} />
             <Route path="/lab" component={Lab} />
             <Route path="/sync" component={Sync} />
             <Route path="/reports" component={Reports} />
             <Route path="/dashboard" component={Dashboard} />
           </>
         )}
+        
         <Route component={NotFound} />
       </Switch>
     </>
