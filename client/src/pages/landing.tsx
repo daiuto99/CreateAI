@@ -31,7 +31,10 @@ export default function Landing() {
         {/* Features Grid */}
         <div className="mt-16 grid grid-cols-4 gap-12">
           {/* The Lab */}
-          <div className="text-center border border-gray-200 rounded-lg p-8">
+          <button 
+            onClick={() => window.location.href = '/api/login?redirect=/lab'}
+            className="text-center border border-gray-200 rounded-lg p-8 hover:border-blue-300 hover:shadow-lg transition-all duration-200 cursor-pointer"
+          >
             <div className="mb-6">
               <img 
                 src={labIcon} 
@@ -44,10 +47,13 @@ export default function Landing() {
             <p className="text-sm text-gray-600 leading-relaxed">
               AI-powered content creation for podcasts, blogs, and e-books with guided workflows
             </p>
-          </div>
+          </button>
 
           {/* CRM Sync */}
-          <div className="text-center border border-gray-200 rounded-lg p-8">
+          <button 
+            onClick={() => window.location.href = '/api/login?redirect=/sync'}
+            className="text-center border border-gray-200 rounded-lg p-8 hover:border-blue-300 hover:shadow-lg transition-all duration-200 cursor-pointer"
+          >
             <div className="mb-6">
               <img 
                 src={syncIcon} 
@@ -60,10 +66,13 @@ export default function Landing() {
             <p className="text-sm text-gray-600 leading-relaxed">
               Automatically sync meeting intelligence and voice updates into HubSpot CRM
             </p>
-          </div>
+          </button>
 
           {/* Reports */}
-          <div className="text-center border border-gray-200 rounded-lg p-8">
+          <button 
+            onClick={() => window.location.href = '/api/login?redirect=/reports'}
+            className="text-center border border-gray-200 rounded-lg p-8 hover:border-blue-300 hover:shadow-lg transition-all duration-200 cursor-pointer"
+          >
             <div className="mb-6">
               <img 
                 src={reportsIcon} 
@@ -76,10 +85,13 @@ export default function Landing() {
             <p className="text-sm text-gray-600 leading-relaxed">
               Weekly and monthly performance summaries with custom report builder
             </p>
-          </div>
+          </button>
 
           {/* Dashboard */}
-          <div className="text-center border border-gray-200 rounded-lg p-8">
+          <button 
+            onClick={() => window.location.href = '/api/login?redirect=/dashboard'}
+            className="text-center border border-gray-200 rounded-lg p-8 hover:border-blue-300 hover:shadow-lg transition-all duration-200 cursor-pointer"
+          >
             <div className="mb-6">
               <img 
                 src={dashboardIcon} 
@@ -92,7 +104,7 @@ export default function Landing() {
             <p className="text-sm text-gray-600 leading-relaxed">
               Real-time KPIs and performance metrics in a clean, customizable interface
             </p>
-          </div>
+          </button>
         </div>
       </div>
     </div>
