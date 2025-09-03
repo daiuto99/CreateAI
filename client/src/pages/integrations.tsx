@@ -11,7 +11,7 @@ import { useToast } from '@/hooks/use-toast';
 
 // Import service logos
 import openaiLogo from '@assets/openai_1756919666153.png';
-import hubspotLogo from '@assets/hubspot_1756919666153.png';
+import hubspotLogo from '@assets/hspot_1756919877513.png';
 import wordpressLogo from '@assets/wordPress_1756919666154.png';
 import transistorLogo from '@assets/transister_1756919666154.jpg';
 import elevenlabsLogo from '@assets/elevenlabs_1756919666154.png';
@@ -253,9 +253,21 @@ export default function Integrations() {
 
           return (
             <Card key={provider} className="relative">
-              {/* Service name in upper right corner */}
-              <div className="absolute top-3 right-3 text-xs font-medium text-gray-500">
-                {config.name}
+              {/* Service name and help icon in upper right corner */}
+              <div className="absolute top-3 right-3 flex items-center space-x-2">
+                <span className="text-xs font-medium text-gray-500">{config.name}</span>
+                <TooltipProvider>
+                  <Tooltip>
+                    <TooltipTrigger asChild>
+                      <button className="w-4 h-4 rounded-full bg-gray-200 hover:bg-gray-300 flex items-center justify-center text-gray-600 hover:text-gray-800 transition-colors">
+                        <span className="text-xs font-bold">?</span>
+                      </button>
+                    </TooltipTrigger>
+                    <TooltipContent side="top" className="max-w-sm">
+                      <p className="text-sm">{config.helpText}</p>
+                    </TooltipContent>
+                  </Tooltip>
+                </TooltipProvider>
               </div>
               
               <CardHeader className="pb-4">
@@ -268,20 +280,6 @@ export default function Integrations() {
                     />
                   </div>
                   <div className="flex-1">
-                    <div className="flex items-center space-x-2">
-                      <TooltipProvider>
-                        <Tooltip>
-                          <TooltipTrigger asChild>
-                            <button className="w-5 h-5 rounded-full bg-gray-200 hover:bg-gray-300 flex items-center justify-center text-gray-600 hover:text-gray-800 transition-colors">
-                              <span className="text-xs font-bold">?</span>
-                            </button>
-                          </TooltipTrigger>
-                          <TooltipContent side="top" className="max-w-sm">
-                            <p className="text-sm">{config.helpText}</p>
-                          </TooltipContent>
-                        </Tooltip>
-                      </TooltipProvider>
-                    </div>
                     <p className="text-sm text-gray-600 mt-1">{config.description}</p>
                   </div>
                   {integration && (
