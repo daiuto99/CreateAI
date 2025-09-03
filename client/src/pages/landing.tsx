@@ -60,9 +60,7 @@ export default function Landing() {
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-8">
           <Card className="text-center">
             <CardHeader>
-              <div className="w-16 h-16 gradient-bg rounded-lg flex items-center justify-center mx-auto mb-4">
-                <img src={labIcon} alt="The Lab icon" className="w-10 h-10" />
-              </div>
+              <img src={labIcon} alt="The Lab icon" className="w-[70px] h-[70px] mx-auto mb-4" />
               <CardTitle>The Lab</CardTitle>
             </CardHeader>
             <CardContent>
@@ -74,9 +72,7 @@ export default function Landing() {
 
           <Card className="text-center">
             <CardHeader>
-              <div className="w-16 h-16 bg-blue-500 rounded-lg flex items-center justify-center mx-auto mb-4">
-                <img src={syncIcon} alt="CRM Sync icon" className="w-10 h-10" />
-              </div>
+              <img src={syncIcon} alt="CRM Sync icon" className="w-[70px] h-[70px] mx-auto mb-4" />
               <CardTitle>CRM Sync</CardTitle>
             </CardHeader>
             <CardContent>
@@ -88,9 +84,7 @@ export default function Landing() {
 
           <Card className="text-center">
             <CardHeader>
-              <div className="w-16 h-16 bg-green-500 rounded-lg flex items-center justify-center mx-auto mb-4">
-                <img src={reportsIcon} alt="Reports icon" className="w-10 h-10" />
-              </div>
+              <img src={reportsIcon} alt="Reports icon" className="w-[70px] h-[70px] mx-auto mb-4" />
               <CardTitle>Reports</CardTitle>
             </CardHeader>
             <CardContent>
@@ -102,9 +96,7 @@ export default function Landing() {
 
           <Card className="text-center">
             <CardHeader>
-              <div className="w-16 h-16 bg-purple-500 rounded-lg flex items-center justify-center mx-auto mb-4">
-                <img src={dashboardIcon} alt="Dashboard icon" className="w-10 h-10" />
-              </div>
+              <img src={dashboardIcon} alt="Dashboard icon" className="w-[70px] h-[70px] mx-auto mb-4" />
               <CardTitle>Dashboard</CardTitle>
             </CardHeader>
             <CardContent>

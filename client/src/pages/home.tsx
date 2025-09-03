@@ -1,12 +1,12 @@
 import { useEffect } from "react";
 import { useAuth } from "@/hooks/useAuth";
 import { useToast } from "@/hooks/use-toast";
-import Sidebar from "@/components/layout/sidebar";
-import MobileNav from "@/components/layout/mobile-nav";
-import Header from "@/components/layout/header";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { Button } from "@/components/ui/button";
-import { Link } from "wouter";
+
+// Import custom icons
+import labIcon from '@assets/generated_images/The_Lab_AI_content_creation_icon_f26cd1d3.png'
+import syncIcon from '@assets/generated_images/CRM_synchronization_workflow_icon_8587610e.png'
+import reportsIcon from '@assets/generated_images/Analytics_reports_dashboard_icon_aa8cffd8.png'
+import dashboardIcon from '@assets/generated_images/KPI_dashboard_interface_icon_1c62cc62.png'
 
 export default function Home() {
   const { toast } = useToast();
@@ -39,190 +39,63 @@ export default function Home() {
 
   return (
     <div className="min-h-screen bg-background">
-      <Sidebar />
-      <MobileNav />
-      
-      <main className="lg:ml-64 pb-20 lg:pb-0">
-        <Header 
-          title="Welcome to CreateAI" 
-          subtitle="Your AI-powered content creation workspace"
-          action={
-            <Link href="/lab" data-testid="link-lab">
-              <Button data-testid="button-start-creating">
-                <i className="fas fa-flask w-4 h-4 mr-2"></i>
-                Start Creating
-              </Button>
-            </Link>
-          }
-        />
-        
-        <div className="p-6">
-          {/* Quick Stats */}
-          <div className="grid grid-cols-1 md:grid-cols-4 gap-6 mb-8">
-            <Card>
-              <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                <CardTitle className="text-sm font-medium">Active Projects</CardTitle>
-                <i className="fas fa-project-diagram text-primary"></i>
-              </CardHeader>
-              <CardContent>
-                <div className="text-2xl font-bold" data-testid="text-active-projects">0</div>
-                <p className="text-xs text-muted-foreground">Get started by creating your first project</p>
-              </CardContent>
-            </Card>
+      <div className="max-w-5xl mx-auto px-6 py-16">
+        {/* Header */}
+        <div className="text-center mb-16">
+          <h1 className="text-5xl md:text-6xl font-bold text-foreground mb-6">
+            CreateAI
+          </h1>
+          <p className="text-xl text-muted-foreground mb-12 max-w-2xl mx-auto">
+            Generate podcasts, blogs, and e-books with AI assistance. Sync with your 
+            CRM automatically. Track performance with beautiful analytics.
+          </p>
+        </div>
 
-            <Card>
-              <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                <CardTitle className="text-sm font-medium">Published Content</CardTitle>
-                <i className="fas fa-check-circle text-green-500"></i>
-              </CardHeader>
-              <CardContent>
-                <div className="text-2xl font-bold" data-testid="text-published-content">0</div>
-                <p className="text-xs text-muted-foreground">Publish your first piece of content</p>
-              </CardContent>
-            </Card>
+        {/* Everything you need section */}
+        <div className="text-center mb-16">
+          <h2 className="text-3xl md:text-4xl font-bold text-foreground mb-4">
+            Everything you need for content creation
+          </h2>
+          <p className="text-lg text-muted-foreground">
+            Powered by AI, designed for creators
+          </p>
+        </div>
 
-            <Card>
-              <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                <CardTitle className="text-sm font-medium">AI Usage</CardTitle>
-                <i className="fas fa-robot text-purple-500"></i>
-              </CardHeader>
-              <CardContent>
-                <div className="text-2xl font-bold" data-testid="text-ai-usage">0%</div>
-                <p className="text-xs text-muted-foreground">of monthly quota used</p>
-              </CardContent>
-            </Card>
-
-            <Card>
-              <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                <CardTitle className="text-sm font-medium">Integrations</CardTitle>
-                <i className="fas fa-plug text-blue-500"></i>
-              </CardHeader>
-              <CardContent>
-                <div className="text-2xl font-bold" data-testid="text-integrations">0</div>
-                <p className="text-xs text-muted-foreground">integrations connected</p>
-              </CardContent>
-            </Card>
+        {/* Features Grid */}
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-12">
+          <div className="text-center">
+            <img src={labIcon} alt="The Lab icon" className="w-[70px] h-[70px] mx-auto mb-6" />
+            <h3 className="text-xl font-semibold text-foreground mb-3">The Lab</h3>
+            <p className="text-sm text-muted-foreground leading-relaxed">
+              AI-powered content creation for podcasts, blogs, and e-books with guided workflows
+            </p>
           </div>
 
-          {/* Getting Started */}
-          <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
-            <Card>
-              <CardHeader>
-                <CardTitle className="flex items-center">
-                  <i className="fas fa-rocket mr-3 text-primary"></i>
-                  Quick Start Guide
-                </CardTitle>
-                <CardDescription>
-                  Get up and running with CreateAI in minutes
-                </CardDescription>
-              </CardHeader>
-              <CardContent className="space-y-4">
-                <div className="space-y-4">
-                  <div className="flex items-start space-x-3">
-                    <div className="w-6 h-6 bg-primary/20 rounded-full flex items-center justify-center flex-shrink-0 mt-0.5">
-                      <span className="text-xs font-bold text-primary">1</span>
-                    </div>
-                    <div>
-                      <p className="font-medium">Create your first project</p>
-                      <p className="text-sm text-muted-foreground">Choose between podcast, blog, or e-book</p>
-                    </div>
-                  </div>
-                  
-                  <div className="flex items-start space-x-3">
-                    <div className="w-6 h-6 bg-primary/20 rounded-full flex items-center justify-center flex-shrink-0 mt-0.5">
-                      <span className="text-xs font-bold text-primary">2</span>
-                    </div>
-                    <div>
-                      <p className="font-medium">Generate AI content</p>
-                      <p className="text-sm text-muted-foreground">Use our guided workflow to create outlines and drafts</p>
-                    </div>
-                  </div>
-                  
-                  <div className="flex items-start space-x-3">
-                    <div className="w-6 h-6 bg-primary/20 rounded-full flex items-center justify-center flex-shrink-0 mt-0.5">
-                      <span className="text-xs font-bold text-primary">3</span>
-                    </div>
-                    <div>
-                      <p className="font-medium">Setup integrations</p>
-                      <p className="text-sm text-muted-foreground">Connect HubSpot, WordPress, and other platforms</p>
-                    </div>
-                  </div>
-                </div>
+          <div className="text-center">
+            <img src={syncIcon} alt="CRM Sync icon" className="w-[70px] h-[70px] mx-auto mb-6" />
+            <h3 className="text-xl font-semibold text-foreground mb-3">CRM Sync</h3>
+            <p className="text-sm text-muted-foreground leading-relaxed">
+              Automatically sync meeting intelligence and voice updates into HubSpot CRM
+            </p>
+          </div>
 
-                <Link href="/lab" data-testid="link-get-started">
-                  <Button className="w-full" data-testid="button-get-started">
-                    Get Started in The Lab
-                    <i className="fas fa-arrow-right ml-2"></i>
-                  </Button>
-                </Link>
-              </CardContent>
-            </Card>
+          <div className="text-center">
+            <img src={reportsIcon} alt="Reports icon" className="w-[70px] h-[70px] mx-auto mb-6" />
+            <h3 className="text-xl font-semibold text-foreground mb-3">Reports</h3>
+            <p className="text-sm text-muted-foreground leading-relaxed">
+              Weekly and monthly performance summaries with custom report builder
+            </p>
+          </div>
 
-            <Card>
-              <CardHeader>
-                <CardTitle className="flex items-center">
-                  <i className="fas fa-cogs mr-3 text-blue-500"></i>
-                  Features Overview
-                </CardTitle>
-                <CardDescription>
-                  Explore what CreateAI can do for you
-                </CardDescription>
-              </CardHeader>
-              <CardContent className="space-y-4">
-                <div className="grid grid-cols-1 gap-4">
-                  <Link href="/lab" data-testid="link-lab-feature">
-                    <div className="p-3 border border-border rounded-lg hover:border-primary transition-colors cursor-pointer">
-                      <div className="flex items-center space-x-3">
-                        <i className="fas fa-flask text-primary"></i>
-                        <div>
-                          <p className="font-medium">The Lab</p>
-                          <p className="text-sm text-muted-foreground">AI-powered content creation</p>
-                        </div>
-                      </div>
-                    </div>
-                  </Link>
-
-                  <Link href="/sync" data-testid="link-sync-feature">
-                    <div className="p-3 border border-border rounded-lg hover:border-primary transition-colors cursor-pointer">
-                      <div className="flex items-center space-x-3">
-                        <i className="fas fa-sync text-blue-500"></i>
-                        <div>
-                          <p className="font-medium">CRM Sync</p>
-                          <p className="text-sm text-muted-foreground">Meeting intelligence & voice updates</p>
-                        </div>
-                      </div>
-                    </div>
-                  </Link>
-
-                  <Link href="/reports" data-testid="link-reports-feature">
-                    <div className="p-3 border border-border rounded-lg hover:border-primary transition-colors cursor-pointer">
-                      <div className="flex items-center space-x-3">
-                        <i className="fas fa-chart-line text-green-500"></i>
-                        <div>
-                          <p className="font-medium">Reports</p>
-                          <p className="text-sm text-muted-foreground">Performance analytics & insights</p>
-                        </div>
-                      </div>
-                    </div>
-                  </Link>
-
-                  <Link href="/dashboard" data-testid="link-dashboard-feature">
-                    <div className="p-3 border border-border rounded-lg hover:border-primary transition-colors cursor-pointer">
-                      <div className="flex items-center space-x-3">
-                        <i className="fas fa-tachometer-alt text-purple-500"></i>
-                        <div>
-                          <p className="font-medium">Dashboard</p>
-                          <p className="text-sm text-muted-foreground">Real-time KPIs & metrics</p>
-                        </div>
-                      </div>
-                    </div>
-                  </Link>
-                </div>
-              </CardContent>
-            </Card>
+          <div className="text-center">
+            <img src={dashboardIcon} alt="Dashboard icon" className="w-[70px] h-[70px] mx-auto mb-6" />
+            <h3 className="text-xl font-semibold text-foreground mb-3">Dashboard</h3>
+            <p className="text-sm text-muted-foreground leading-relaxed">
+              Real-time KPIs and performance metrics in a clean, customizable interface
+            </p>
           </div>
         </div>
-      </main>
+      </div>
     </div>
   );
 }
