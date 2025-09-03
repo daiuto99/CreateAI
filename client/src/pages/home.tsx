@@ -38,59 +38,90 @@ export default function Home() {
   }
 
   return (
-    <div className="min-h-screen bg-background">
-      <div className="max-w-5xl mx-auto px-6 py-16">
-        {/* Header */}
-        <div className="text-center mb-16">
-          <h1 className="text-5xl md:text-6xl font-bold text-foreground mb-6">
+    <div className="min-h-screen bg-white">
+      <div className="max-w-6xl mx-auto px-6 py-20">
+        {/* Main Title */}
+        <div className="text-center mb-8">
+          <h1 className="text-6xl font-bold text-gray-900 mb-6">
             CreateAI
           </h1>
-          <p className="text-xl text-muted-foreground mb-12 max-w-2xl mx-auto">
-            Generate podcasts, blogs, and e-books with AI assistance. Sync with your 
-            CRM automatically. Track performance with beautiful analytics.
+          <p className="text-lg text-gray-600 max-w-2xl mx-auto leading-relaxed">
+            Generate podcasts, blogs, and e-books with AI assistance. Sync with your CRM automatically. Track performance with beautiful analytics.
           </p>
         </div>
 
-        {/* Everything you need section */}
-        <div className="text-center mb-16">
-          <h2 className="text-3xl md:text-4xl font-bold text-foreground mb-4">
+        {/* Section Title */}
+        <div className="text-center mb-4">
+          <h2 className="text-4xl font-bold text-gray-900 mb-2">
             Everything you need for content creation
           </h2>
-          <p className="text-lg text-muted-foreground">
+          <p className="text-lg text-gray-500">
             Powered by AI, designed for creators
           </p>
         </div>
 
         {/* Features Grid */}
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-12">
+        <div className="mt-16 grid grid-cols-4 gap-12">
+          {/* The Lab */}
           <div className="text-center">
-            <img src={labIcon} alt="The Lab icon" className="w-[70px] h-[70px] mx-auto mb-6" />
-            <h3 className="text-xl font-semibold text-foreground mb-3">The Lab</h3>
-            <p className="text-sm text-muted-foreground leading-relaxed">
+            <div className="mb-6">
+              <img 
+                src={labIcon} 
+                alt="The Lab" 
+                className="w-[110px] h-[110px] mx-auto"
+                style={{ backgroundColor: 'transparent' }}
+              />
+            </div>
+            <h3 className="text-xl font-semibold text-gray-900 mb-4">The Lab</h3>
+            <p className="text-sm text-gray-600 leading-relaxed">
               AI-powered content creation for podcasts, blogs, and e-books with guided workflows
             </p>
           </div>
 
+          {/* CRM Sync */}
           <div className="text-center">
-            <img src={syncIcon} alt="CRM Sync icon" className="w-[70px] h-[70px] mx-auto mb-6" />
-            <h3 className="text-xl font-semibold text-foreground mb-3">CRM Sync</h3>
-            <p className="text-sm text-muted-foreground leading-relaxed">
+            <div className="mb-6">
+              <img 
+                src={syncIcon} 
+                alt="CRM Sync" 
+                className="w-[110px] h-[110px] mx-auto"
+                style={{ backgroundColor: 'transparent' }}
+              />
+            </div>
+            <h3 className="text-xl font-semibold text-gray-900 mb-4">CRM Sync</h3>
+            <p className="text-sm text-gray-600 leading-relaxed">
               Automatically sync meeting intelligence and voice updates into HubSpot CRM
             </p>
           </div>
 
+          {/* Reports */}
           <div className="text-center">
-            <img src={reportsIcon} alt="Reports icon" className="w-[70px] h-[70px] mx-auto mb-6" />
-            <h3 className="text-xl font-semibold text-foreground mb-3">Reports</h3>
-            <p className="text-sm text-muted-foreground leading-relaxed">
+            <div className="mb-6">
+              <img 
+                src={reportsIcon} 
+                alt="Reports" 
+                className="w-[110px] h-[110px] mx-auto"
+                style={{ backgroundColor: 'transparent' }}
+              />
+            </div>
+            <h3 className="text-xl font-semibold text-gray-900 mb-4">Reports</h3>
+            <p className="text-sm text-gray-600 leading-relaxed">
               Weekly and monthly performance summaries with custom report builder
             </p>
           </div>
 
+          {/* Dashboard */}
           <div className="text-center">
-            <img src={dashboardIcon} alt="Dashboard icon" className="w-[70px] h-[70px] mx-auto mb-6" />
-            <h3 className="text-xl font-semibold text-foreground mb-3">Dashboard</h3>
-            <p className="text-sm text-muted-foreground leading-relaxed">
+            <div className="mb-6">
+              <img 
+                src={dashboardIcon} 
+                alt="Dashboard" 
+                className="w-[110px] h-[110px] mx-auto"
+                style={{ backgroundColor: 'transparent' }}
+              />
+            </div>
+            <h3 className="text-xl font-semibold text-gray-900 mb-4">Dashboard</h3>
+            <p className="text-sm text-gray-600 leading-relaxed">
               Real-time KPIs and performance metrics in a clean, customizable interface
             </p>
           </div>
