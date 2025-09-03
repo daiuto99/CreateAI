@@ -309,15 +309,20 @@ export async function registerRoutes(app: Express): Promise<Server> {
             }
             break;
 
-          case 'hubspot':
-            // Test HubSpot API key
-            const hubspotCreds = integration.credentials as any;
-            const hubspotResponse = await fetch(`https://api.hubapi.com/contacts/v1/lists?hapikey=${hubspotCreds.apiKey}&count=1`);
-            if (hubspotResponse.ok) {
-              testResult = { success: true, message: 'HubSpot API key is valid and working!', error: '' };
+          case 'bigin':
+            // Test Bigin by Zoho API key
+            const biginCreds = integration.credentials as any;
+            const biginResponse = await fetch(`https://www.zohoapis.com/bigin/v1/Contacts`, {
+              headers: {
+                'Authorization': `Zoho-oauthtoken ${biginCreds.apiKey}`,
+                'Content-Type': 'application/json'
+              }
+            });
+            if (biginResponse.ok) {
+              testResult = { success: true, message: 'Bigin by Zoho API key is valid and working!', error: '' };
               await storage.upsertUserIntegration({ ...integration, status: 'connected' as any });
             } else {
-              testResult = { success: false, message: '', error: 'Invalid HubSpot API key' };
+              testResult = { success: false, message: '', error: 'Invalid Bigin by Zoho API key' };
               await storage.upsertUserIntegration({ ...integration, status: 'error' as any });
             }
             break;

@@ -64,7 +64,7 @@ export default function Sync() {
                   Meeting Intelligence
                 </CardTitle>
                 <CardDescription>
-                  Automatically sync Outlook calendar and Otter.ai transcripts to HubSpot
+                  Automatically sync Outlook calendar and Otter.ai transcripts to Bigin by Zoho
                 </CardDescription>
               </CardHeader>
               <CardContent className="space-y-4">
@@ -97,13 +97,13 @@ export default function Sync() {
 
                   <div className="flex items-center justify-between p-3 border border-border rounded-lg">
                     <div className="flex items-center space-x-3">
-                      <i className="fas fa-hubspot text-orange-500"></i>
+                      <i className="fas fa-chart-line text-green-500"></i>
                       <div>
-                        <p className="font-medium">HubSpot CRM</p>
+                        <p className="font-medium">Bigin by Zoho CRM</p>
                         <p className="text-sm text-muted-foreground">Contact and deal management</p>
                       </div>
                     </div>
-                    <Badge variant="outline" data-testid="badge-hubspot-status">
+                    <Badge variant="outline" data-testid="badge-bigin-status">
                       Setup Required
                     </Badge>
                   </div>
@@ -113,10 +113,10 @@ export default function Sync() {
                   <h4 className="font-medium mb-3">How it works:</h4>
                   <ol className="text-sm text-muted-foreground space-y-1">
                     <li>1. Import calendar events from Outlook</li>
-                    <li>2. Match meeting attendees to HubSpot contacts</li>
+                    <li>2. Match meeting attendees to Bigin contacts</li>
                     <li>3. Fetch Otter.ai transcripts and summaries</li>
                     <li>4. Generate AI-powered meeting insights</li>
-                    <li>5. One-click sync to HubSpot timeline</li>
+                    <li>5. One-click sync to Bigin timeline</li>
                   </ol>
                 </div>
 
@@ -190,7 +190,7 @@ export default function Sync() {
                 <i className="fas fa-calendar-check text-4xl text-muted-foreground mb-4"></i>
                 <h3 className="text-lg font-semibold text-foreground mb-2">No meetings captured yet</h3>
                 <p className="text-muted-foreground text-center mb-4">
-                  Once you connect your Outlook calendar and Otter.ai account, meetings will appear here for review and sync to HubSpot.
+                  Once you connect your Outlook calendar and Otter.ai account, meetings will appear here for review and sync to Bigin by Zoho.
                 </p>
                 <Button variant="outline" data-testid="button-connect-calendar">
                   <i className="fas fa-calendar-plus mr-2"></i>

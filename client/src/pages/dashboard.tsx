@@ -241,11 +241,11 @@ export default function Dashboard() {
                     <i className="fas fa-address-book text-4xl text-muted-foreground mb-4"></i>
                     <h3 className="text-lg font-semibold text-foreground mb-2">No CRM data available</h3>
                     <p className="text-muted-foreground text-center mb-4">
-                      Connect your HubSpot integration to see pipeline metrics and activity data.
+                      Connect your Bigin by Zoho integration to see pipeline metrics and activity data.
                     </p>
-                    <Button variant="outline" data-testid="button-connect-hubspot">
-                      <i className="fas fa-hubspot mr-2"></i>
-                      Connect HubSpot
+                    <Button variant="outline" data-testid="button-connect-bigin">
+                      <i className="fas fa-chart-line mr-2"></i>
+                      Connect Bigin by Zoho
                     </Button>
                   </div>
                 </CardContent>

@@ -96,7 +96,7 @@ The development setup includes:
 
 ### Optional Integrations
 
-- **CRM Systems**: HubSpot integration for customer relationship management sync
+- **CRM Systems**: Bigin by Zoho integration for customer relationship management sync
 - **Content Publishing**: WordPress API for automated blog publishing
 - **Podcast Hosting**: Transistor FM for podcast distribution and analytics
 - **Voice Synthesis**: ElevenLabs for text-to-speech and voice generation

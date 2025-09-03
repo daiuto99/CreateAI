@@ -11,7 +11,7 @@ import { useToast } from '@/hooks/use-toast';
 
 // Import service logos
 import openaiLogo from '@assets/openai_1756919666153.png';
-import hubspotLogo from '@assets/hspot_1756919877513.png';
+import biginLogo from '@assets/bigin_1756937799014.png';
 import wordpressLogo from '@assets/wordPress_1756919666154.png';
 import transistorLogo from '@assets/transister_1756919666154.jpg';
 import elevenlabsLogo from '@assets/elevenlabs_1756919666154.png';
@@ -53,14 +53,14 @@ const serviceConfigs: Record<string, ServiceConfig> = {
       { key: 'apiKey', label: 'API Key', type: 'password', placeholder: 'sk-...', required: true }
     ]
   },
-  hubspot: {
-    name: 'HubSpot',
+  bigin: {
+    name: 'Bigin by Zoho',
     description: 'Sync meeting intelligence and voice updates into your CRM',
-    logo: hubspotLogo,
-    helpText: 'Go to HubSpot Settings → Integrations → Private Apps → Create app. Generate a token with "Read" permissions for contacts and companies.',
+    logo: biginLogo,
+    helpText: 'Go to Bigin Settings → Developer Space → Server-based Applications → Create app. Generate an access token with "Read" and "Write" permissions for contacts and deals.',
     fields: [
-      { key: 'apiKey', label: 'Private App Token', type: 'password', placeholder: 'pat-...', required: true },
-      { key: 'portalId', label: 'Portal ID', type: 'text', placeholder: '12345678', required: true }
+      { key: 'apiKey', label: 'Access Token', type: 'password', placeholder: '1000.xxx...', required: true },
+      { key: 'orgId', label: 'Organization ID', type: 'text', placeholder: 'Your Bigin org ID', required: true }
     ]
   },
   wordpress: {
