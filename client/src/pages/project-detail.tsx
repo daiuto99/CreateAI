@@ -195,6 +195,7 @@ export default function ProjectDetail() {
                     hostType: (project as any).hostType || 'single',
                     metadata: project.metadata || {},
                     settings: project.settings || {},
+                    status: project.status as any,
                     createdAt: new Date(project.createdAt),
                     updatedAt: new Date(project.updatedAt)
                   }} />
