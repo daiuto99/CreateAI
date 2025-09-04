@@ -12,12 +12,49 @@ export async function apiRequest(
   url: string,
   data?: unknown | undefined,
 ): Promise<Response> {
+  console.log('🌍 API Request:', {
+    method,
+    url,
+    data,
+    timestamp: new Date().toISOString()
+  });
+  
   const res = await fetch(url, {
     method,
     headers: data ? { "Content-Type": "application/json" } : {},
     body: data ? JSON.stringify(data) : undefined,
     credentials: "include",
   });
+  
+  console.log('🌍 API Response:', {
+    method,
+    url,
+    status: res.status,
+    statusText: res.statusText,
+    ok: res.ok,
+    timestamp: new Date().toISOString()
+  });
+  
+  // Log error details before throwing
+  if (!res.ok) {
+    try {
+      const errorText = await res.clone().text();
+      console.error('🌍 API Error Response Body:', errorText);
+      
+      // Store API error debug info
+      sessionStorage.setItem('debug-last-api-error', JSON.stringify({
+        timestamp: new Date().toISOString(),
+        method,
+        url,
+        status: res.status,
+        statusText: res.statusText,
+        errorBody: errorText,
+        requestData: data
+      }));
+    } catch (e) {
+      console.warn('Failed to read error response body:', e);
+    }
+  }
 
   await throwIfResNotOk(res);
   return res;

@@ -67,15 +67,60 @@ export default function Lab() {
 
   const createProjectMutation = useMutation({
     mutationFn: async (data: ProjectFormData) => {
+      console.log('📁 Creating project - Debug info:', {
+        organizationId,
+        backendUserOrgs: backendUser?.organizations,
+        formData: data,
+        firebaseUser: {
+          uid: firebaseUser?.uid,
+          email: firebaseUser?.email
+        },
+        timestamp: new Date().toISOString()
+      });
+      
       if (!organizationId) {
+        console.error('🚨 Project creation failed: No organization found');
+        console.error('Debug - backendUser:', backendUser);
+        console.error('Debug - organizations:', backendUser?.organizations);
+        
+        // Store error debug info
+        try {
+          sessionStorage.setItem('debug-project-creation-error', JSON.stringify({
+            timestamp: new Date().toISOString(),
+            error: 'No organization found',
+            backendUser,
+            firebaseUser: {
+              uid: firebaseUser?.uid,
+              email: firebaseUser?.email
+            }
+          }));
+        } catch (e) {
+          console.warn('Failed to store project creation debug info:', e);
+        }
+        
         throw new Error('No organization found. Please contact support.');
       }
-      const response = await apiRequest('POST', '/api/content-projects', {
+      
+      const requestData = {
         ...data,
         organizationId,
         settings: data.type === 'podcast' ? { hostType: data.hostType } : {}
+      };
+      
+      console.log('📁 Sending project creation request:', requestData);
+      
+      const response = await apiRequest('POST', '/api/content-projects', requestData);
+      
+      console.log('📁 Project creation response:', {
+        status: response.status,
+        ok: response.ok,
+        statusText: response.statusText
       });
-      return response.json();
+      
+      const result = await response.json();
+      console.log('📁 Project creation result:', result);
+      
+      return result;
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['/api/content-projects'] });
@@ -86,8 +131,35 @@ export default function Lab() {
         description: "Project created successfully",
       });
     },
-    onError: (error) => {
+    onError: (error: any) => {
+      console.error('📍 Project creation failed:', {
+        error: error?.message || error,
+        stack: error?.stack,
+        organizationId,
+        backendUser,
+        timestamp: new Date().toISOString()
+      });
+      
+      // Store detailed error info for debugging
+      try {
+        sessionStorage.setItem('debug-project-creation-error', JSON.stringify({
+          timestamp: new Date().toISOString(),
+          error: error?.message || error?.toString() || 'Unknown error',
+          stack: error?.stack,
+          organizationId,
+          backendUser,
+          firebaseUser: {
+            uid: firebaseUser?.uid,
+            email: firebaseUser?.email
+          }
+        }));
+        console.log('📍 Project creation error debug info saved to sessionStorage');
+      } catch (e) {
+        console.warn('Failed to store project creation error debug info:', e);
+      }
+      
       if (isUnauthorizedError(error)) {
+        console.log('📍 Unauthorized error detected, redirecting to login');
         toast({
           title: "Unauthorized",
           description: "You are logged out. Logging in again...",
@@ -98,9 +170,11 @@ export default function Lab() {
         }, 500);
         return;
       }
+      
+      const errorMessage = error?.message || 'Failed to create project';
       toast({
         title: "Error",
-        description: "Failed to create project",
+        description: errorMessage,
         variant: "destructive",
       });
     },

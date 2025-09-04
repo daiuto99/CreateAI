@@ -16,26 +16,61 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
   // Auth routes
   app.get('/api/auth/user', isAuthenticated, async (req: any, res) => {
+    const startTime = Date.now();
     try {
       const userId = req.user.claims.sub;
+      console.log('🔍 [/api/auth/user] Fetching user data for userId:', userId);
+      
       const user = await storage.getUser(userId);
+      console.log('🔍 [/api/auth/user] User query result:', {
+        found: !!user,
+        id: user?.id,
+        email: user?.email,
+        firstName: user?.firstName,
+        lastName: user?.lastName
+      });
+      
       if (!user) {
+        console.warn('🔍 [/api/auth/user] User not found in database for userId:', userId);
         return res.status(404).json({ message: "User not found" });
       }
       
       // Get user organizations
+      console.log('🔍 [/api/auth/user] Fetching organizations for userId:', userId);
       const userOrgs = await storage.getUserOrganizations(userId);
+      console.log('🔍 [/api/auth/user] Organizations query result:', {
+        count: userOrgs.length,
+        organizations: userOrgs.map(uo => ({
+          id: uo.organization.id,
+          name: uo.organization.name,
+          role: uo.role
+        }))
+      });
       
-      res.json({ 
+      const responseData = { 
         ...user, 
         organizations: userOrgs.map(uo => ({
           ...uo.organization,
           role: uo.role
         }))
+      };
+      
+      console.log('🔍 [/api/auth/user] Sending response:', {
+        userId: responseData.id,
+        email: responseData.email,
+        organizationsCount: responseData.organizations?.length || 0,
+        duration: Date.now() - startTime + 'ms'
       });
-    } catch (error) {
-      console.error("Error fetching user:", error);
-      res.status(500).json({ message: "Failed to fetch user" });
+      
+      res.json(responseData);
+    } catch (error: any) {
+      console.error('🚨 [/api/auth/user] Error fetching user:', {
+        error: error?.message || error,
+        stack: error?.stack,
+        userId: req.user?.claims?.sub,
+        duration: Date.now() - startTime + 'ms'
+      });
+      res.status(500).json({ message: "Failed to fetch user", error: error?.message || 'Unknown error' });
     }
   });
 
@@ -55,7 +90,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       );
       
       res.json(organization);
-    } catch (error) {
+    } catch (error: any) {
       console.error("Error creating organization:", error);
       res.status(500).json({ message: "Failed to create organization" });
     }
@@ -85,29 +120,61 @@ export async function registerRoutes(app: Express): Promise<Server> {
       );
       
       res.json(projectsWithCounts);
-    } catch (error) {
+    } catch (error: any) {
       console.error("Error fetching content projects:", error);
       res.status(500).json({ message: "Failed to fetch content projects" });
     }
   });
 
   app.post('/api/content-projects', isAuthenticated, async (req: any, res) => {
+    const startTime = Date.now();
     try {
       const userId = req.user.claims.sub;
+      console.log('📁 [/api/content-projects] POST - Creating project:', {
+        userId,
+        requestBody: req.body,
+        timestamp: new Date().toISOString()
+      });
+      
       const projectData = insertContentProjectSchema.parse({
         ...req.body,
         createdBy: userId
       });
       
+      console.log('📁 [/api/content-projects] Parsed project data:', projectData);
+      
       const project = await storage.createContentProject(projectData);
+      
+      console.log('📁 [/api/content-projects] Project created successfully:', {
+        projectId: project.id,
+        name: project.name,
+        organizationId: project.organizationId,
+        duration: Date.now() - startTime + 'ms'
+      });
+      
       res.json(project);
-    } catch (error) {
+    } catch (error: any) {
+      console.error('🚨 [/api/content-projects] Error creating project:', {
+        error: error?.message || error,
+        stack: error?.stack,
+        userId: req.user?.claims?.sub,
+        requestBody: req.body,
+        duration: Date.now() - startTime + 'ms'
+      });
+      
       if (error instanceof z.ZodError) {
-        console.error("Validation errors:", error.errors);
-        return res.status(400).json({ message: "Invalid project data", errors: error.errors });
+        console.error('🚨 [/api/content-projects] Validation errors:', error.errors);
+        return res.status(400).json({ 
+          message: "Invalid project data", 
+          errors: error.errors,
+          receivedData: req.body 
+        });
       }
-      console.error("Error creating content project:", error);
-      res.status(500).json({ message: "Failed to create content project" });
+      
+      res.status(500).json({ 
+        message: "Failed to create content project",
+        error: error?.message || 'Unknown error'
+      });
     }
   });
 
