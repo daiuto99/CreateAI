@@ -178,6 +178,58 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  // Get individual project details
+  app.get('/api/content-projects/:projectId', isAuthenticated, async (req: any, res) => {
+    const startTime = Date.now();
+    try {
+      const { projectId } = req.params;
+      const userId = req.user.claims.sub;
+      
+      console.log('🔍 [/api/content-projects/:id] Fetching project details:', {
+        projectId,
+        userId,
+        timestamp: new Date().toISOString()
+      });
+      
+      const project = await storage.getContentProject(projectId);
+      
+      if (!project) {
+        console.log('🔍 [/api/content-projects/:id] Project not found:', projectId);
+        return res.status(404).json({ message: "Project not found" });
+      }
+      
+      // Get content items count for the project
+      const items = await storage.getContentItems(project.id);
+      const projectWithDetails = {
+        ...project,
+        itemCount: items.length,
+        latestItem: items[0] || null
+      };
+      
+      console.log('🔍 [/api/content-projects/:id] Project details fetched:', {
+        projectId: project.id,
+        name: project.name,
+        itemCount: items.length,
+        duration: Date.now() - startTime + 'ms'
+      });
+      
+      res.json(projectWithDetails);
+    } catch (error: any) {
+      console.error('🚨 [/api/content-projects/:id] Error fetching project:', {
+        error: error?.message || error,
+        stack: error?.stack,
+        projectId: req.params?.projectId,
+        userId: req.user?.claims?.sub,
+        duration: Date.now() - startTime + 'ms'
+      });
+      
+      res.status(500).json({ 
+        message: "Failed to fetch project details",
+        error: error?.message || 'Unknown error'
+      });
+    }
+  });
+
   // Content Item routes
   app.get('/api/content-projects/:projectId/items', isAuthenticated, async (req, res) => {
     try {

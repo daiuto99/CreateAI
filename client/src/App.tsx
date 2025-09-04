@@ -15,6 +15,7 @@ import Sync from "@/pages/sync";
 import Reports from "@/pages/reports";
 import Dashboard from "@/pages/dashboard";
 import Integrations from "@/pages/integrations";
+import ProjectDetail from "@/pages/project-detail";
 
 function MainContent() {
   const { status } = useAuth();
@@ -48,6 +49,7 @@ function Router() {
           <>
             <Route path="/home" component={Home} />
             <Route path="/lab" component={Lab} />
+            <Route path="/project/:id" component={ProjectDetail} />
             <Route path="/sync" component={Sync} />
             <Route path="/reports" component={Reports} />
             <Route path="/dashboard" component={Dashboard} />

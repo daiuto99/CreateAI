@@ -120,6 +120,16 @@ export class DatabaseStorage implements IStorage {
       .orderBy(desc(contentProjects.updatedAt));
   }
 
+  async getContentProject(projectId: string): Promise<ContentProject | null> {
+    const [project] = await db
+      .select()
+      .from(contentProjects)
+      .where(eq(contentProjects.id, projectId))
+      .limit(1);
+    
+    return project || null;
+  }
+
   async createContentProject(project: InsertContentProject): Promise<ContentProject> {
     const [newProject] = await db
       .insert(contentProjects)

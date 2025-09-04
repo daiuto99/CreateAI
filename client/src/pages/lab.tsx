@@ -3,6 +3,7 @@ import { useAuth } from "@/hooks/useAuth";
 import { useBackendUser } from "@/hooks/useBackendUser";
 import { useToast } from "@/hooks/use-toast";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
+import { useLocation } from "wouter";
 import type { ContentProject, UserIntegration } from "@shared/schema";
 import { isUnauthorizedError, apiRequest } from "@/lib/queryClient";
 import Sidebar from "@/components/layout/sidebar";
@@ -39,6 +40,7 @@ export default function Lab() {
   const { data: backendUser, isLoading: isFetchingBackendUser } = useBackendUser(firebaseUser);
   const queryClient = useQueryClient();
   const [newProjectOpen, setNewProjectOpen] = useState(false);
+  const [, setLocation] = useLocation();
 
   const form = useForm<ProjectFormData>({
     resolver: zodResolver(projectSchema),
@@ -316,9 +318,13 @@ export default function Lab() {
                 ) : projects.length > 0 ? (
                   <div className="grid gap-6">
                     {projects.map((project) => (
-                      <Card key={project.id} className="hover:shadow-md transition-shadow">
+                      <Card key={project.id} className="hover:shadow-md transition-shadow cursor-pointer"
+                            onClick={() => {
+                              console.log('🔗 Navigating to project:', project.id);
+                              setLocation(`/project/${project.id}`);
+                            }}>
                         <CardHeader>
-                          <CardTitle className="flex items-center">
+                          <CardTitle className="flex items-center hover:text-primary transition-colors">
                             <span className="mr-2">{getProjectIcon(project.type)}</span>
                             {project.name}
                           </CardTitle>
@@ -329,7 +335,18 @@ export default function Lab() {
                         <CardContent>
                           <div className="flex justify-between items-center">
                             <span className="text-sm text-muted-foreground">Status: {project.status}</span>
-                            <Button variant="outline" size="sm">View Project</Button>
+                            <Button 
+                              variant="outline" 
+                              size="sm"
+                              onClick={(e) => {
+                                e.stopPropagation(); // Prevent card click
+                                console.log('🔗 View Project button clicked for:', project.id);
+                                setLocation(`/project/${project.id}`);
+                              }}
+                              data-testid={`button-view-project-${project.id}`}
+                            >
+                              View Project
+                            </Button>
                           </div>
                         </CardContent>
                       </Card>
