@@ -20,25 +20,33 @@ function Router() {
   return (
     <>
       <AuthHandler />
-      <Switch>
-        {/* Landing page for unauthenticated users */}
-        {!isAuthenticated && <Route path="/" component={Landing} />}
-        
-        {/* Protected routes - only accessible when authenticated */}
-        {isAuthenticated && (
-          <>
-            <Route path="/" component={Home} />
-            <Route path="/home" component={Home} />
-            <Route path="/lab" component={Lab} />
-            <Route path="/sync" component={Sync} />
-            <Route path="/reports" component={Reports} />
-            <Route path="/dashboard" component={Dashboard} />
-            <Route path="/integrations" component={Integrations} />
-          </>
-        )}
-        
-        <Route component={NotFound} />
-      </Switch>
+      {isLoading ? (
+        <div className="min-h-screen flex items-center justify-center">
+          <div className="text-center">
+            <div className="w-8 h-8 bg-gradient-to-r from-blue-600 to-purple-600 rounded-lg animate-pulse mx-auto mb-4"></div>
+            <p className="text-muted-foreground">Loading...</p>
+          </div>
+        </div>
+      ) : (
+        <Switch>
+          {/* Root route */}
+          <Route path="/" component={isAuthenticated ? Home : Landing} />
+          
+          {/* Protected routes - only accessible when authenticated */}
+          {isAuthenticated && (
+            <>
+              <Route path="/home" component={Home} />
+              <Route path="/lab" component={Lab} />
+              <Route path="/sync" component={Sync} />
+              <Route path="/reports" component={Reports} />
+              <Route path="/dashboard" component={Dashboard} />
+              <Route path="/integrations" component={Integrations} />
+            </>
+          )}
+          
+          <Route component={NotFound} />
+        </Switch>
+      )}
     </>
   );
 }
