@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { useAuth } from "@/hooks/useAuth";
-import type { User } from "@/types";
+import type { User } from "@/hooks/useAuth";
 import { useToast } from "@/hooks/use-toast";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import type { ContentProject, UserIntegration } from "@shared/schema";
@@ -50,6 +50,9 @@ export default function Lab() {
     }
   });
 
+  // Get user's first organization
+  const organizationId = user?.organizations?.[0]?.organization?.id;
+
   useEffect(() => {
     if (!isLoading && !isAuthenticated) {
       toast({
@@ -63,9 +66,6 @@ export default function Lab() {
       return;
     }
   }, [isAuthenticated, isLoading, toast]);
-
-  // Get user's first organization
-  const organizationId = user?.organizations?.[0]?.organization?.id;
 
   const { data: projects = [], isLoading: projectsLoading } = useQuery<ContentProject[]>({
     queryKey: ['/api/content-projects', organizationId],
