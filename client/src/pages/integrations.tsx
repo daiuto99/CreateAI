@@ -16,6 +16,7 @@ import wordpressLogo from '@assets/wordPress_1756919666154.png';
 import transistorLogo from '@assets/transister_1756919666154.jpg';
 import elevenlabsLogo from '@assets/elevenlabs_1756919666154.png';
 import adobeStockLogo from '@assets/Adobe_1756919666154.png';
+import otterLogo from '@assets/generated_images/Otter.AI_professional_logo_f69f2acd.png';
 
 interface Integration {
   id: string;
@@ -100,6 +101,15 @@ const serviceConfigs: Record<string, ServiceConfig> = {
     fields: [
       { key: 'clientId', label: 'Client ID', type: 'text', placeholder: 'Your Adobe client ID', required: true },
       { key: 'clientSecret', label: 'Client Secret', type: 'password', placeholder: 'Your Adobe client secret', required: true }
+    ]
+  },
+  otter: {
+    name: 'Otter.ai',
+    description: 'Sync CRM contacts with AI-powered meeting notes and transcriptions',
+    logo: otterLogo,
+    helpText: 'Go to otter.ai → Settings → Integrations → Developer API. Generate an API key to access your meeting transcriptions and connect with your CRM contacts.',
+    fields: [
+      { key: 'apiKey', label: 'API Key', type: 'password', placeholder: 'otter_api_key_here', required: true }
     ]
   }
 };
