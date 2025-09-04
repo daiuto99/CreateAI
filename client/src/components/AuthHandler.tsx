@@ -10,9 +10,13 @@ export function AuthHandler() {
       try {
         const result = await handleRedirectResult();
         if (result) {
+          console.log('Authentication successful via redirect');
+          
           // User successfully signed in, check for stored feature preference
           const pendingFeature = localStorage.getItem('pendingFeature');
-          localStorage.removeItem('pendingFeature'); // Clean up
+          if (pendingFeature) {
+            localStorage.removeItem('pendingFeature'); // Clean up
+          }
           
           // Map feature names to routes
           const featureRoutes: Record<string, string> = {
@@ -24,12 +28,16 @@ export function AuthHandler() {
           
           const targetRoute = pendingFeature && featureRoutes[pendingFeature] 
             ? featureRoutes[pendingFeature] 
-            : '/home'; // Default fallback to home instead of dashboard
+            : '/'; // Navigate to landing page which will show authenticated state
           
-          setLocation(targetRoute);
+          // Small delay to ensure auth state is updated
+          setTimeout(() => {
+            setLocation(targetRoute);
+          }, 100);
         }
       } catch (error) {
         console.error('Error handling auth redirect:', error);
+        // Don't show error to user as this runs on every page load
       }
     };
 

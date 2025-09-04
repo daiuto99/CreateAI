@@ -1,6 +1,6 @@
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
-import { signInWithGoogle } from "@/lib/firebase";
+import { signInWithGoogleSafe, getBestAuthMethod, signInWithGoogle } from "@/lib/firebase";
 
 interface LoginModalProps {
   isOpen: boolean;
@@ -11,29 +11,61 @@ interface LoginModalProps {
 export function LoginModal({ isOpen, onClose, featureName }: LoginModalProps) {
   const handleGoogleSignIn = async () => {
     try {
-      const result = await signInWithGoogle();
+      const bestMethod = getBestAuthMethod();
+      let result;
       
-      // Close modal on successful sign-in
-      onClose();
+      if (bestMethod === 'redirect') {
+        // Store the pending feature before redirect
+        if (featureName) {
+          localStorage.setItem('pendingFeature', featureName);
+        }
+        // Use redirect method - user will be redirected away
+        await signInWithGoogle(true);
+        return; // Don't close modal as page will redirect
+      } else {
+        // Use safe popup method with fallbacks
+        result = await signInWithGoogleSafe();
+      }
       
-      // Handle feature redirect if needed
-      const pendingFeature = localStorage.getItem('pendingFeature');
-      if (pendingFeature) {
-        localStorage.removeItem('pendingFeature');
-        const featureRoutes: Record<string, string> = {
-          'The Lab': '/lab',
-          'Sync': '/sync',
-          'Reports': '/reports',
-          'Dashboard': '/dashboard'
-        };
-        const targetRoute = featureRoutes[pendingFeature];
-        if (targetRoute) {
-          window.location.href = targetRoute;
+      // Only execute this if we got a result (popup succeeded)
+      if (result) {
+        // Close modal on successful sign-in
+        onClose();
+        
+        // Handle feature redirect if needed
+        const pendingFeature = localStorage.getItem('pendingFeature');
+        if (pendingFeature) {
+          localStorage.removeItem('pendingFeature');
+          const featureRoutes: Record<string, string> = {
+            'The Lab': '/lab',
+            'Sync': '/sync',
+            'Reports': '/reports',
+            'Dashboard': '/dashboard'
+          };
+          const targetRoute = featureRoutes[pendingFeature];
+          if (targetRoute) {
+            // Use window.location for reliable navigation
+            window.location.href = targetRoute;
+          }
         }
       }
-    } catch (error) {
+    } catch (error: any) {
       console.error('Sign-in error:', error);
-      alert('Sign-in failed: ' + (error as any).message);
+      
+      // Provide user-friendly error messages
+      let errorMessage = 'Sign-in failed. Please try again.';
+      
+      if (error.code === 'auth/popup-blocked') {
+        errorMessage = 'Popup was blocked. Please allow popups for this site or try again.';
+      } else if (error.code === 'auth/popup-closed-by-user') {
+        errorMessage = 'Sign-in was cancelled.';
+      } else if (error.code === 'auth/network-request-failed') {
+        errorMessage = 'Network error. Please check your connection and try again.';
+      } else if (error.message) {
+        errorMessage = error.message;
+      }
+      
+      alert(errorMessage);
     }
   };
 
