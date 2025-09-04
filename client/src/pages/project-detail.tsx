@@ -7,6 +7,7 @@ import { Badge } from "@/components/ui/badge";
 import Sidebar from "@/components/layout/sidebar";
 import MobileNav from "@/components/layout/mobile-nav";
 import Header from "@/components/layout/header";
+import ContentWorkflow from "@/components/content/content-workflow";
 import { useAuth } from "@/hooks/useAuth";
 
 interface ContentProject {
@@ -188,46 +189,15 @@ export default function ProjectDetail() {
                     </CardContent>
                   </Card>
 
-                  {/* Quick Actions */}
-                  <Card>
-                    <CardHeader>
-                      <CardTitle>Quick Actions</CardTitle>
-                      <CardDescription>
-                        What would you like to do with this project?
-                      </CardDescription>
-                    </CardHeader>
-                    <CardContent>
-                      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                        <Button 
-                          className="h-20 flex-col gap-2"
-                          variant="outline"
-                          disabled
-                        >
-                          <span className="text-2xl">✍️</span>
-                          <span>Create Content</span>
-                        </Button>
-                        <Button 
-                          className="h-20 flex-col gap-2"
-                          variant="outline"
-                          disabled
-                        >
-                          <span className="text-2xl">⚙️</span>
-                          <span>Settings</span>
-                        </Button>
-                        <Button 
-                          className="h-20 flex-col gap-2"
-                          variant="outline"
-                          disabled
-                        >
-                          <span className="text-2xl">📊</span>
-                          <span>Analytics</span>
-                        </Button>
-                      </div>
-                      <p className="text-sm text-muted-foreground mt-4 text-center">
-                        More features coming soon! This project detail page is now functional.
-                      </p>
-                    </CardContent>
-                  </Card>
+                  {/* AI Content Creation Workflow */}
+                  <ContentWorkflow project={{
+                    ...project,
+                    hostType: (project as any).hostType || 'single',
+                    metadata: project.metadata || {},
+                    settings: project.settings || {},
+                    createdAt: new Date(project.createdAt),
+                    updatedAt: new Date(project.updatedAt)
+                  }} />
                 </div>
               ) : null}
             </div>
