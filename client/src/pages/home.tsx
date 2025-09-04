@@ -1,50 +1,22 @@
 import { useEffect, useState } from "react";
-import { useAuth } from "@/hooks/useAuth";
-import type { User } from "@/types";
 import { useToast } from "@/hooks/use-toast";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import type { ContentProject } from "@shared/schema";
 import { isUnauthorizedError, apiRequest } from "@/lib/queryClient";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
-import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form";
-import { Input } from "@/components/ui/input";
-import { Textarea } from "@/components/ui/textarea";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { useForm } from "react-hook-form";
-import { zodResolver } from "@hookform/resolvers/zod";
-import { z } from "zod";
-import { Plus, Mic, FileText, Book, TrendingUp, Calendar } from "lucide-react";
+import { Mic, FileText, Book, TrendingUp, Calendar } from "lucide-react";
+import { useAuth } from "@/hooks/useAuth";
+import type { User } from "@/hooks/useAuth";
 
 // Import CreateAI logo
 import createAILogo from '@assets/generated_images/createai_logo.png'
-
-const projectSchema = z.object({
-  name: z.string().min(1, "Project name is required"),
-  type: z.enum(['podcast', 'blog', 'ebook']),
-  hostType: z.enum(['single', 'morning_show', 'interview']).optional(),
-  description: z.string().optional(),
-});
-
-type ProjectFormData = z.infer<typeof projectSchema>;
 
 export default function Home() {
   const { toast } = useToast();
   const { user: authUser, isAuthenticated, isLoading } = useAuth();
   const user = authUser as User;
   const queryClient = useQueryClient();
-  const [newProjectOpen, setNewProjectOpen] = useState(false);
-
-  const form = useForm<ProjectFormData>({
-    resolver: zodResolver(projectSchema),
-    defaultValues: {
-      name: '',
-      type: 'podcast',
-      hostType: 'single',
-      description: '',
-    }
-  });
 
   // Get user's first organization
   const organizationId = user?.organizations?.[0]?.organization?.id;
@@ -69,57 +41,16 @@ export default function Home() {
     retry: false,
   });
 
-  const createProjectMutation = useMutation({
-    mutationFn: async (data: ProjectFormData) => {
-      if (!organizationId) {
-        throw new Error('No organization found. Please contact support.');
-      }
-      const response = await apiRequest('POST', '/api/content-projects', {
-        ...data,
-        organizationId,
-        settings: data.type === 'podcast' ? { hostType: data.hostType } : {}
-      });
-      return response.json();
-    },
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['/api/content-projects'] });
-      setNewProjectOpen(false);
-      form.reset();
-      toast({
-        title: "Success",
-        description: "Project created successfully",
-      });
-    },
-    onError: (error) => {
-      if (isUnauthorizedError(error)) {
-        toast({
-          title: "Unauthorized",
-          description: "You are logged out. Logging in again...",
-          variant: "destructive",
-        });
-        setTimeout(() => {
-          window.location.href = "/api/login";
-        }, 500);
-        return;
-      }
-      toast({
-        title: "Error",
-        description: "Failed to create project",
-        variant: "destructive",
-      });
-    },
-  });
-
-  const onSubmit = (data: ProjectFormData) => {
-    createProjectMutation.mutate(data);
-  };
-
   const getProjectIcon = (type: string) => {
     switch (type) {
-      case 'podcast': return <Mic className="w-5 h-5" />;
-      case 'blog': return <FileText className="w-5 h-5" />;
-      case 'ebook': return <Book className="w-5 h-5" />;
-      default: return <FileText className="w-5 h-5" />;
+      case 'podcast':
+        return <Mic className="w-5 h-5 text-blue-600" />;
+      case 'blog':
+        return <FileText className="w-5 h-5 text-green-600" />;
+      case 'ebook':
+        return <Book className="w-5 h-5 text-purple-600" />;
+      default:
+        return <FileText className="w-5 h-5 text-gray-600" />;
     }
   };
 
@@ -146,8 +77,8 @@ export default function Home() {
   return (
     <div className="min-h-screen bg-background">
       <div className="max-w-7xl mx-auto px-6 py-8">
-        {/* Header with Logo and Create Button */}
-        <div className="flex items-center justify-between mb-8">
+        {/* Header with Logo */}
+        <div className="flex items-center mb-8">
           <div className="flex items-center space-x-4">
             <img 
               src={createAILogo} 
@@ -159,146 +90,6 @@ export default function Home() {
               <p className="text-muted-foreground">Create amazing content with AI assistance</p>
             </div>
           </div>
-          
-          {/* Prominent Create New Project Button */}
-          <Dialog open={newProjectOpen} onOpenChange={setNewProjectOpen}>
-            <DialogTrigger asChild>
-              <Button size="lg" className="bg-gradient-to-r from-blue-600 to-purple-600 hover:from-blue-700 hover:to-purple-700 text-white px-8 py-6 text-lg" data-testid="button-create-project">
-                <Plus className="w-6 h-6 mr-3" />
-                Create New Project
-              </Button>
-            </DialogTrigger>
-            <DialogContent className="sm:max-w-md" data-testid="dialog-create-project">
-              <DialogHeader>
-                <DialogTitle>Create New Project</DialogTitle>
-                <DialogDescription>
-                  Start a new content creation project
-                </DialogDescription>
-              </DialogHeader>
-              
-              <Form {...form}>
-                <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4">
-                  <FormField
-                    control={form.control}
-                    name="name"
-                    render={({ field }) => (
-                      <FormItem>
-                        <FormLabel>Project Name</FormLabel>
-                        <FormControl>
-                          <Input 
-                            placeholder="My Awesome Project"
-                            data-testid="input-project-name"
-                            {...field} 
-                          />
-                        </FormControl>
-                        <FormMessage />
-                      </FormItem>
-                    )}
-                  />
-
-                  <FormField
-                    control={form.control}
-                    name="type"
-                    render={({ field }) => (
-                      <FormItem>
-                        <FormLabel>Content Type</FormLabel>
-                        <Select onValueChange={field.onChange} defaultValue={field.value}>
-                          <FormControl>
-                            <SelectTrigger data-testid="select-project-type">
-                              <SelectValue placeholder="Select content type" />
-                            </SelectTrigger>
-                          </FormControl>
-                          <SelectContent>
-                            <SelectItem value="podcast" data-testid="option-podcast">
-                              <div className="flex items-center">
-                                <Mic className="w-4 h-4 mr-2" />
-                                Podcast
-                              </div>
-                            </SelectItem>
-                            <SelectItem value="blog" data-testid="option-blog">
-                              <div className="flex items-center">
-                                <FileText className="w-4 h-4 mr-2" />
-                                Blog
-                              </div>
-                            </SelectItem>
-                            <SelectItem value="ebook" data-testid="option-ebook">
-                              <div className="flex items-center">
-                                <Book className="w-4 h-4 mr-2" />
-                                E-Book
-                              </div>
-                            </SelectItem>
-                          </SelectContent>
-                        </Select>
-                        <FormMessage />
-                      </FormItem>
-                    )}
-                  />
-
-                  {form.watch('type') === 'podcast' && (
-                    <FormField
-                      control={form.control}
-                      name="hostType"
-                      render={({ field }) => (
-                        <FormItem>
-                          <FormLabel>Host Type</FormLabel>
-                          <Select onValueChange={field.onChange} defaultValue={field.value}>
-                            <FormControl>
-                              <SelectTrigger data-testid="select-host-type">
-                                <SelectValue placeholder="Select host type" />
-                              </SelectTrigger>
-                            </FormControl>
-                            <SelectContent>
-                              <SelectItem value="single" data-testid="option-single-host">Single Host</SelectItem>
-                              <SelectItem value="morning_show" data-testid="option-morning-show">Morning Show</SelectItem>
-                              <SelectItem value="interview" data-testid="option-interview">Interview</SelectItem>
-                            </SelectContent>
-                          </Select>
-                          <FormMessage />
-                        </FormItem>
-                      )}
-                    />
-                  )}
-
-                  <FormField
-                    control={form.control}
-                    name="description"
-                    render={({ field }) => (
-                      <FormItem>
-                        <FormLabel>Description (Optional)</FormLabel>
-                        <FormControl>
-                          <Textarea 
-                            placeholder="Brief description of your project..."
-                            data-testid="textarea-project-description"
-                            {...field} 
-                          />
-                        </FormControl>
-                        <FormMessage />
-                      </FormItem>
-                    )}
-                  />
-
-                  <div className="flex justify-end space-x-2">
-                    <Button type="button" variant="outline" onClick={() => setNewProjectOpen(false)} data-testid="button-cancel">
-                      Cancel
-                    </Button>
-                    <Button type="submit" disabled={createProjectMutation.isPending} data-testid="button-create">
-                      {createProjectMutation.isPending ? (
-                        <>
-                          <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin mr-2"></div>
-                          Creating...
-                        </>
-                      ) : (
-                        <>
-                          <Plus className="w-4 h-4 mr-2" />
-                          Create Project
-                        </>
-                      )}
-                    </Button>
-                  </div>
-                </form>
-              </Form>
-            </DialogContent>
-          </Dialog>
         </div>
 
         {/* Recent Projects */}
@@ -360,9 +151,9 @@ export default function Home() {
                 <p className="text-muted-foreground mb-4 text-center">
                   Create your first project to get started with AI-powered content creation
                 </p>
-                <Button onClick={() => setNewProjectOpen(true)} data-testid="button-create-first-project">
-                  <Plus className="w-4 h-4 mr-2" />
-                  Create Your First Project
+                <Button onClick={() => window.location.href = '/lab'} data-testid="button-create-first-project">
+                  <FileText className="w-4 h-4 mr-2" />
+                  Go to The Lab
                 </Button>
               </CardContent>
             </Card>
@@ -374,43 +165,52 @@ export default function Home() {
           <Card className="hover:shadow-lg transition-shadow cursor-pointer" onClick={() => window.location.href = '/lab'}>
             <CardHeader>
               <CardTitle className="flex items-center text-lg">
-                <div className="w-10 h-10 rounded-lg bg-blue-100 dark:bg-blue-900 flex items-center justify-center mr-3">
-                  <Mic className="w-5 h-5 text-blue-600 dark:text-blue-400" />
-                </div>
+                <Mic className="w-6 h-6 text-blue-600 mr-3" />
                 The Lab
               </CardTitle>
               <CardDescription>
                 AI-powered content creation workspace
               </CardDescription>
             </CardHeader>
+            <CardContent>
+              <p className="text-sm text-muted-foreground">
+                Generate podcasts, blogs, and e-books with AI assistance
+              </p>
+            </CardContent>
           </Card>
-          
+
           <Card className="hover:shadow-lg transition-shadow cursor-pointer" onClick={() => window.location.href = '/sync'}>
             <CardHeader>
               <CardTitle className="flex items-center text-lg">
-                <div className="w-10 h-10 rounded-lg bg-green-100 dark:bg-green-900 flex items-center justify-center mr-3">
-                  <TrendingUp className="w-5 h-5 text-green-600 dark:text-green-400" />
-                </div>
+                <TrendingUp className="w-6 h-6 text-green-600 mr-3" />
                 Sync
               </CardTitle>
               <CardDescription>
-                Sync with Bigin by Zoho CRM
+                CRM synchronization and automation
               </CardDescription>
             </CardHeader>
+            <CardContent>
+              <p className="text-sm text-muted-foreground">
+                Sync with Bigin by Zoho CRM automatically
+              </p>
+            </CardContent>
           </Card>
-          
-          <Card className="hover:shadow-lg transition-shadow cursor-pointer" onClick={() => window.location.href = '/dashboard'}>
+
+          <Card className="hover:shadow-lg transition-shadow cursor-pointer" onClick={() => window.location.href = '/reports'}>
             <CardHeader>
               <CardTitle className="flex items-center text-lg">
-                <div className="w-10 h-10 rounded-lg bg-purple-100 dark:bg-purple-900 flex items-center justify-center mr-3">
-                  <TrendingUp className="w-5 h-5 text-purple-600 dark:text-purple-400" />
-                </div>
-                Dashboard
+                <FileText className="w-6 h-6 text-purple-600 mr-3" />
+                Reports
               </CardTitle>
               <CardDescription>
                 Performance analytics and insights
               </CardDescription>
             </CardHeader>
+            <CardContent>
+              <p className="text-sm text-muted-foreground">
+                Track performance with beautiful analytics
+              </p>
+            </CardContent>
           </Card>
         </div>
       </div>
