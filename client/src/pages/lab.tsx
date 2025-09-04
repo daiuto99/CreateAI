@@ -1,6 +1,5 @@
 import { useEffect, useState } from "react";
-import { useAuth } from "@/hooks/useAuth";
-import type { User } from "@/hooks/useAuth";
+import { useAuth, type User } from "@/hooks/useAuth";
 import { useToast } from "@/hooks/use-toast";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import type { ContentProject, UserIntegration } from "@shared/schema";
@@ -35,7 +34,7 @@ type ProjectFormData = z.infer<typeof projectSchema>;
 export default function Lab() {
   const { toast } = useToast();
   const { user: authUser, isAuthenticated, isLoading } = useAuth();
-  const user = authUser as User;
+  const user = authUser;
   const queryClient = useQueryClient();
   // Removed activeTab since we no longer have content type tabs
   const [newProjectOpen, setNewProjectOpen] = useState(false);
@@ -51,7 +50,7 @@ export default function Lab() {
   });
 
   // Get user's first organization
-  const organizationId = user?.organizations?.[0]?.organization?.id;
+  const organizationId = user?.organizations?.[0]?.id;
 
   useEffect(() => {
     if (!isLoading && !isAuthenticated) {

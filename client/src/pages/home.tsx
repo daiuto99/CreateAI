@@ -18,7 +18,7 @@ export default function Home() {
   const queryClient = useQueryClient();
 
   // Get user's first organization
-  const organizationId = user?.organizations?.[0]?.organization?.id;
+  const organizationId = user?.organizations?.[0]?.id;
 
   useEffect(() => {
     if (!isLoading && !isAuthenticated) {
