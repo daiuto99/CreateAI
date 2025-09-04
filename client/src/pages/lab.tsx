@@ -55,6 +55,38 @@ export default function Lab() {
 
   const { data: projects = [], isLoading: projectsLoading } = useQuery<ContentProject[]>({
     queryKey: ['/api/content-projects', organizationId],
+    queryFn: async () => {
+      console.log('📋 Fetching projects for organization:', organizationId);
+      if (!organizationId) {
+        console.warn('📋 No organizationId available for project fetch');
+        return [];
+      }
+      
+      const response = await fetch(`/api/content-projects?organizationId=${organizationId}`, {
+        credentials: 'include'
+      });
+      
+      console.log('📋 Projects fetch response:', {
+        status: response.status,
+        statusText: response.statusText,
+        ok: response.ok,
+        organizationId
+      });
+      
+      if (!response.ok) {
+        const errorText = await response.text();
+        console.error('📋 Failed to fetch projects:', errorText);
+        throw new Error(`Failed to fetch projects: ${response.status} ${errorText}`);
+      }
+      
+      const projectsData = await response.json();
+      console.log('📋 Fetched projects:', {
+        count: projectsData.length,
+        projects: projectsData.map((p: any) => ({ id: p.id, name: p.name, type: p.type }))
+      });
+      
+      return projectsData;
+    },
     enabled: !!organizationId,
     retry: false,
   });
@@ -123,7 +155,18 @@ export default function Lab() {
       return result;
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['/api/content-projects'] });
+      console.log('🔄 Project created successfully, invalidating queries');
+      
+      // Invalidate the specific organization's projects
+      queryClient.invalidateQueries({ 
+        queryKey: ['/api/content-projects', organizationId] 
+      });
+      
+      // Also invalidate any general project queries
+      queryClient.invalidateQueries({ 
+        queryKey: ['/api/content-projects'] 
+      });
+      
       setNewProjectOpen(false);
       form.reset();
       toast({
