@@ -99,7 +99,26 @@ export class OpenAIService {
         targetAudience: result.targetAudience || settings.audience || "General audience",
         keyTakeaways: result.keyTakeaways || [],
       };
-    } catch (error) {
+    } catch (error: any) {
+      console.error('🚨 OpenAI API Error Details:', {
+        message: error.message,
+        status: error.status || error.statusCode,
+        code: error.code,
+        type: error.type,
+        stack: error.stack?.split('\n').slice(0, 3).join('\n')
+      });
+      
+      // More specific error messages based on OpenAI error types
+      if (error.status === 401 || error.message?.includes('Incorrect API key')) {
+        throw new Error('Invalid OpenAI API key. Please check your integration settings.');
+      }
+      if (error.status === 429) {
+        throw new Error('OpenAI rate limit exceeded. Please wait a moment and try again.');
+      }
+      if (error.status === 403) {
+        throw new Error('OpenAI API access denied. Please check your account permissions.');
+      }
+      
       throw new Error(`Failed to generate content outline: ${error instanceof Error ? error.message : 'Unknown error'}`);
     }
   }

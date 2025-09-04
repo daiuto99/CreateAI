@@ -113,7 +113,17 @@ export default function ContentWorkflow({ project }: ContentWorkflowProps) {
           settings: data.settings
         })
       });
-      if (!response.ok) throw new Error('Failed to generate outline');
+      
+      if (!response.ok) {
+        const errorData = await response.json().catch(() => ({ message: 'Unknown error' }));
+        console.error('🚨 Server error response:', {
+          status: response.status,
+          statusText: response.statusText,
+          errorData
+        });
+        throw new Error(errorData.message || errorData.error || `Server error: ${response.status}`);
+      }
+      
       return await response.json();
     },
     onSuccess: (data) => {
@@ -149,7 +159,17 @@ export default function ContentWorkflow({ project }: ContentWorkflowProps) {
           settings: contentSettings
         })
       });
-      if (!response.ok) throw new Error('Failed to generate content');
+      
+      if (!response.ok) {
+        const errorData = await response.json().catch(() => ({ message: 'Unknown error' }));
+        console.error('🚨 Server error response:', {
+          status: response.status,
+          statusText: response.statusText,
+          errorData
+        });
+        throw new Error(errorData.message || errorData.error || `Server error: ${response.status}`);
+      }
+      
       return await response.json();
     },
     onSuccess: (data) => {
