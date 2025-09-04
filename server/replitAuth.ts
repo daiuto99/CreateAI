@@ -57,13 +57,40 @@ function updateUserSession(
 async function upsertUser(
   claims: any,
 ) {
+  const userId = claims["sub"];
+  
+  // Check if this is a new user (doesn't exist in database)
+  const existingUser = await storage.getUser(userId);
+  const isNewUser = !existingUser;
+  
+  // Create or update the user
   await storage.upsertUser({
-    id: claims["sub"],
+    id: userId,
     email: claims["email"],
     firstName: claims["first_name"],
     lastName: claims["last_name"],
     profileImageUrl: claims["profile_image_url"],
   });
+  
+  // If this is a new user, create a default organization
+  if (isNewUser) {
+    const firstName = claims["first_name"] || "User";
+    const lastName = claims["last_name"] || "";
+    const fullName = `${firstName} ${lastName}`.trim();
+    
+    try {
+      await storage.createOrganization(
+        {
+          name: `${fullName}'s Workspace`,
+          settings: {},
+        },
+        userId
+      );
+    } catch (error) {
+      console.error(`Failed to create default organization for user ${userId}:`, error);
+      // Don't throw error here - user creation should still succeed even if org creation fails
+    }
+  }
 }
 
 export async function setupAuth(app: Express) {

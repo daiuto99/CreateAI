@@ -5,7 +5,7 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
+import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 import { useToast } from '@/hooks/use-toast';
 
@@ -349,6 +349,9 @@ export default function Integrations() {
             <DialogTitle>
               Connect {selectedService ? serviceConfigs[selectedService]?.name : ''}
             </DialogTitle>
+            <DialogDescription>
+              Configure your {selectedService ? serviceConfigs[selectedService]?.name : 'service'} integration to enable seamless content synchronization.
+            </DialogDescription>
           </DialogHeader>
           
           {selectedService && (

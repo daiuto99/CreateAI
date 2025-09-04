@@ -1,4 +1,4 @@
-import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { signInWithGoogleSafe, getBestAuthMethod, signInWithGoogle } from "@/lib/firebase";
 
@@ -76,6 +76,9 @@ export function LoginModal({ isOpen, onClose, featureName }: LoginModalProps) {
           <DialogTitle className="text-2xl font-bold text-center">
             {featureName ? `Access ${featureName}` : 'Sign In to CreateAI'}
           </DialogTitle>
+          <DialogDescription>
+            Sign in with your Google account to access CreateAI's content creation tools and AI-powered features.
+          </DialogDescription>
         </DialogHeader>
         
         <div className="space-y-6 py-4">

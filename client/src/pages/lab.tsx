@@ -164,7 +164,7 @@ export default function Lab() {
         <Sidebar />
         <div className="flex-1 lg:ml-64">
           <MobileNav />
-          <Header />
+          <Header title="The Lab" />
           
           <main className="flex-1 overflow-auto">
             <div className="p-6 space-y-8">
@@ -352,7 +352,7 @@ export default function Lab() {
               {/* Integration Status */}
               <div className="space-y-6">
                 <h2 className="text-xl font-semibold text-foreground">Integration Status</h2>
-                <IntegrationStatus integrations={integrations} />
+                <IntegrationStatus integrations={integrations as any} />
               </div>
 
               {/* Stats Cards */}
@@ -360,26 +360,30 @@ export default function Lab() {
                 <StatsCard
                   title="Active Projects"
                   value="0"
-                  description="this week"
-                  trend="up"
+                  change="this week"
+                  icon="fas fa-project-diagram"
+                  color="blue"
                 />
                 <StatsCard
                   title="Published"
                   value="0"
-                  description="this month"
-                  trend="up"
+                  change="this month"
+                  icon="fas fa-check-circle"
+                  color="green"
                 />
                 <StatsCard
                   title="Total Content"
                   value="0"
-                  description="all time"
-                  trend="up"
+                  change="all time"
+                  icon="fas fa-file-alt"
+                  color="purple"
                 />
                 <StatsCard
                   title="AI Usage"
                   value="0%"
-                  description="of monthly quota"
-                  trend="up"
+                  change="of monthly quota"
+                  icon="fas fa-robot"
+                  color="orange"
                 />
               </div>
             </div>
