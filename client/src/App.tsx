@@ -15,7 +15,7 @@ import Dashboard from "@/pages/dashboard";
 import Integrations from "@/pages/integrations";
 
 function MainContent() {
-  const { isAuthenticated, isLoading } = useAuth();
+  const { isLoading } = useAuth();
   
   if (isLoading) {
     return (
@@ -28,11 +28,8 @@ function MainContent() {
     );
   }
 
-  if (!isAuthenticated) {
-    return <Landing />;
-  }
-
-  return <Home />;
+  // Always show landing page regardless of auth state
+  return <Landing />;
 }
 
 function Router() {

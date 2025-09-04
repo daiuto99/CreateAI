@@ -7,7 +7,6 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Mic, FileText, Book, TrendingUp, Calendar } from "lucide-react";
 import { useAuth } from "@/hooks/useAuth";
-import type { User } from "@/hooks/useAuth";
 
 // Import CreateAI logo
 import createAILogo from '@assets/generated_images/createai_logo.png'
@@ -15,7 +14,7 @@ import createAILogo from '@assets/generated_images/createai_logo.png'
 export default function Home() {
   const { toast } = useToast();
   const { user: authUser, isAuthenticated, isLoading } = useAuth();
-  const user = authUser as User;
+  const user = authUser;
   const queryClient = useQueryClient();
 
   // Get user's first organization
