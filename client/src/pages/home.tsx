@@ -13,12 +13,19 @@ import createAILogo from '@assets/generated_images/createai_logo.png'
 
 export default function Home() {
   const { toast } = useToast();
-  const { user: authUser, isAuthenticated, isLoading } = useAuth();
-  const user = authUser;
+  const { user: firebaseUser, isAuthenticated, isLoading } = useAuth();
   const queryClient = useQueryClient();
 
-  // Get user's first organization
-  const organizationId = user?.organizations?.[0]?.id;
+  // Fetch backend user data
+  const { data: backendUser } = useQuery<{organizations?: Array<{id: string}>}>({
+    queryKey: ['/api/auth/user'],
+    enabled: !!firebaseUser,
+    retry: false,
+    staleTime: 5 * 60 * 1000,
+  });
+
+  // Get user's first organization from backend data
+  const organizationId = backendUser?.organizations?.[0]?.id;
 
   useEffect(() => {
     if (!isLoading && !isAuthenticated) {

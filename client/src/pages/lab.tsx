@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { useAuth, type User } from "@/hooks/useAuth";
+import { useAuth } from "@/hooks/useAuth";
 import { useToast } from "@/hooks/use-toast";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import type { ContentProject, UserIntegration } from "@shared/schema";
@@ -33,10 +33,8 @@ type ProjectFormData = z.infer<typeof projectSchema>;
 
 export default function Lab() {
   const { toast } = useToast();
-  const { user: authUser, isAuthenticated, isLoading } = useAuth();
-  const user = authUser;
+  const { user: firebaseUser, isAuthenticated, isLoading } = useAuth();
   const queryClient = useQueryClient();
-  // Removed activeTab since we no longer have content type tabs
   const [newProjectOpen, setNewProjectOpen] = useState(false);
 
   const form = useForm<ProjectFormData>({
@@ -49,8 +47,16 @@ export default function Lab() {
     }
   });
 
-  // Get user's first organization
-  const organizationId = user?.organizations?.[0]?.id;
+  // Fetch backend user data
+  const { data: backendUser } = useQuery<{organizations?: Array<{id: string}>}>({
+    queryKey: ['/api/auth/user'],
+    enabled: !!firebaseUser,
+    retry: false,
+    staleTime: 5 * 60 * 1000,
+  });
+
+  // Get user's first organization from backend data
+  const organizationId = backendUser?.organizations?.[0]?.id;
 
   useEffect(() => {
     if (!isLoading && !isAuthenticated) {
@@ -74,7 +80,7 @@ export default function Lab() {
 
   const { data: integrations = [] } = useQuery<UserIntegration[]>({
     queryKey: ['/api/integrations'],
-    enabled: !!user,
+    enabled: !!firebaseUser,
     retry: false,
   });
 
