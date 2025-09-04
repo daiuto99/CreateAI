@@ -64,7 +64,7 @@ function Router() {
 }
 
 function App() {
-  console.log('🚀 App component mounting/re-rendering at:', new Date().toISOString());
+  // console.log('🚀 App component mounting/re-rendering at:', new Date().toISOString());
   
   return (
     <ErrorBoundary>

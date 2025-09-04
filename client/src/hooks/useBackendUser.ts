@@ -14,41 +14,41 @@ export function useBackendUser(firebaseUser: User | null) {
   return useQuery<BackendUser>({
     queryKey: ["/api/auth/user", firebaseUser?.uid ?? null],
     queryFn: async () => {
-      console.log('👤 Fetching backend user data for Firebase user:', {
-        uid: firebaseUser?.uid,
-        email: firebaseUser?.email,
-        timestamp: new Date().toISOString()
-      });
+      // console.log('👤 Fetching backend user data for Firebase user:', {
+      //   uid: firebaseUser?.uid,
+      //   email: firebaseUser?.email,
+      //   timestamp: new Date().toISOString()
+      // });
       
       const res = await fetch("/api/auth/user", { credentials: "include" });
       
-      console.log('👤 Backend user response:', {
-        status: res.status,
-        statusText: res.statusText,
-        ok: res.ok,
-        url: res.url
-      });
+      // console.log('👤 Backend user response:', {
+      //   status: res.status,
+      //   statusText: res.statusText,
+      //   ok: res.ok,
+      //   url: res.url
+      // });
       
       if (!res.ok) {
         const errorText = await res.text();
-        console.error('👤 Backend user fetch failed:', {
-          status: res.status,
-          statusText: res.statusText,
-          error: errorText
-        });
+        // console.error('👤 Backend user fetch failed:', {
+        //   status: res.status,
+        //   statusText: res.statusText,
+        //   error: errorText
+        // });
         throw new Error(`Failed to fetch backend user: ${res.status} ${errorText}`);
       }
       
       const userData = await res.json();
-      console.log('👤 Backend user data received:', {
-        id: userData.id,
-        email: userData.email,
-        firstName: userData.firstName,
-        lastName: userData.lastName,
-        organizationsCount: userData.organizations?.length || 0,
-        organizations: userData.organizations,
-        timestamp: new Date().toISOString()
-      });
+      // console.log('👤 Backend user data received:', {
+      //   id: userData.id,
+      //   email: userData.email,
+      //   firstName: userData.firstName,
+      //   lastName: userData.lastName,
+      //   organizationsCount: userData.organizations?.length || 0,
+      //   organizations: userData.organizations,
+      //   timestamp: new Date().toISOString()
+      // });
       
       // Store debug info
       try {

@@ -97,7 +97,7 @@ export const fixMissingOrganization = async () => {
 (window as any).debugCreateAI = debugCreateAI;
 (window as any).fixMissingOrganization = fixMissingOrganization;
 
-// Auto-run debug on script load
-console.log('🔍 CreateAI Debug Tools Loaded');
-console.log('Run debugCreateAI() in console for detailed debug info');
-console.log('Run fixMissingOrganization() to create a default organization');
+// Auto-run debug on script load (disabled for cleaner console)
+// console.log('🔍 CreateAI Debug Tools Loaded');
+// console.log('Run debugCreateAI() in console for detailed debug info');
+// console.log('Run fixMissingOrganization() to create a default organization');
