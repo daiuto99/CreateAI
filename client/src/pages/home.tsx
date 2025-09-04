@@ -7,39 +7,54 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Mic, FileText, Book, TrendingUp, Calendar } from "lucide-react";
 import { useAuth } from "@/hooks/useAuth";
+import { useBackendUser } from "@/hooks/useBackendUser";
 
 // Import CreateAI logo
 import createAILogo from '@assets/generated_images/createai_logo.png'
 
 export default function Home() {
   const { toast } = useToast();
-  const { user: firebaseUser, isAuthenticated, isLoading } = useAuth();
+  const { firebaseUser, status } = useAuth();
+  const { data: backendUser, isLoading: isFetchingBackendUser } = useBackendUser(firebaseUser);
   const queryClient = useQueryClient();
-
-  // Fetch backend user data
-  const { data: backendUser } = useQuery<{organizations?: Array<{id: string}>}>({
-    queryKey: ['/api/auth/user'],
-    enabled: !!firebaseUser,
-    retry: false,
-    staleTime: 5 * 60 * 1000,
-  });
 
   // Get user's first organization from backend data
   const organizationId = backendUser?.organizations?.[0]?.id;
 
-  useEffect(() => {
-    if (!isLoading && !isAuthenticated) {
-      toast({
-        title: "Unauthorized",
-        description: "You are logged out. Logging in again...",
-        variant: "destructive",
-      });
-      setTimeout(() => {
-        window.location.href = "/api/login";
-      }, 500);
-      return;
-    }
-  }, [isAuthenticated, isLoading, toast]);
+  // ✅ hooks above; rendering logic below
+
+  if (status === "loading") {
+    return (
+      <div className="min-h-screen bg-background flex items-center justify-center">
+        <div className="text-center">
+          <div className="w-8 h-8 bg-gradient-to-r from-blue-600 to-purple-600 rounded-lg animate-pulse mx-auto mb-4"></div>
+          <p className="text-muted-foreground">Loading...</p>
+        </div>
+      </div>
+    );
+  }
+
+  if (!firebaseUser) {
+    return (
+      <div className="min-h-screen bg-background flex items-center justify-center">
+        <div className="text-center">
+          <p className="text-muted-foreground mb-4">Please sign in to continue.</p>
+          <button onClick={() => window.location.href = "/api/login"} className="bg-blue-600 text-white px-4 py-2 rounded">Sign In</button>
+        </div>
+      </div>
+    );
+  }
+
+  if (isFetchingBackendUser) {
+    return (
+      <div className="min-h-screen bg-background flex items-center justify-center">
+        <div className="text-center">
+          <div className="w-8 h-8 bg-gradient-to-r from-blue-600 to-purple-600 rounded-lg animate-pulse mx-auto mb-4"></div>
+          <p className="text-muted-foreground">Loading your account...</p>
+        </div>
+      </div>
+    );
+  }
 
   const { data: projects = [], isLoading: projectsLoading } = useQuery<ContentProject[]>({
     queryKey: ['/api/content-projects', organizationId],
@@ -69,16 +84,6 @@ export default function Home() {
     }
   };
 
-  if (isLoading || !isAuthenticated) {
-    return (
-      <div className="min-h-screen bg-background flex items-center justify-center">
-        <div className="text-center">
-          <div className="w-8 h-8 bg-gradient-to-r from-blue-600 to-purple-600 rounded-lg animate-pulse mx-auto mb-4"></div>
-          <p className="text-muted-foreground">Loading...</p>
-        </div>
-      </div>
-    );
-  }
 
   return (
     <div className="min-h-screen bg-background">

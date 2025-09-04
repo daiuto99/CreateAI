@@ -1,0 +1,209 @@
+🔧 Replit Agent Prompt — Fix React Hook Order + Auth + Query
+
+Context
+
+App: React 18 + TypeScript + Vite + TanStack Query v5 + wouter
+
+Errors seen:
+
+Uncaught Error: Should have a queue... and Rendered fewer hooks than expected (React hook order violation)
+
+Uncaught ReferenceError: user is not defined in client/src/pages/lab.tsx:88
+
+Recent change added a conditional useQuery inside useAuth, which violates the Rules of Hooks.
+
+Goal: Refactor auth so no hooks run conditionally, and separate backend user fetching into its own hook with enabled.
+
+Acceptance criteria
+
+No console errors for:
+
+“Should have a queue…”
+
+“Rendered fewer hooks than expected…”
+
+“user is not defined”
+
+Navigating to /lab and /home renders without runtime errors.
+
+Backend user fetch only runs when a Firebase user exists.
+
+Project creation flow works after these fixes (trigger whatever “create project” action exists on /lab).
+
+Tasks
+1) Create a safe auth hook (no conditional hooks)
+
+File: client/src/hooks/useAuth.ts (create if missing)
+
+import { useEffect, useState } from "react";
+import { onAuthStateChanged, User } from "firebase/auth";
+import { auth } from "../lib/firebase"; // adjust import path if different
+
+type AuthStatus = "loading" | "authed" | "guest";
+
+export function useAuth() {
+  const [firebaseUser, setFirebaseUser] = useState<User | null>(null);
+  const [status, setStatus] = useState<AuthStatus>("loading");
+
+  useEffect(() => {
+    const unsub = onAuthStateChanged(auth, (u) => {
+      setFirebaseUser(u);
+      setStatus(u ? "authed" : "guest");
+    });
+
+    return () => unsub();
+  }, []);
+
+  return { firebaseUser, status };
+}
+
+
+Requirements
+
+No useQuery or any other hook that could be conditionally skipped.
+
+Only useState + useEffect above, always executed in the same order.
+
+2) Create a separate backend user hook (query guarded by enabled)
+
+File: client/src/hooks/useBackendUser.ts (create)
+
+import { useQuery } from "@tanstack/react-query";
+import type { User } from "firebase/auth";
+
+type Org = { id: string };
+type BackendUser = {
+  id?: string;
+  email?: string;
+  organizations?: Org[];
+  // add other fields returned by /api/auth/user as needed
+};
+
+export function useBackendUser(firebaseUser: User | null) {
+  return useQuery<BackendUser>({
+    queryKey: ["/api/auth/user", firebaseUser?.uid ?? null],
+    queryFn: async () => {
+      const res = await fetch("/api/auth/user", { credentials: "include" });
+      if (!res.ok) throw new Error("Failed to fetch backend user");
+      return res.json();
+    },
+    enabled: !!firebaseUser, // only runs after firebaseUser exists
+    staleTime: 60_000,
+    retry: false,
+  });
+}
+
+3) Update lab.tsx to use the new hooks and remove any undefined user
+
+File: client/src/pages/lab.tsx
+
+Ensure all hooks are declared at the top level of the component (no hooks in conditionals/loops/early code paths).
+
+Replace any user reference with either firebaseUser or fields from backendUser.
+
+Only render gated UI after hooks have run.
+
+Patch example (adapt to file structure):
+
+import React from "react";
+import { useAuth } from "../hooks/useAuth";
+import { useBackendUser } from "../hooks/useBackendUser";
+// other imports...
+
+export default function Lab() {
+  const { firebaseUser, status } = useAuth();
+  const { data: backendUser, isFetching: isFetchingBackendUser } = useBackendUser(firebaseUser);
+
+  // ✅ hooks above; rendering logic below
+
+  if (status === "loading") {
+    return <div>Loading…</div>;
+  }
+
+  if (!firebaseUser) {
+    return <div>Please sign in to continue.</div>;
+  }
+
+  if (isFetchingBackendUser) {
+    return <div>Loading your account…</div>;
+  }
+
+  // Avoid referencing a bare `user`. Use `firebaseUser` or `backendUser`.
+  const orgId = backendUser?.organizations?.[0]?.id;
+
+  return (
+    <div>
+      <h1>Lab</h1>
+      <div>Signed in as: {firebaseUser.email}</div>
+      {orgId ? <div>Active org: {orgId}</div> : <div>No organization</div>}
+      {/* …rest of Lab UI and project-create actions… */}
+    </div>
+  );
+}
+
+
+Important
+
+Do not put any useQuery behind an if block.
+
+Do not return early before declaring all hooks. (We’re returning after hooks have run—this is safe.)
+
+4) Update home.tsx similarly (no conditional hooks; no bare user)
+
+File: client/src/pages/home.tsx
+
+Use the same pattern:
+
+const { firebaseUser, status } = useAuth();
+
+const { data: backendUser } = useBackendUser(firebaseUser);
+
+Remove any user references or define them properly from firebaseUser/backendUser.
+
+Keep all hooks top-level.
+
+5) Verify providers and dependencies
+
+File(s): client/src/App.tsx (or wherever providers are mounted)
+
+Ensure QueryClientProvider wraps the app once and above routes.
+
+Ensure any AuthProvider you might have isn’t conditionally mounted.
+
+Confirm React + ReactDOM versions match (React 18 for both).
+
+Do a clean install to avoid mismatched lockfiles.
+
+Commands to run:
+
+rm -rf node_modules pnpm-lock.yaml package-lock.json yarn.lock
+pnpm i || npm i
+pnpm run dev || npm run dev
+
+6) Quick tests (Agent, please perform)
+
+Start the app and open /home and /lab.
+
+Confirm there are no console errors:
+
+No “Should have a queue…”
+
+No “Rendered fewer hooks…”
+
+No “user is not defined”
+
+Sign-in flow: when signed out, /lab shows the sign-in gate; when signed in, it shows user info and org (if present).
+
+Trigger “Create Project” and confirm it succeeds (or surfaces backend validation errors only).
+
+7) Optional hardening (if quick)
+
+Add a minimal error boundary component around routes to show a friendly error UI.
+
+In useBackendUser, surface fetch errors with a small inline message + retry button.
+
+Notes
+
+Ignore CSP warnings and allow-downloads-without-user-activation sandbox warnings — those are unrelated to the hook errors.
+
+The key fix is: no conditional hooks in useAuth and separate data fetching with enabled.

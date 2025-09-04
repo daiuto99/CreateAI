@@ -1,5 +1,6 @@
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import { useAuth } from "@/hooks/useAuth";
+import { useBackendUser } from "@/hooks/useBackendUser";
 import { useToast } from "@/hooks/use-toast";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import type { ContentProject, UserIntegration } from "@shared/schema";
@@ -32,8 +33,10 @@ const projectSchema = z.object({
 type ProjectFormData = z.infer<typeof projectSchema>;
 
 export default function Lab() {
+  // ✅ All hooks declared at top level - no conditional hooks
   const { toast } = useToast();
-  const { user: firebaseUser, isAuthenticated, isLoading } = useAuth();
+  const { firebaseUser, status } = useAuth();
+  const { data: backendUser, isLoading: isFetchingBackendUser } = useBackendUser(firebaseUser);
   const queryClient = useQueryClient();
   const [newProjectOpen, setNewProjectOpen] = useState(false);
 
@@ -47,30 +50,8 @@ export default function Lab() {
     }
   });
 
-  // Fetch backend user data
-  const { data: backendUser } = useQuery<{organizations?: Array<{id: string}>}>({
-    queryKey: ['/api/auth/user'],
-    enabled: !!firebaseUser,
-    retry: false,
-    staleTime: 5 * 60 * 1000,
-  });
-
   // Get user's first organization from backend data
   const organizationId = backendUser?.organizations?.[0]?.id;
-
-  useEffect(() => {
-    if (!isLoading && !isAuthenticated) {
-      toast({
-        title: "Unauthorized",
-        description: "You are logged out. Logging in again...",
-        variant: "destructive",
-      });
-      setTimeout(() => {
-        window.location.href = "/api/login";
-      }, 500);
-      return;
-    }
-  }, [isAuthenticated, isLoading, toast]);
 
   const { data: projects = [], isLoading: projectsLoading } = useQuery<ContentProject[]>({
     queryKey: ['/api/content-projects', organizationId],
@@ -129,268 +110,282 @@ export default function Lab() {
     createProjectMutation.mutate(data);
   };
 
+  // ✅ hooks above; rendering logic below
 
-  if (isLoading || !isAuthenticated) {
+  if (status === "loading") {
     return (
       <div className="min-h-screen bg-background flex items-center justify-center">
         <div className="text-center">
-          <div className="w-8 h-8 gradient-bg rounded-lg animate-pulse mx-auto mb-4"></div>
+          <div className="w-8 h-8 bg-gradient-to-r from-blue-600 to-purple-600 rounded-lg animate-pulse mx-auto mb-4"></div>
           <p className="text-muted-foreground">Loading...</p>
         </div>
       </div>
     );
   }
 
+  if (!firebaseUser) {
+    return (
+      <div className="min-h-screen bg-background flex items-center justify-center">
+        <div className="text-center">
+          <p className="text-muted-foreground mb-4">Please sign in to continue.</p>
+          <button onClick={() => window.location.href = "/api/login"} className="bg-blue-600 text-white px-4 py-2 rounded">Sign In</button>
+        </div>
+      </div>
+    );
+  }
 
-  const filteredProjects = projects || [];
+  if (isFetchingBackendUser) {
+    return (
+      <div className="min-h-screen bg-background flex items-center justify-center">
+        <div className="text-center">
+          <div className="w-8 h-8 bg-gradient-to-r from-blue-600 to-purple-600 rounded-lg animate-pulse mx-auto mb-4"></div>
+          <p className="text-muted-foreground">Loading your account...</p>
+        </div>
+      </div>
+    );
+  }
+
+  const getProjectIcon = (type: string) => {
+    switch (type) {
+      case 'podcast':
+        return '🎙️';
+      case 'blog':
+        return '📝';
+      case 'ebook':
+        return '📚';
+      default:
+        return '📄';
+    }
+  };
 
   return (
     <div className="min-h-screen bg-background">
-      <Sidebar />
-      <MobileNav />
-      
-      <main className="lg:ml-64 pb-20 lg:pb-0">
-        <Header 
-          title="The Lab" 
-          subtitle="Create amazing content with AI assistance"
-        />
-        
-        <div className="p-6">
-          {/* Content Type Tabs Removed - Now using unified project creation */}
+      <div className="flex h-screen">
+        <Sidebar />
+        <div className="flex-1 lg:ml-64">
+          <MobileNav />
+          <Header />
+          
+          <main className="flex-1 overflow-auto">
+            <div className="p-6 space-y-8">
+              {/* Header */}
+              <div className="flex items-center justify-between">
+                <div>
+                  <h1 className="text-3xl font-bold text-foreground">The Lab</h1>
+                  <p className="text-muted-foreground">Create amazing content with AI assistance</p>
+                </div>
+                <div className="text-sm text-muted-foreground">
+                  Signed in as: {firebaseUser.email}
+                  {organizationId && <div>Active org: {organizationId}</div>}
+                </div>
+              </div>
 
-          {/* Content Projects */}
-          <div className="mb-8">
-            <div className="flex items-center justify-between mb-6">
-              <h2 className="text-xl font-semibold text-foreground">Recent Projects</h2>
-              <div className="flex items-center space-x-2">
-                <select className="bg-card border border-border rounded-lg px-3 py-2 text-sm text-foreground" data-testid="select-filter-status">
-                  <option value="">All Status</option>
-                  <option value="outline">Outline</option>
-                  <option value="draft">Draft</option>
-                  <option value="review">Review</option>
-                  <option value="published">Published</option>
-                </select>
+              {/* Recent Projects */}
+              <div className="space-y-6">
+                <div className="flex items-center justify-between">
+                  <h2 className="text-xl font-semibold text-foreground">Recent Projects</h2>
+                  <select className="text-sm border rounded px-3 py-1" data-testid="select-project-status">
+                    <option>All Status</option>
+                    <option>Draft</option>
+                    <option>Published</option>
+                  </select>
+                </div>
+
+                {projectsLoading ? (
+                  <div className="text-center py-12">
+                    <div className="w-8 h-8 bg-gradient-to-r from-blue-600 to-purple-600 rounded-lg animate-pulse mx-auto mb-4"></div>
+                    <p className="text-muted-foreground">Loading projects...</p>
+                  </div>
+                ) : projects.length > 0 ? (
+                  <div className="grid gap-6">
+                    {projects.map((project) => (
+                      <Card key={project.id} className="hover:shadow-md transition-shadow">
+                        <CardHeader>
+                          <CardTitle className="flex items-center">
+                            <span className="mr-2">{getProjectIcon(project.type)}</span>
+                            {project.name}
+                          </CardTitle>
+                          <CardDescription>
+                            {project.type} • Created {project.createdAt ? new Date(project.createdAt).toLocaleDateString() : 'Unknown'}
+                          </CardDescription>
+                        </CardHeader>
+                        <CardContent>
+                          <div className="flex justify-between items-center">
+                            <span className="text-sm text-muted-foreground">Status: {project.status}</span>
+                            <Button variant="outline" size="sm">View Project</Button>
+                          </div>
+                        </CardContent>
+                      </Card>
+                    ))}
+                  </div>
+                ) : (
+                  <Card className="border-dashed border-2">
+                    <CardContent className="flex flex-col items-center justify-center py-12">
+                      <div className="text-4xl mb-4">🎯</div>
+                      <h3 className="text-lg font-medium mb-2">No projects yet</h3>
+                      <p className="text-muted-foreground mb-4 text-center">
+                        Create your first project to get started with AI-powered content creation
+                      </p>
+                      <Dialog open={newProjectOpen} onOpenChange={setNewProjectOpen}>
+                        <DialogTrigger asChild>
+                          <Button data-testid="button-create-first-project">
+                            Create Your First Project
+                          </Button>
+                        </DialogTrigger>
+                        <DialogContent data-testid="dialog-create-project">
+                          <DialogHeader>
+                            <DialogTitle>Create New Project</DialogTitle>
+                            <DialogDescription>
+                              Start a new content creation project
+                            </DialogDescription>
+                          </DialogHeader>
+                          
+                          <Form {...form}>
+                            <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4">
+                              <FormField
+                                control={form.control}
+                                name="name"
+                                render={({ field }) => (
+                                  <FormItem>
+                                    <FormLabel>Project Name</FormLabel>
+                                    <FormControl>
+                                      <Input 
+                                        placeholder="My Awesome Project"
+                                        data-testid="input-project-name"
+                                        {...field} 
+                                      />
+                                    </FormControl>
+                                    <FormMessage />
+                                  </FormItem>
+                                )}
+                              />
+
+                              <FormField
+                                control={form.control}
+                                name="type"
+                                render={({ field }) => (
+                                  <FormItem>
+                                    <FormLabel>Content Type</FormLabel>
+                                    <Select onValueChange={field.onChange} defaultValue={field.value}>
+                                      <FormControl>
+                                        <SelectTrigger data-testid="select-project-type">
+                                          <SelectValue placeholder="Select content type" />
+                                        </SelectTrigger>
+                                      </FormControl>
+                                      <SelectContent>
+                                        <SelectItem value="podcast">Podcast</SelectItem>
+                                        <SelectItem value="blog">Blog</SelectItem>
+                                        <SelectItem value="ebook">E-Book</SelectItem>
+                                      </SelectContent>
+                                    </Select>
+                                    <FormMessage />
+                                  </FormItem>
+                                )}
+                              />
+
+                              {form.watch('type') === 'podcast' && (
+                                <FormField
+                                  control={form.control}
+                                  name="hostType"
+                                  render={({ field }) => (
+                                    <FormItem>
+                                      <FormLabel>Host Type</FormLabel>
+                                      <Select onValueChange={field.onChange} defaultValue={field.value}>
+                                        <FormControl>
+                                          <SelectTrigger data-testid="select-host-type">
+                                            <SelectValue placeholder="Select host type" />
+                                          </SelectTrigger>
+                                        </FormControl>
+                                        <SelectContent>
+                                          <SelectItem value="single">Single Host</SelectItem>
+                                          <SelectItem value="morning_show">Morning Show</SelectItem>
+                                          <SelectItem value="interview">Interview</SelectItem>
+                                        </SelectContent>
+                                      </Select>
+                                      <FormMessage />
+                                    </FormItem>
+                                  )}
+                                />
+                              )}
+
+                              <FormField
+                                control={form.control}
+                                name="description"
+                                render={({ field }) => (
+                                  <FormItem>
+                                    <FormLabel>Description (Optional)</FormLabel>
+                                    <FormControl>
+                                      <Textarea 
+                                        placeholder="Brief description of your project..."
+                                        data-testid="textarea-project-description"
+                                        {...field} 
+                                      />
+                                    </FormControl>
+                                    <FormMessage />
+                                  </FormItem>
+                                )}
+                              />
+
+                              <div className="flex justify-end space-x-2">
+                                <Button type="button" variant="outline" onClick={() => setNewProjectOpen(false)} data-testid="button-cancel">
+                                  Cancel
+                                </Button>
+                                <Button type="submit" disabled={createProjectMutation.isPending} data-testid="button-create">
+                                  {createProjectMutation.isPending ? "Creating..." : "Create Project"}
+                                </Button>
+                              </div>
+                            </form>
+                          </Form>
+                        </DialogContent>
+                      </Dialog>
+                    </CardContent>
+                  </Card>
+                )}
+              </div>
+
+              {/* AI Workflow Assistant */}
+              <div className="space-y-6">
+                <h2 className="text-xl font-semibold text-foreground">AI Workflow Assistant</h2>
+                <WorkflowSteps />
+              </div>
+
+              {/* Integration Status */}
+              <div className="space-y-6">
+                <h2 className="text-xl font-semibold text-foreground">Integration Status</h2>
+                <IntegrationStatus integrations={integrations} />
+              </div>
+
+              {/* Stats Cards */}
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+                <StatsCard
+                  title="Active Projects"
+                  value="0"
+                  description="this week"
+                  trend="up"
+                />
+                <StatsCard
+                  title="Published"
+                  value="0"
+                  description="this month"
+                  trend="up"
+                />
+                <StatsCard
+                  title="Total Content"
+                  value="0"
+                  description="all time"
+                  trend="up"
+                />
+                <StatsCard
+                  title="AI Usage"
+                  value="0%"
+                  description="of monthly quota"
+                  trend="up"
+                />
               </div>
             </div>
-
-            {projectsLoading ? (
-              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-                {[...Array(3)].map((_, i) => (
-                  <div key={i} className="content-card rounded-lg p-6 animate-pulse">
-                    <div className="h-4 bg-muted rounded mb-3"></div>
-                    <div className="h-3 bg-muted rounded mb-4 w-3/4"></div>
-                    <div className="space-y-2">
-                      <div className="h-3 bg-muted rounded w-1/2"></div>
-                      <div className="h-3 bg-muted rounded w-2/3"></div>
-                    </div>
-                  </div>
-                ))}
-              </div>
-            ) : filteredProjects.length > 0 ? (
-              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-                {filteredProjects.map((project: any) => (
-                  <ContentCard key={project.id} project={project} />
-                ))}
-              </div>
-            ) : (
-              <Card>
-                <CardContent className="flex flex-col items-center justify-center py-12">
-                  <i className="fas fa-flask text-4xl text-muted-foreground mb-4"></i>
-                  <h3 className="text-lg font-semibold text-foreground mb-2">No projects yet</h3>
-                  <p className="text-muted-foreground text-center mb-4">
-                    Create your first project to get started with AI-powered content creation
-                  </p>
-                  <Dialog open={newProjectOpen} onOpenChange={setNewProjectOpen}>
-                    <DialogTrigger asChild>
-                      <Button data-testid="button-create-first-project">
-                        <i className="fas fa-plus mr-2"></i>
-                        Create Your First Project
-                      </Button>
-                    </DialogTrigger>
-                    <DialogContent className="sm:max-w-md" data-testid="dialog-create-project">
-                      <DialogHeader>
-                        <DialogTitle>Create New Project</DialogTitle>
-                        <DialogDescription>
-                          Start a new content creation project
-                        </DialogDescription>
-                      </DialogHeader>
-                      
-                      <Form {...form}>
-                        <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4">
-                          <FormField
-                            control={form.control}
-                            name="name"
-                            render={({ field }) => (
-                              <FormItem>
-                                <FormLabel>Project Name</FormLabel>
-                                <FormControl>
-                                  <Input 
-                                    placeholder="My Awesome Project"
-                                    data-testid="input-project-name"
-                                    {...field} 
-                                  />
-                                </FormControl>
-                                <FormMessage />
-                              </FormItem>
-                            )}
-                          />
-
-                          <FormField
-                            control={form.control}
-                            name="type"
-                            render={({ field }) => (
-                              <FormItem>
-                                <FormLabel>Content Type</FormLabel>
-                                <Select onValueChange={field.onChange} defaultValue={field.value}>
-                                  <FormControl>
-                                    <SelectTrigger data-testid="select-project-type">
-                                      <SelectValue placeholder="Select content type" />
-                                    </SelectTrigger>
-                                  </FormControl>
-                                  <SelectContent>
-                                    <SelectItem value="podcast" data-testid="option-podcast">
-                                      <div className="flex items-center">
-                                        <i className="fas fa-microphone w-4 h-4 mr-2"></i>
-                                        Podcast
-                                      </div>
-                                    </SelectItem>
-                                    <SelectItem value="blog" data-testid="option-blog">
-                                      <div className="flex items-center">
-                                        <i className="fas fa-blog w-4 h-4 mr-2"></i>
-                                        Blog
-                                      </div>
-                                    </SelectItem>
-                                    <SelectItem value="ebook" data-testid="option-ebook">
-                                      <div className="flex items-center">
-                                        <i className="fas fa-book w-4 h-4 mr-2"></i>
-                                        E-Book
-                                      </div>
-                                    </SelectItem>
-                                  </SelectContent>
-                                </Select>
-                                <FormMessage />
-                              </FormItem>
-                            )}
-                          />
-
-                          {form.watch('type') === 'podcast' && (
-                            <FormField
-                              control={form.control}
-                              name="hostType"
-                              render={({ field }) => (
-                                <FormItem>
-                                  <FormLabel>Host Type</FormLabel>
-                                  <Select onValueChange={field.onChange} defaultValue={field.value}>
-                                    <FormControl>
-                                      <SelectTrigger data-testid="select-host-type">
-                                        <SelectValue placeholder="Select host type" />
-                                      </SelectTrigger>
-                                    </FormControl>
-                                    <SelectContent>
-                                      <SelectItem value="single" data-testid="option-single-host">Single Host</SelectItem>
-                                      <SelectItem value="morning_show" data-testid="option-morning-show">Morning Show</SelectItem>
-                                      <SelectItem value="interview" data-testid="option-interview">Interview</SelectItem>
-                                    </SelectContent>
-                                  </Select>
-                                  <FormMessage />
-                                </FormItem>
-                              )}
-                            />
-                          )}
-
-                          <FormField
-                            control={form.control}
-                            name="description"
-                            render={({ field }) => (
-                              <FormItem>
-                                <FormLabel>Description (Optional)</FormLabel>
-                                <FormControl>
-                                  <Textarea 
-                                    placeholder="Brief description of your project..."
-                                    data-testid="input-project-description"
-                                    {...field} 
-                                  />
-                                </FormControl>
-                                <FormMessage />
-                              </FormItem>
-                            )}
-                          />
-
-                          <div className="flex justify-end space-x-2">
-                            <Button 
-                              type="button" 
-                              variant="outline" 
-                              onClick={() => setNewProjectOpen(false)}
-                              data-testid="button-cancel-project"
-                            >
-                              Cancel
-                            </Button>
-                            <Button 
-                              type="submit" 
-                              disabled={createProjectMutation.isPending}
-                              data-testid="button-submit-project"
-                            >
-                              {createProjectMutation.isPending ? (
-                                <i className="fas fa-spinner fa-spin mr-2"></i>
-                              ) : (
-                                <i className="fas fa-plus mr-2"></i>
-                              )}
-                              Create Project
-                            </Button>
-                          </div>
-                        </form>
-                      </Form>
-                    </DialogContent>
-                  </Dialog>
-                </CardContent>
-              </Card>
-            )}
-          </div>
-
-          {/* Workflow Section */}
-          <WorkflowSteps />
-
-          {/* Integration Status */}
-          <div className="mb-8">
-            <IntegrationStatus integrations={integrations} />
-          </div>
-
-          {/* Quick Stats */}
-          <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-            <StatsCard
-              title="Active Projects"
-              value={projects?.length || 0}
-              change="+0 this week"
-              icon="fas fa-project-diagram"
-              color="primary"
-            />
-            
-            <StatsCard
-              title="Published"
-              value={projects?.filter(p => p.status === 'published').length || 0}
-              change="+0 this month"
-              icon="fas fa-check-circle"
-              color="green"
-            />
-            
-            <StatsCard
-              title="Total Content"
-              value={projects?.reduce((acc: number, p) => acc + ((p.metadata as any)?.itemCount || 0), 0) || 0}
-              change="+0% growth"
-              icon="fas fa-file-alt"
-              color="blue"
-            />
-            
-            <StatsCard
-              title="AI Usage"
-              value="0%"
-              change="of monthly quota"
-              icon="fas fa-robot"
-              color="purple"
-            />
-          </div>
+          </main>
         </div>
-      </main>
+      </div>
     </div>
   );
 }

@@ -15,9 +15,9 @@ import Dashboard from "@/pages/dashboard";
 import Integrations from "@/pages/integrations";
 
 function MainContent() {
-  const { isLoading } = useAuth();
+  const { status } = useAuth();
   
-  if (isLoading) {
+  if (status === "loading") {
     return (
       <div className="min-h-screen flex items-center justify-center">
         <div className="text-center">
@@ -33,7 +33,7 @@ function MainContent() {
 }
 
 function Router() {
-  const { isAuthenticated, isLoading } = useAuth();
+  const { firebaseUser, status } = useAuth();
 
   return (
     <>
@@ -42,7 +42,7 @@ function Router() {
         <Route path="/" component={MainContent} />
         
         {/* Protected routes - only accessible when authenticated */}
-        {isAuthenticated && (
+        {firebaseUser && (
           <>
             <Route path="/home" component={Home} />
             <Route path="/lab" component={Lab} />

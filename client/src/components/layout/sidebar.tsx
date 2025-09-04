@@ -26,7 +26,7 @@ const mockProjects = [
 
 export default function Sidebar() {
   const [location] = useLocation();
-  const { user } = useAuth();
+  const { firebaseUser } = useAuth();
 
   return (
     <div className="fixed inset-y-0 left-0 z-50 w-64 bg-card border-r border-border hidden lg:flex flex-col">
@@ -88,21 +88,21 @@ export default function Sidebar() {
       {/* User Profile */}
       <div className="p-4 border-t border-border">
         <div className="flex items-center space-x-3">
-          {user?.photoURL ? (
+          {firebaseUser?.photoURL ? (
             <img
-              src={user.photoURL}
+              src={firebaseUser.photoURL}
               alt="User avatar"
               className="w-8 h-8 rounded-full object-cover"
               data-testid="img-user-avatar"
             />
           ) : (
             <div className="w-8 h-8 rounded-full bg-blue-600 flex items-center justify-center text-white text-sm font-medium">
-              {(user?.displayName?.charAt(0) || user?.email?.charAt(0) || '?').toUpperCase()}
+              {(firebaseUser?.displayName?.charAt(0) || firebaseUser?.email?.charAt(0) || '?').toUpperCase()}
             </div>
           )}
           <div className="flex-1 min-w-0">
             <p className="text-sm font-medium text-foreground truncate" data-testid="text-user-name">
-              {user?.displayName || user?.email || 'User'}
+              {firebaseUser?.displayName || firebaseUser?.email || 'User'}
             </p>
             <p className="text-xs text-muted-foreground truncate" data-testid="text-user-role">
               Member

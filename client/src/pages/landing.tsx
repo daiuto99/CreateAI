@@ -14,7 +14,7 @@ import { signOutUser } from '@/lib/firebase'
 export default function Landing() {
   const [isLoginModalOpen, setIsLoginModalOpen] = useState(false)
   const [selectedFeature, setSelectedFeature] = useState<string | null>(null)
-  const { user, isAuthenticated, isLoading } = useAuth()
+  const { firebaseUser, status } = useAuth()
   const [, setLocation] = useLocation()
 
 
@@ -28,7 +28,7 @@ export default function Landing() {
   }
 
   const handleFeatureClick = (featureName: string, route: string) => {
-    if (isAuthenticated) {
+    if (firebaseUser) {
       // User is authenticated, go directly to the feature
       setLocation(route)
     } else {
@@ -49,25 +49,25 @@ export default function Landing() {
     <div className="min-h-screen bg-white">
       {/* Header with Login Button */}
       <div className="absolute top-6 right-6">
-        {isAuthenticated ? (
+        {firebaseUser ? (
           <div className="flex items-center space-x-4">
-            {user?.photoURL ? (
+            {firebaseUser?.photoURL ? (
               <img 
-                src={user.photoURL} 
+                src={firebaseUser.photoURL} 
                 alt="Profile" 
                 className="w-8 h-8 rounded-full"
               />
             ) : (
               <div className="w-8 h-8 rounded-full bg-blue-600 flex items-center justify-center text-white text-sm font-medium">
-                {(user?.displayName?.charAt(0) || user?.email?.charAt(0) || '?').toUpperCase()}
+                {(firebaseUser?.displayName?.charAt(0) || firebaseUser?.email?.charAt(0) || '?').toUpperCase()}
               </div>
             )}
             <div className="text-right">
               <div className="text-sm font-medium text-gray-900">
-                {user?.displayName || 'User'}
+                {firebaseUser?.displayName || 'User'}
               </div>
               <div className="text-xs text-gray-500">
-                {user?.email}
+                {firebaseUser?.email}
               </div>
             </div>
             <Button 
