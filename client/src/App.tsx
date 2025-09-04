@@ -21,8 +21,8 @@ function Router() {
     <>
       <AuthHandler />
       <Switch>
-        {/* Landing page always accessible */}
-        <Route path="/" component={Landing} />
+        {/* Root path - Landing for unauthenticated, Home for authenticated */}
+        <Route path="/" component={isAuthenticated ? Home : Landing} />
         
         {/* Protected routes - only accessible when authenticated */}
         {isAuthenticated && (
