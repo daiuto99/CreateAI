@@ -14,39 +14,50 @@ import Reports from "@/pages/reports";
 import Dashboard from "@/pages/dashboard";
 import Integrations from "@/pages/integrations";
 
+function MainContent() {
+  const { isAuthenticated, isLoading } = useAuth();
+  
+  if (isLoading) {
+    return (
+      <div className="min-h-screen flex items-center justify-center">
+        <div className="text-center">
+          <div className="w-8 h-8 bg-gradient-to-r from-blue-600 to-purple-600 rounded-lg animate-pulse mx-auto mb-4"></div>
+          <p className="text-muted-foreground">Loading...</p>
+        </div>
+      </div>
+    );
+  }
+
+  if (!isAuthenticated) {
+    return <Landing />;
+  }
+
+  return <Home />;
+}
+
 function Router() {
   const { isAuthenticated, isLoading } = useAuth();
 
   return (
     <>
       <AuthHandler />
-      {isLoading ? (
-        <div className="min-h-screen flex items-center justify-center">
-          <div className="text-center">
-            <div className="w-8 h-8 bg-gradient-to-r from-blue-600 to-purple-600 rounded-lg animate-pulse mx-auto mb-4"></div>
-            <p className="text-muted-foreground">Loading...</p>
-          </div>
-        </div>
-      ) : (
-        <Switch>
-          {/* Root route */}
-          <Route path="/" component={isAuthenticated ? Home : Landing} />
-          
-          {/* Protected routes - only accessible when authenticated */}
-          {isAuthenticated && (
-            <>
-              <Route path="/home" component={Home} />
-              <Route path="/lab" component={Lab} />
-              <Route path="/sync" component={Sync} />
-              <Route path="/reports" component={Reports} />
-              <Route path="/dashboard" component={Dashboard} />
-              <Route path="/integrations" component={Integrations} />
-            </>
-          )}
-          
-          <Route component={NotFound} />
-        </Switch>
-      )}
+      <Switch>
+        <Route path="/" component={MainContent} />
+        
+        {/* Protected routes - only accessible when authenticated */}
+        {isAuthenticated && (
+          <>
+            <Route path="/home" component={Home} />
+            <Route path="/lab" component={Lab} />
+            <Route path="/sync" component={Sync} />
+            <Route path="/reports" component={Reports} />
+            <Route path="/dashboard" component={Dashboard} />
+            <Route path="/integrations" component={Integrations} />
+          </>
+        )}
+        
+        <Route component={NotFound} />
+      </Switch>
     </>
   );
 }
