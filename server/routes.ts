@@ -522,7 +522,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       
       // Import OpenAI service
       const { OpenAIService } = await import('./services/openai.js');
-      const openaiService = new OpenAIService();
+      const openaiService = await OpenAIService.createWithUserIntegration(storage, userId);
       
       // Generate outline using AI
       const outline = await openaiService.generateContentOutline(type, prompt, settings);
@@ -569,7 +569,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       
       // Import OpenAI service
       const { OpenAIService } = await import('./services/openai.js');
-      const openaiService = new OpenAIService();
+      const openaiService = await OpenAIService.createWithUserIntegration(storage, userId);
       
       let content;
       if (type === 'podcast') {

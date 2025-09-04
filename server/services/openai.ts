@@ -1,9 +1,7 @@
 import OpenAI from "openai";
+import type { IStorage } from '../storage.js';
 
 // the newest OpenAI model is "gpt-5" which was released August 7, 2025. do not change this unless explicitly requested by the user
-const openai = new OpenAI({ 
-  apiKey: process.env.OPENAI_API_KEY || process.env.OPENAI_API_KEY_ENV_VAR || "default_key"
-});
 
 export interface ContentOutline {
   title: string;
@@ -40,6 +38,35 @@ export interface PodcastScript {
 }
 
 export class OpenAIService {
+  private openai: OpenAI;
+  
+  constructor(apiKey?: string) {
+    this.openai = new OpenAI({
+      apiKey: apiKey || process.env.OPENAI_API_KEY || process.env.OPENAI_API_KEY_ENV_VAR || "default_key"
+    });
+  }
+  
+  static async createWithUserIntegration(storage: IStorage, userId: string): Promise<OpenAIService> {
+    try {
+      // Fetch user's OpenAI integration
+      const integrations = await storage.getUserIntegrations(userId);
+      const openaiIntegration = integrations.find(i => i.provider === 'openai');
+      
+      if (openaiIntegration && openaiIntegration.credentials) {
+        const apiKey = (openaiIntegration.credentials as any).apiKey;
+        if (apiKey) {
+          console.log('✅ Using user\'s OpenAI API key from integrations');
+          return new OpenAIService(apiKey);
+        }
+      }
+      
+      console.warn('⚠️ No OpenAI integration found, using default key');
+      return new OpenAIService();
+    } catch (error) {
+      console.error('❌ Error fetching OpenAI integration, using default key:', error);
+      return new OpenAIService();
+    }
+  }
   async generateContentOutline(
     type: 'podcast' | 'blog' | 'ebook',
     prompt: string,
@@ -53,7 +80,7 @@ export class OpenAIService {
     try {
       const systemPrompt = this.getSystemPrompt(type, 'outline', settings);
       
-      const response = await openai.chat.completions.create({
+      const response = await this.openai.chat.completions.create({
         model: "gpt-5",
         messages: [
           { role: "system", content: systemPrompt },
@@ -92,7 +119,7 @@ export class OpenAIService {
         "seoScore": score_out_of_100
       }`;
 
-      const response = await openai.chat.completions.create({
+      const response = await this.openai.chat.completions.create({
         model: "gpt-5",
         messages: [
           { role: "system", content: systemPrompt },
@@ -119,7 +146,7 @@ export class OpenAIService {
     try {
       const systemPrompt = this.getSystemPrompt('podcast', 'script', { hostType, hostProfile });
       
-      const response = await openai.chat.completions.create({
+      const response = await this.openai.chat.completions.create({
         model: "gpt-5",
         messages: [
           { role: "system", content: systemPrompt },
@@ -159,7 +186,7 @@ export class OpenAIService {
         "summary": "Brief chapter summary"
       }`;
 
-      const response = await openai.chat.completions.create({
+      const response = await this.openai.chat.completions.create({
         model: "gpt-5",
         messages: [
           { role: "system", content: systemPrompt },
@@ -195,7 +222,7 @@ export class OpenAIService {
         "sentiment": "positive|neutral|negative"
       }`;
 
-      const response = await openai.chat.completions.create({
+      const response = await this.openai.chat.completions.create({
         model: "gpt-5",
         messages: [
           { role: "system", content: systemPrompt },
