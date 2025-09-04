@@ -107,7 +107,7 @@ const serviceConfigs: Record<string, ServiceConfig> = {
     name: 'Otter.ai',
     description: 'Sync CRM contacts with AI-powered meeting notes and transcriptions',
     logo: otterLogo,
-    helpText: 'Go to otter.ai → Settings → Integrations → Developer API. Generate an API key to access your meeting transcriptions and connect with your CRM contacts.',
+    helpText: 'In Otter.ai, go to Settings → Integrations tab → click "API Key" button (top right). Generate an API key to access meeting transcriptions. Also supports direct Salesforce and HubSpot integrations.',
     fields: [
       { key: 'apiKey', label: 'API Key', type: 'password', placeholder: 'otter_api_key_here', required: true }
     ]
