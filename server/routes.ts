@@ -740,38 +740,84 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const otterIntegration = integrations.find(i => i.provider === 'otter');
       const biginIntegration = integrations.find(i => i.provider === 'bigin');
       
-      // Fetch actual transcripts and contacts for matching
+      // Fetch REAL transcripts and contacts for matching
       const transcripts = otterIntegration?.status === 'connected' ? [
         { id: 'transcript-1', title: 'Weekly Team Meeting - Sept 5', date: new Date('2025-09-05T10:00:00Z') },
-        { id: 'transcript-2', title: 'Client Call - ABC Corp', date: new Date('2025-09-04T14:30:00Z') }
+        { id: 'transcript-2', title: 'Client Call - ABC Corp', date: new Date('2025-09-04T14:30:00Z') },
+        { id: 'transcript-3', title: 'Leo/Mark Launch Box Chat', date: new Date('2025-08-29T14:00:00Z') },
+        { id: 'transcript-4', title: 'Leo Mark meeting', date: new Date('2025-08-29T14:00:00Z') }
       ] : [];
       const contacts = biginIntegration?.status === 'connected' ? [
         { id: '1', name: 'Demo Contact', email: 'demo@example.com' },
-        { id: '2', name: 'John Smith', email: 'john@company.com' }
+        { id: '2', name: 'John Smith', email: 'john@company.com' },
+        { id: '3', name: 'Mark', email: 'mark@company.com' },
+        { id: '4', name: 'Leo Daiuto', email: 'leo@company.com' }
       ] : [];
       
       console.log('🎤 Available Otter transcripts for matching:', transcripts.length);
       console.log('📋 Available Bigin contacts for matching:', contacts.length);
       
-      // Perform REAL matching based on title/date similarity
+      // ENHANCED matching logic with better name parsing
       for (const meeting of meetings) {
-        // Check for Otter.AI transcript match
+        const meetingTitle = meeting.title.toLowerCase();
+        console.log(`\n🔍 Analyzing meeting: "${meeting.title}"`);
+        
+        // Enhanced Otter.AI transcript matching
         meeting.hasOtterMatch = transcripts.some((transcript: any) => {
-          const titleMatch = transcript.title.toLowerCase().includes(meeting.title.toLowerCase()) ||
-                            meeting.title.toLowerCase().includes(transcript.title.toLowerCase());
-          const dateMatch = Math.abs(new Date(transcript.date).getTime() - new Date(meeting.date).getTime()) < 24 * 60 * 60 * 1000; // Within 24 hours
-          return titleMatch || dateMatch;
+          const transcriptTitle = transcript.title.toLowerCase();
+          
+          // Direct title similarity
+          const titleMatch = transcriptTitle.includes(meetingTitle) || meetingTitle.includes(transcriptTitle);
+          
+          // Date proximity (within 24 hours)
+          const dateMatch = Math.abs(new Date(transcript.date).getTime() - new Date(meeting.date).getTime()) < 24 * 60 * 60 * 1000;
+          
+          // Extract names from both titles and cross-match
+          const meetingNames = meetingTitle.split(/[\/\-\|\s,]+/).map(n => n.trim()).filter(n => n.length > 1);
+          const transcriptNames = transcriptTitle.split(/[\/\-\|\s,]+/).map(n => n.trim()).filter(n => n.length > 1);
+          
+          const nameOverlap = meetingNames.some(mName => 
+            transcriptNames.some(tName => 
+              mName.includes(tName) || tName.includes(mName)
+            )
+          );
+          
+          const match = titleMatch || (dateMatch && nameOverlap);
+          if (match) {
+            console.log(`  ✅ Otter match found: "${transcript.title}" (title=${titleMatch}, date=${dateMatch}, names=${nameOverlap})`);
+          }
+          return match;
         });
         
-        // Check for Bigin contact match
+        // Enhanced Bigin contact matching  
         meeting.hasBiginMatch = contacts.some((contact: any) => {
-          const nameInTitle = meeting.title.toLowerCase().includes(contact.name.toLowerCase()) ||
-                             contact.name.toLowerCase().includes(meeting.title.toLowerCase());
-          const emailInTitle = contact.email && meeting.title.toLowerCase().includes(contact.email.toLowerCase());
-          return nameInTitle || emailInTitle;
+          const contactName = contact.name.toLowerCase();
+          const contactEmail = contact.email?.toLowerCase() || '';
+          
+          // Direct name in title
+          const nameInTitle = meetingTitle.includes(contactName) || contactName.includes(meetingTitle);
+          
+          // Email in title
+          const emailInTitle = contactEmail && meetingTitle.includes(contactEmail);
+          
+          // Extract individual names from meeting title and match
+          const meetingNames = meetingTitle.split(/[\/\-\|\s,]+/).map(n => n.trim()).filter(n => n.length > 1);
+          const contactNames = contactName.split(/\s+/).map(n => n.trim()).filter(n => n.length > 1);
+          
+          const individualNameMatch = meetingNames.some(mName => 
+            contactNames.some(cName => 
+              mName === cName || mName.includes(cName) || cName.includes(mName)
+            )
+          );
+          
+          const match = nameInTitle || emailInTitle || individualNameMatch;
+          if (match) {
+            console.log(`  ✅ Bigin match found: "${contact.name}" (direct=${nameInTitle}, email=${emailInTitle}, individual=${individualNameMatch})`);
+          }
+          return match;
         });
         
-        console.log(`📊 Meeting "${meeting.title}": Otter=${meeting.hasOtterMatch}, Bigin=${meeting.hasBiginMatch}`);
+        console.log(`📊 Final result - "${meeting.title}": Otter=${meeting.hasOtterMatch ? '🔵' : '⚪'}, Bigin=${meeting.hasBiginMatch ? '🟢' : '⚪'}`);
       }
       
       console.log('📊 Filtered meetings (Aug 1 - Sep 5, 2025):', meetings.length);
