@@ -1,6 +1,8 @@
 import { useEffect } from "react";
 import { useAuth } from "@/hooks/useAuth";
 import { useToast } from "@/hooks/use-toast";
+import { useQuery } from "@tanstack/react-query";
+import type { UserIntegration } from "@shared/schema";
 import Sidebar from "@/components/layout/sidebar";
 import MobileNav from "@/components/layout/mobile-nav";
 import Header from "@/components/layout/header";
@@ -11,6 +13,24 @@ import { Badge } from "@/components/ui/badge";
 export default function Sync() {
   const { toast } = useToast();
   const { isAuthenticated, isLoading } = useAuth();
+  
+  // Fetch user integrations to show real connection status
+  const { data: integrations = [] } = useQuery<UserIntegration[]>({
+    queryKey: ['/api/integrations'],
+    enabled: isAuthenticated,
+    retry: false,
+  });
+  
+  // Helper function to get integration status
+  const getIntegrationStatus = (provider: string) => {
+    const integration = integrations.find(i => i.provider === provider);
+    return integration?.status === 'connected' ? 'Connected' : 'Setup Required';
+  };
+  
+  const getStatusVariant = (provider: string) => {
+    const integration = integrations.find(i => i.provider === provider);
+    return integration?.status === 'connected' ? 'default' : 'outline';
+  };
 
   useEffect(() => {
     if (!isLoading && !isAuthenticated) {
@@ -71,8 +91,8 @@ export default function Sync() {
                         <p className="text-sm text-muted-foreground">Connect to sync meeting data</p>
                       </div>
                     </div>
-                    <Badge variant="outline" data-testid="badge-outlook-status">
-                      Setup Required
+                    <Badge variant={getStatusVariant('outlook')} data-testid="badge-outlook-status">
+                      {getIntegrationStatus('outlook')}
                     </Badge>
                   </div>
 
@@ -84,8 +104,8 @@ export default function Sync() {
                         <p className="text-sm text-muted-foreground">Meeting transcription service</p>
                       </div>
                     </div>
-                    <Badge variant="outline" data-testid="badge-otter-status">
-                      Setup Required
+                    <Badge variant={getStatusVariant('otter')} data-testid="badge-otter-status">
+                      {getIntegrationStatus('otter')}
                     </Badge>
                   </div>
 
@@ -97,8 +117,8 @@ export default function Sync() {
                         <p className="text-sm text-muted-foreground">Contact and deal management</p>
                       </div>
                     </div>
-                    <Badge variant="outline" data-testid="badge-bigin-status">
-                      Setup Required
+                    <Badge variant={getStatusVariant('bigin')} data-testid="badge-bigin-status">
+                      {getIntegrationStatus('bigin')}
                     </Badge>
                   </div>
                 </div>
