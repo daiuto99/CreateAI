@@ -783,6 +783,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
           date: new Date('2025-09-04T11:00:00Z')
         }
       ] : [];
+      // DEBUG: Check Bigin integration
+      console.log('🔍 Bigin integration:', biginIntegration ? { status: biginIntegration.status, provider: biginIntegration.provider } : 'NONE');
+      
       // Realistic test contact data for name-based matching
       const contacts = biginIntegration?.status === 'connected' ? [
         { id: '1', name: 'Nicole', email: 'nicole@unknown.com' },
@@ -790,9 +793,12 @@ export async function registerRoutes(app: Express): Promise<Server> {
         { id: '3', name: 'Dante', email: 'dante@unknown.com' },
         { id: '4', name: 'Brian Albans', email: 'brian.albans@unknown.com' }
       ] : [];
+      console.log('📋 Bigin contacts created:', contacts.map(c => c.name));
       
       console.log('🎤 Available Otter transcripts for matching:', transcripts.length);
+      console.log('📧 Transcript titles:', transcripts.map(t => t.title));
       console.log('📋 Available Bigin contacts for matching:', contacts.length);
+      console.log('👥 Contact names:', contacts.map(c => c.name));
       
       // ENHANCED matching logic with better name parsing
       for (const meeting of meetings) {
@@ -800,6 +806,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         console.log(`\n🔍 Analyzing meeting: "${meeting.title}"`);
         
         // UPDATED Otter.AI matching: title + date proximity (no emails available in calendar)
+        console.log(`  🔍 Otter matching for "${meeting.title}"...`);
         meeting.hasOtterMatch = transcripts.some((transcript: any) => {
           const transcriptTitle = transcript.title.toLowerCase();
           
@@ -823,6 +830,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         });
         
         // UPDATED Bigin matching: extract names from meeting titles (no emails available)
+        console.log(`  🔍 Bigin matching for "${meeting.title}"...`);
         meeting.hasBiginMatch = contacts.some((contact: any) => {
           const contactName = contact.name.toLowerCase();
           
@@ -831,7 +839,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
           
           // Also check individual name parts (for "Brian Albans" vs "Brian")
           const nameParts = contactName.split(' ');
-          const namePartMatch = nameParts.some(part => 
+          const namePartMatch = nameParts.some((part: string) => 
             part.length > 2 && meetingTitle.includes(part)
           );
           
