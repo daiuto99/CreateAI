@@ -24,21 +24,21 @@ export default function Sync() {
   });
 
   // Fetch actual meeting data
-  const { data: meetings = [] } = useQuery({
+  const { data: meetings = [] } = useQuery<any[]>({
     queryKey: ['/api/meetings'],
     enabled: isAuthenticated,
     retry: false,
   });
 
   // Fetch Otter.ai transcripts
-  const { data: transcripts = [] } = useQuery({
+  const { data: transcripts = [] } = useQuery<any[]>({
     queryKey: ['/api/otter/transcripts'],
     enabled: isAuthenticated,
     retry: false,
   });
 
   // Fetch Bigin contacts
-  const { data: contacts = [] } = useQuery({
+  const { data: contacts = [] } = useQuery<any[]>({
     queryKey: ['/api/bigin/contacts'],
     enabled: isAuthenticated,
     retry: false,
