@@ -638,7 +638,6 @@ export async function registerRoutes(app: Express): Promise<Server> {
       console.log('🔍 All user integrations:', integrations.map(i => ({ 
         provider: i.provider, 
         status: i.status, 
-        isActive: i.isActive,
         hasCredentials: !!i.credentials 
       })));
       
@@ -646,7 +645,6 @@ export async function registerRoutes(app: Express): Promise<Server> {
       console.log('🔍 Outlook integration found:', outlookIntegration ? {
         provider: outlookIntegration.provider,
         status: outlookIntegration.status,
-        isActive: outlookIntegration.isActive,
         hasCredentials: !!outlookIntegration.credentials,
         credentialKeys: outlookIntegration.credentials ? Object.keys(outlookIntegration.credentials) : []
       } : 'NONE');
@@ -684,6 +682,15 @@ export async function registerRoutes(app: Express): Promise<Server> {
       // Test: Verify we can find VEVENT blocks
       const eventBlocks = icsData.split('BEGIN:VEVENT');
       console.log('📊 Found VEVENT blocks:', eventBlocks.length - 1);
+      
+      // DEBUG: Check if any ATTENDEE fields exist at all
+      const attendeeCount = (icsData.match(/ATTENDEE/g) || []).length;
+      console.log('📧 Found ATTENDEE fields in ICS:', attendeeCount);
+      if (attendeeCount > 0) {
+        // Show first few attendee examples
+        const attendeeLines = icsData.split('\n').filter(line => line.includes('ATTENDEE')).slice(0, 3);
+        console.log('📧 Sample ATTENDEE lines:', attendeeLines);
+      }
       
       if (eventBlocks.length <= 1) {
         console.log('⚠️ No VEVENT blocks found in ICS data');
