@@ -117,11 +117,9 @@ const serviceConfigs: Record<string, ServiceConfig> = {
     name: 'Microsoft Outlook',
     description: 'Import calendar events and meeting data for intelligence sync',
     logo: outlookLogo,
-    helpText: 'To connect Outlook, you\'ll need to register an application in Azure AD and obtain OAuth credentials. Go to Azure Portal → App registrations → New registration.',
+    helpText: 'In Outlook.com, go to Calendar → Settings (gear icon) → Shared calendars → Publish a calendar → Select your calendar → Copy the ICS URL. Or use your organization\'s public calendar feed URL.',
     fields: [
-      { key: 'clientId', label: 'Application (client) ID', type: 'text', placeholder: 'xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx', required: true },
-      { key: 'clientSecret', label: 'Client Secret', type: 'password', placeholder: 'Your client secret value', required: true },
-      { key: 'tenantId', label: 'Directory (tenant) ID', type: 'text', placeholder: 'xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx', required: true }
+      { key: 'feedUrl', label: 'Calendar Feed URL (ICS)', type: 'text', placeholder: 'https://outlook.live.com/owa/calendar/xxx/calendar.ics', required: true }
     ]
   }
 };

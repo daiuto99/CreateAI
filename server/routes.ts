@@ -586,13 +586,27 @@ export async function registerRoutes(app: Express): Promise<Server> {
             break;
 
           case 'outlook':
-            // Test Outlook/Microsoft Graph credentials
+            // Test Outlook calendar feed URL
             const outlookCreds = integration.credentials as any;
-            if (outlookCreds.clientId && outlookCreds.clientSecret && outlookCreds.tenantId) {
-              testResult = { success: true, message: 'Microsoft Outlook credentials saved successfully! OAuth flow will be tested when accessing calendar data.', error: '' };
-              await storage.upsertUserIntegration({ ...integration, status: 'connected' as any });
+            if (outlookCreds.feedUrl) {
+              try {
+                // Test if the calendar feed URL is accessible
+                const feedResponse = await fetch(outlookCreds.feedUrl, {
+                  method: 'HEAD', // Just check if URL is accessible without downloading content
+                });
+                if (feedResponse.ok) {
+                  testResult = { success: true, message: 'Calendar feed URL is accessible! Meeting data will be imported from this feed.', error: '' };
+                  await storage.upsertUserIntegration({ ...integration, status: 'connected' as any });
+                } else {
+                  testResult = { success: false, message: '', error: 'Calendar feed URL is not accessible. Please check the URL and make sure the calendar is publicly shared.' };
+                  await storage.upsertUserIntegration({ ...integration, status: 'error' as any });
+                }
+              } catch (error) {
+                testResult = { success: false, message: '', error: 'Failed to test calendar feed URL. Please verify the URL is correct and accessible.' };
+                await storage.upsertUserIntegration({ ...integration, status: 'error' as any });
+              }
             } else {
-              testResult = { success: false, message: '', error: 'Missing Client ID, Client Secret, or Tenant ID' };
+              testResult = { success: false, message: '', error: 'Missing calendar feed URL' };
               await storage.upsertUserIntegration({ ...integration, status: 'error' as any });
             }
             break;
