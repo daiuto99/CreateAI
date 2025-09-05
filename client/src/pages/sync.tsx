@@ -46,12 +46,6 @@ export default function Sync() {
         <Header 
           title="Sync" 
           subtitle="AI-assisted integration and meeting intelligence"
-          action={
-            <Button data-testid="button-setup-integrations">
-              <i className="fas fa-cog w-4 h-4 mr-2"></i>
-              Setup Integrations
-            </Button>
-          }
         />
         
         <div className="p-6">
