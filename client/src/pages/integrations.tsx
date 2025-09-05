@@ -278,15 +278,22 @@ export default function Integrations() {
               {/* Service name and help icon in upper right corner */}
               <div className="absolute top-3 right-3 flex items-center space-x-2">
                 <span className="text-xs font-medium text-gray-500">{config.name}</span>
-                <TooltipProvider>
+                <TooltipProvider delayDuration={0}>
                   <Tooltip>
                     <TooltipTrigger asChild>
-                      <button className="w-4 h-4 rounded-full bg-gray-200 hover:bg-gray-300 flex items-center justify-center text-gray-600 hover:text-gray-800 transition-colors">
+                      <button 
+                        className="w-4 h-4 rounded-full bg-gray-200 hover:bg-gray-300 flex items-center justify-center text-gray-600 hover:text-gray-800 transition-colors focus:outline-none focus:ring-2 focus:ring-blue-500"
+                        type="button"
+                      >
                         <span className="text-xs font-bold">?</span>
                       </button>
                     </TooltipTrigger>
-                    <TooltipContent side="top" className="max-w-sm">
-                      <p className="text-sm">{config.helpText}</p>
+                    <TooltipContent 
+                      side="top" 
+                      className="max-w-sm z-50 p-3 text-sm bg-slate-900 text-white border border-slate-600"
+                      sideOffset={8}
+                    >
+                      <p>{config.helpText}</p>
                     </TooltipContent>
                   </Tooltip>
                 </TooltipProvider>
