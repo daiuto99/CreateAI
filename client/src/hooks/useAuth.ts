@@ -50,5 +50,14 @@ export function useAuth() {
     };
   }, []);
 
-  return { firebaseUser, status };
+  const isAuthenticated = status === "authed";
+  const isLoading = status === "loading";
+  
+  return { 
+    firebaseUser, 
+    status,
+    isAuthenticated,
+    isLoading,
+    user: firebaseUser // Add user alias for compatibility
+  };
 }

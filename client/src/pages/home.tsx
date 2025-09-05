@@ -39,7 +39,7 @@ export default function Home() {
       <div className="min-h-screen bg-background flex items-center justify-center">
         <div className="text-center">
           <p className="text-muted-foreground mb-4">Please sign in to continue.</p>
-          <button onClick={() => window.location.href = "/api/login"} className="bg-blue-600 text-white px-4 py-2 rounded">Sign In</button>
+          <button onClick={() => window.location.href = "/"} className="bg-blue-600 text-white px-4 py-2 rounded">Sign In</button>
         </div>
       </div>
     );

@@ -85,6 +85,23 @@ export async function registerRoutes(app: Express): Promise<Server> {
             profileImageUrl: payload.picture || null
           });
           user = await storage.getUser(firebaseUserId);
+          
+          // Create default organization for new user
+          if (user) {
+            try {
+              const firstName = displayName?.split(' ')[0] || 'User';
+              await storage.createOrganization(
+                {
+                  name: `${firstName}'s Workspace`,
+                  settings: {},
+                },
+                firebaseUserId
+              );
+              console.log('✅ Created default organization for user:', firebaseUserId);
+            } catch (error) {
+              console.error('Failed to create default organization:', error);
+            }
+          }
         }
         
         // Set up session (mimic what Replit auth would do)

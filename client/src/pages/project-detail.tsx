@@ -92,7 +92,7 @@ export default function ProjectDetail() {
       <div className="min-h-screen bg-background flex items-center justify-center">
         <div className="text-center">
           <p className="text-muted-foreground mb-4">Please sign in to continue.</p>
-          <Button onClick={() => window.location.href = "/api/login"}>Sign In</Button>
+          <Button onClick={() => window.location.href = "/"}>Sign In</Button>
         </div>
       </div>
     );
