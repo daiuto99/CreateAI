@@ -1,229 +1,185 @@
-import { useEffect, useState } from "react";
-import { useToast } from "@/hooks/use-toast";
-import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import type { ContentProject } from "@shared/schema";
-import { isUnauthorizedError, apiRequest } from "@/lib/queryClient";
-import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { Mic, FileText, Book, TrendingUp, Calendar } from "lucide-react";
-import { useAuth } from "@/hooks/useAuth";
-import { useBackendUser } from "@/hooks/useBackendUser";
-
-// Import CreateAI logo
+import { useState } from 'react'
+import { useLocation } from 'wouter'
+// Import custom icons
+import labIcon from '@assets/generated_images/The_Lab_AI_content_creation_icon_f26cd1d3.png'
+import syncIcon from '@assets/generated_images/CRM_synchronization_workflow_icon_8587610e.png'
+import reportsIcon from '@assets/generated_images/Analytics_reports_dashboard_icon_aa8cffd8.png'
+import dashboardIcon from '@assets/generated_images/KPI_dashboard_interface_icon_1c62cc62.png'
 import createAILogo from '@assets/generated_images/createai_logo.png'
+import { Button } from '@/components/ui/button'
+import { useAuth } from '@/hooks/useAuth'
+import { signOutUser } from '@/lib/firebase'
 
 export default function Home() {
-  const { toast } = useToast();
-  const { firebaseUser, status } = useAuth();
-  const { data: backendUser, isLoading: isFetchingBackendUser } = useBackendUser(firebaseUser);
-  const queryClient = useQueryClient();
+  const { firebaseUser, status } = useAuth()
+  const [, setLocation] = useLocation()
 
-  // Get user's first organization from backend data
-  const organizationId = backendUser?.organizations?.[0]?.id;
-
-  // ALL HOOKS MUST BE CALLED BEFORE ANY CONDITIONAL RETURNS
-  const { data: projects = [], isLoading: projectsLoading } = useQuery<ContentProject[]>({
-    queryKey: ['/api/content-projects', organizationId],
-    enabled: !!organizationId && !!firebaseUser && status !== "loading" && !isFetchingBackendUser,
-    retry: false,
-  });
-
-  // ✅ hooks above; rendering logic below
-
-  if (status === "loading") {
-    return (
-      <div className="min-h-screen bg-background flex items-center justify-center">
-        <div className="text-center">
-          <div className="w-8 h-8 bg-gradient-to-r from-blue-600 to-purple-600 rounded-lg animate-pulse mx-auto mb-4"></div>
-          <p className="text-muted-foreground">Loading...</p>
-        </div>
-      </div>
-    );
-  }
-
-  if (!firebaseUser) {
-    return (
-      <div className="min-h-screen bg-background flex items-center justify-center">
-        <div className="text-center">
-          <p className="text-muted-foreground mb-4">Please sign in to continue.</p>
-          <button onClick={() => window.location.href = "/"} className="bg-blue-600 text-white px-4 py-2 rounded">Sign In</button>
-        </div>
-      </div>
-    );
-  }
-
-  if (isFetchingBackendUser) {
-    return (
-      <div className="min-h-screen bg-background flex items-center justify-center">
-        <div className="text-center">
-          <div className="w-8 h-8 bg-gradient-to-r from-blue-600 to-purple-600 rounded-lg animate-pulse mx-auto mb-4"></div>
-          <p className="text-muted-foreground">Loading your account...</p>
-        </div>
-      </div>
-    );
-  }
-
-  const getProjectIcon = (type: string) => {
-    switch (type) {
-      case 'podcast':
-        return <Mic className="w-5 h-5 text-blue-600" />;
-      case 'blog':
-        return <FileText className="w-5 h-5 text-green-600" />;
-      case 'ebook':
-        return <Book className="w-5 h-5 text-purple-600" />;
-      default:
-        return <FileText className="w-5 h-5 text-gray-600" />;
+  const handleFeatureClick = (featureName: string, route: string) => {
+    if (firebaseUser) {
+      // User is authenticated, go directly to the feature
+      setLocation(route)
+    } else {
+      // User needs to authenticate first, redirect to landing
+      setLocation('/')
     }
-  };
+  }
 
-  const getProjectTypeLabel = (type: string) => {
-    switch (type) {
-      case 'podcast': return 'Podcast';
-      case 'blog': return 'Blog';
-      case 'ebook': return 'E-Book';
-      default: return type;
+  const handleSignOut = async () => {
+    try {
+      await signOutUser()
+    } catch (error) {
+      console.error('Sign out error:', error)
     }
-  };
-
+  }
 
   return (
-    <div className="min-h-screen bg-background">
-      <div className="max-w-7xl mx-auto px-6 py-8">
-        {/* Header with Logo */}
-        <div className="flex items-center mb-8">
+    <div className="min-h-screen bg-white">
+      {/* Header with Login Button */}
+      <div className="absolute top-6 right-6">
+        {firebaseUser ? (
           <div className="flex items-center space-x-4">
-            <img 
-              src={createAILogo} 
-              alt="CreateAI" 
-              className="w-48 h-auto"
-            />
-            <div>
-              <h1 className="text-2xl font-bold text-foreground">Welcome back!</h1>
-              <p className="text-muted-foreground">Create amazing content with AI assistance</p>
+            {firebaseUser?.photoURL ? (
+              <img 
+                src={firebaseUser.photoURL} 
+                alt="Profile" 
+                className="w-8 h-8 rounded-full"
+              />
+            ) : (
+              <div className="w-8 h-8 rounded-full bg-blue-600 flex items-center justify-center text-white text-sm font-medium">
+                {(firebaseUser?.displayName?.charAt(0) || firebaseUser?.email?.charAt(0) || '?').toUpperCase()}
+              </div>
+            )}
+            <div className="text-right">
+              <div className="text-sm font-medium text-gray-900">
+                {firebaseUser?.displayName || 'User'}
+              </div>
+              <div className="text-xs text-gray-500">
+                {firebaseUser?.email}
+              </div>
             </div>
+            <Button 
+              onClick={handleSignOut}
+              className="bg-gray-600 hover:bg-gray-700 text-white px-4 py-2"
+              data-testid="button-signout-header"
+            >
+              Sign Out
+            </Button>
           </div>
+        ) : (
+          <Button 
+            onClick={() => setLocation('/')}
+            className="bg-blue-600 hover:bg-blue-700 text-white px-6 py-2"
+            data-testid="button-login-header"
+          >
+            Sign In
+          </Button>
+        )}
+      </div>
+
+      <div className="max-w-6xl mx-auto px-6 py-20">
+        {/* Main Title */}
+        <div className="text-center mb-8">
+          <img 
+            src={createAILogo} 
+            alt="CreateAI" 
+            className="w-96 h-auto mx-auto mb-6"
+          />
+          <p className="text-lg text-gray-600 max-w-2xl mx-auto leading-relaxed">
+            Generate podcasts, blogs, and e-books with AI assistance. Sync with your CRM automatically. Track performance with beautiful analytics.
+          </p>
         </div>
 
-        {/* Recent Projects */}
-        <div className="mb-8">
-          <h2 className="text-xl font-semibold text-foreground mb-4">Recent Projects</h2>
-          
-          {projectsLoading ? (
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-              {[1, 2, 3].map((i) => (
-                <Card key={i} className="animate-pulse">
-                  <CardHeader>
-                    <div className="h-4 bg-muted rounded w-3/4"></div>
-                    <div className="h-3 bg-muted rounded w-1/2"></div>
-                  </CardHeader>
-                  <CardContent>
-                    <div className="h-3 bg-muted rounded w-full mb-2"></div>
-                    <div className="h-3 bg-muted rounded w-2/3"></div>
-                  </CardContent>
-                </Card>
-              ))}
-            </div>
-          ) : projects.length > 0 ? (
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-              {projects.slice(0, 6).map((project) => (
-                <Card key={project.id} className="hover:shadow-lg transition-shadow cursor-pointer" data-testid={`project-card-${project.id}`}>
-                  <CardHeader>
-                    <div className="flex items-center justify-between">
-                      <CardTitle className="flex items-center text-lg">
-                        {getProjectIcon(project.type)}
-                        <span className="ml-2">{project.name}</span>
-                      </CardTitle>
-                      <span className="text-xs text-muted-foreground bg-muted px-2 py-1 rounded">
-                        {getProjectTypeLabel(project.type)}
-                      </span>
-                    </div>
-                    <CardDescription className="flex items-center text-sm text-muted-foreground">
-                      <Calendar className="w-4 h-4 mr-1" />
-                      {project.createdAt ? new Date(project.createdAt).toLocaleDateString() : 'Unknown'}
-                    </CardDescription>
-                  </CardHeader>
-                  <CardContent>
-                    <div className="flex items-center justify-between">
-                      <span className="text-sm text-muted-foreground capitalize">
-                        Status: {project.status}
-                      </span>
-                      <TrendingUp className="w-4 h-4 text-muted-foreground" />
-                    </div>
-                  </CardContent>
-                </Card>
-              ))}
-            </div>
-          ) : (
-            <Card className="border-dashed border-2 border-muted">
-              <CardContent className="flex flex-col items-center justify-center py-12">
-                <div className="text-muted-foreground mb-4">
-                  <FileText className="w-12 h-12" />
-                </div>
-                <h3 className="text-lg font-medium text-foreground mb-2">No projects yet</h3>
-                <p className="text-muted-foreground mb-4 text-center">
-                  Create your first project to get started with AI-powered content creation
-                </p>
-                <Button onClick={() => window.location.href = '/lab'} data-testid="button-create-first-project">
-                  <FileText className="w-4 h-4 mr-2" />
-                  Go to The Lab
-                </Button>
-              </CardContent>
-            </Card>
-          )}
+        {/* Section Title */}
+        <div className="text-center mb-4">
+          <h2 className="text-4xl font-bold text-gray-900 mb-2">
+            Everything you need for content creation
+          </h2>
+          <p className="text-lg text-gray-500">
+            Powered by AI, designed for creators
+          </p>
         </div>
 
-        {/* Quick Actions */}
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-          <Card className="hover:shadow-lg transition-shadow cursor-pointer" onClick={() => window.location.href = '/lab'}>
-            <CardHeader>
-              <CardTitle className="flex items-center text-lg">
-                <Mic className="w-6 h-6 text-blue-600 mr-3" />
-                The Lab
-              </CardTitle>
-              <CardDescription>
-                AI-powered content creation workspace
-              </CardDescription>
-            </CardHeader>
-            <CardContent>
-              <p className="text-sm text-muted-foreground">
-                Generate podcasts, blogs, and e-books with AI assistance
-              </p>
-            </CardContent>
-          </Card>
+        {/* Features Grid */}
+        <div className="mt-16 grid grid-cols-4 gap-12">
+          {/* The Lab */}
+          <button 
+            onClick={() => handleFeatureClick('The Lab', '/lab')}
+            className="text-center border border-gray-200 rounded-lg p-8 hover:border-blue-300 hover:shadow-lg transition-all duration-200 cursor-pointer"
+            data-testid="card-lab"
+          >
+            <div className="mb-6">
+              <img 
+                src={labIcon} 
+                alt="The Lab" 
+                className="w-[110px] h-[110px] mx-auto"
+                style={{ backgroundColor: 'transparent' }}
+              />
+            </div>
+            <h3 className="text-xl font-semibold text-gray-900 mb-4">The Lab</h3>
+            <p className="text-sm text-gray-600 leading-relaxed">
+              AI-powered content creation for podcasts, blogs, and e-books with guided workflows
+            </p>
+          </button>
 
-          <Card className="hover:shadow-lg transition-shadow cursor-pointer" onClick={() => window.location.href = '/sync'}>
-            <CardHeader>
-              <CardTitle className="flex items-center text-lg">
-                <TrendingUp className="w-6 h-6 text-green-600 mr-3" />
-                Sync
-              </CardTitle>
-              <CardDescription>
-                CRM synchronization and automation
-              </CardDescription>
-            </CardHeader>
-            <CardContent>
-              <p className="text-sm text-muted-foreground">
-                Sync with Bigin by Zoho CRM automatically
-              </p>
-            </CardContent>
-          </Card>
+          {/* Sync */}
+          <button 
+            onClick={() => handleFeatureClick('Sync', '/sync')}
+            className="text-center border border-gray-200 rounded-lg p-8 hover:border-blue-300 hover:shadow-lg transition-all duration-200 cursor-pointer"
+            data-testid="card-sync"
+          >
+            <div className="mb-6">
+              <img 
+                src={syncIcon} 
+                alt="Sync" 
+                className="w-[110px] h-[110px] mx-auto"
+                style={{ backgroundColor: 'transparent' }}
+              />
+            </div>
+            <h3 className="text-xl font-semibold text-gray-900 mb-4">Sync</h3>
+            <p className="text-sm text-gray-600 leading-relaxed">
+              Automatically sync meeting intelligence and voice updates into HubSpot CRM
+            </p>
+          </button>
 
-          <Card className="hover:shadow-lg transition-shadow cursor-pointer" onClick={() => window.location.href = '/reports'}>
-            <CardHeader>
-              <CardTitle className="flex items-center text-lg">
-                <FileText className="w-6 h-6 text-purple-600 mr-3" />
-                Reports
-              </CardTitle>
-              <CardDescription>
-                Performance analytics and insights
-              </CardDescription>
-            </CardHeader>
-            <CardContent>
-              <p className="text-sm text-muted-foreground">
-                Track performance with beautiful analytics
-              </p>
-            </CardContent>
-          </Card>
+          {/* Reports */}
+          <button 
+            onClick={() => handleFeatureClick('Reports', '/reports')}
+            className="text-center border border-gray-200 rounded-lg p-8 hover:border-blue-300 hover:shadow-lg transition-all duration-200 cursor-pointer"
+            data-testid="card-reports"
+          >
+            <div className="mb-6">
+              <img 
+                src={reportsIcon} 
+                alt="Reports" 
+                className="w-[110px] h-[110px] mx-auto"
+                style={{ backgroundColor: 'transparent' }}
+              />
+            </div>
+            <h3 className="text-xl font-semibold text-gray-900 mb-4">Reports</h3>
+            <p className="text-sm text-gray-600 leading-relaxed">
+              Weekly and monthly performance summaries with custom report builder
+            </p>
+          </button>
+
+          {/* Dashboard */}
+          <button 
+            onClick={() => handleFeatureClick('Dashboard', '/dashboard')}
+            className="text-center border border-gray-200 rounded-lg p-8 hover:border-blue-300 hover:shadow-lg transition-all duration-200 cursor-pointer"
+            data-testid="card-dashboard"
+          >
+            <div className="mb-6">
+              <img 
+                src={dashboardIcon} 
+                alt="Dashboard" 
+                className="w-[110px] h-[110px] mx-auto"
+                style={{ backgroundColor: 'transparent' }}
+              />
+            </div>
+            <h3 className="text-xl font-semibold text-gray-900 mb-4">Dashboard</h3>
+            <p className="text-sm text-gray-600 leading-relaxed">
+              Real-time KPIs and performance metrics in a clean, customizable interface
+            </p>
+          </button>
         </div>
       </div>
     </div>
