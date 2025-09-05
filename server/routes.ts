@@ -633,12 +633,26 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const userId = req.user.claims.sub;
       console.log('📅 Fetching meetings for user:', userId);
       
-      // Fetch user's Outlook integration
-      const integration = await storage.getUserIntegrations(userId);
-      const outlookIntegration = integration.find(int => int.provider === 'outlook');
+      // Debug: Check what integrations exist
+      const integrations = await storage.getUserIntegrations(userId);
+      console.log('🔍 All user integrations:', integrations.map(i => ({ 
+        provider: i.provider, 
+        status: i.status, 
+        isActive: i.isActive,
+        hasCredentials: !!i.credentials 
+      })));
       
-      if (!outlookIntegration || !outlookIntegration.isActive) {
-        console.log('⚠️ No active Outlook integration found');
+      const outlookIntegration = integrations.find(int => int.provider === 'outlook');
+      console.log('🔍 Outlook integration found:', outlookIntegration ? {
+        provider: outlookIntegration.provider,
+        status: outlookIntegration.status,
+        isActive: outlookIntegration.isActive,
+        hasCredentials: !!outlookIntegration.credentials,
+        credentialKeys: outlookIntegration.credentials ? Object.keys(outlookIntegration.credentials) : []
+      } : 'NONE');
+      
+      if (!outlookIntegration || outlookIntegration.status !== 'connected') {
+        console.log('⚠️ No connected Outlook integration found');
         return res.json([]);
       }
       
@@ -654,20 +668,30 @@ export async function registerRoutes(app: Express): Promise<Server> {
       
       if (!response.ok) {
         console.error('❌ Calendar feed fetch failed:', response.status, response.statusText);
+        console.error('❌ Response headers:', Object.fromEntries(response.headers.entries()));
         return res.json([]);
       }
       
       const icsData = await response.text();
       console.log('📄 ICS data length:', icsData.length);
+      console.log('📄 First 500 chars:', icsData.substring(0, 500));
       
       if (icsData.length < 50) {
         console.log('⚠️ ICS data seems too short:', icsData);
         return res.json([]);
       }
       
+      // Test: Verify we can find VEVENT blocks
+      const eventBlocks = icsData.split('BEGIN:VEVENT');
+      console.log('📊 Found VEVENT blocks:', eventBlocks.length - 1);
+      
+      if (eventBlocks.length <= 1) {
+        console.log('⚠️ No VEVENT blocks found in ICS data');
+        return res.json([]);
+      }
+      
       // Parse ICS data (improved parsing)
       const meetings = [];
-      const eventBlocks = icsData.split('BEGIN:VEVENT');
       
       for (const block of eventBlocks.slice(1)) { // Skip first empty block
         const lines = block.split(/\r?\n/); // Handle both \r\n and \n
