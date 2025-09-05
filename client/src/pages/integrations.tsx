@@ -17,6 +17,7 @@ import transistorLogo from '@assets/transister_1756919666154.jpg';
 import elevenlabsLogo from '@assets/elevenlabs_1756919666154.png';
 import adobeStockLogo from '@assets/Adobe_1756919666154.png';
 import otterLogo from '@assets/generated_images/Otter.AI_professional_logo_f69f2acd.png';
+import outlookLogo from '@assets/generated_images/Microsoft_Outlook_professional_icon_d90a7b40.png';
 
 interface Integration {
   id: string;
@@ -110,6 +111,17 @@ const serviceConfigs: Record<string, ServiceConfig> = {
     helpText: 'In Otter.ai, go to Settings → Integrations tab → click "API Key" button (top right). Generate an API key to access meeting transcriptions. Also supports direct Salesforce and HubSpot integrations.',
     fields: [
       { key: 'apiKey', label: 'API Key', type: 'password', placeholder: 'otter_api_key_here', required: true }
+    ]
+  },
+  outlook: {
+    name: 'Microsoft Outlook',
+    description: 'Import calendar events and meeting data for intelligence sync',
+    logo: outlookLogo,
+    helpText: 'To connect Outlook, you\'ll need to register an application in Azure AD and obtain OAuth credentials. Go to Azure Portal → App registrations → New registration.',
+    fields: [
+      { key: 'clientId', label: 'Application (client) ID', type: 'text', placeholder: 'xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx', required: true },
+      { key: 'clientSecret', label: 'Client Secret', type: 'password', placeholder: 'Your client secret value', required: true },
+      { key: 'tenantId', label: 'Directory (tenant) ID', type: 'text', placeholder: 'xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx', required: true }
     ]
   }
 };

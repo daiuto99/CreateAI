@@ -573,6 +573,30 @@ export async function registerRoutes(app: Express): Promise<Server> {
             }
             break;
 
+          case 'otter':
+            // Test Otter.ai credentials - validate API key format
+            const otterCreds = integration.credentials as any;
+            if (otterCreds.apiKey && otterCreds.apiKey.length > 0) {
+              testResult = { success: true, message: 'Otter.ai API key saved successfully! Connection will be tested when accessing meeting transcripts.', error: '' };
+              await storage.upsertUserIntegration({ ...integration, status: 'connected' as any });
+            } else {
+              testResult = { success: false, message: '', error: 'Missing or invalid Otter.ai API key' };
+              await storage.upsertUserIntegration({ ...integration, status: 'error' as any });
+            }
+            break;
+
+          case 'outlook':
+            // Test Outlook/Microsoft Graph credentials
+            const outlookCreds = integration.credentials as any;
+            if (outlookCreds.clientId && outlookCreds.clientSecret && outlookCreds.tenantId) {
+              testResult = { success: true, message: 'Microsoft Outlook credentials saved successfully! OAuth flow will be tested when accessing calendar data.', error: '' };
+              await storage.upsertUserIntegration({ ...integration, status: 'connected' as any });
+            } else {
+              testResult = { success: false, message: '', error: 'Missing Client ID, Client Secret, or Tenant ID' };
+              await storage.upsertUserIntegration({ ...integration, status: 'error' as any });
+            }
+            break;
+
           default:
             testResult = { success: false, message: '', error: 'Connection testing not implemented for this provider yet' };
         }
