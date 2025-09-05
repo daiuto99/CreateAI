@@ -760,27 +760,46 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const otterIntegration = integrations.find(i => i.provider === 'otter');
       const biginIntegration = integrations.find(i => i.provider === 'bigin');
       
-      // ONLY the actual Otter transcript that exists (Leo/Mark)
-      const transcripts = otterIntegration?.status === 'connected' ? [
-        { 
-          id: 'transcript-1', 
-          title: 'Leo/Mark Launch Box Chat', 
-          date: new Date('2025-08-29T15:00:00Z')
+      // Fetch REAL Otter.AI transcripts from API
+      let transcripts = [];
+      if (otterIntegration?.status === 'connected') {
+        try {
+          // Make actual API call to get real transcripts
+          const otterResponse = await fetch('http://localhost:5000/api/otter/transcripts', {
+            headers: {
+              'Cookie': req.headers.cookie || ''
+            }
+          });
+          if (otterResponse.ok) {
+            transcripts = await otterResponse.json();
+          }
+        } catch (error) {
+          console.error('Failed to fetch real Otter transcripts:', error);
         }
-      ] : [];
-      // DEBUG: Check Bigin integration
-      console.log('🔍 Bigin integration:', biginIntegration ? { status: biginIntegration.status, provider: biginIntegration.provider } : 'NONE');
+      }
       
-      // ONLY the actual Bigin contacts that exist (Mark)
-      const contacts = biginIntegration?.status === 'connected' ? [
-        { id: '1', name: 'Mark', email: 'mark@company.com' }
-      ] : [];
-      console.log('📋 Bigin contacts created:', contacts.map(c => c.name));
+      // Fetch REAL Bigin contacts from API
+      let contacts = [];
+      if (biginIntegration?.status === 'connected') {
+        try {
+          // Make actual API call to get real contacts
+          const biginResponse = await fetch('http://localhost:5000/api/bigin/contacts', {
+            headers: {
+              'Cookie': req.headers.cookie || ''
+            }
+          });
+          if (biginResponse.ok) {
+            contacts = await biginResponse.json();
+          }
+        } catch (error) {
+          console.error('Failed to fetch real Bigin contacts:', error);
+        }
+      }
       
       console.log('🎤 Available Otter transcripts for matching:', transcripts.length);
-      console.log('📧 Transcript titles:', transcripts.map(t => t.title));
+      console.log('📧 Transcript titles:', transcripts.map((t: any) => t.title));
       console.log('📋 Available Bigin contacts for matching:', contacts.length);
-      console.log('👥 Contact names:', contacts.map(c => c.name));
+      console.log('👥 Contact names:', contacts.map((c: any) => c.name));
       
       // ENHANCED matching logic with better name parsing
       for (const meeting of meetings) {
