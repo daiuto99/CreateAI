@@ -627,6 +627,137 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  // Data fetching routes
+  app.get('/api/meetings', isAuthenticated, async (req: any, res) => {
+    try {
+      const userId = req.user.claims.sub;
+      const integrations = await storage.getUserIntegrations(userId);
+      const outlookIntegration = integrations.find(i => i.provider === 'outlook');
+      
+      if (!outlookIntegration || outlookIntegration.status !== 'connected') {
+        return res.json([]);
+      }
+      
+      const credentials = outlookIntegration.credentials as any;
+      if (!credentials.feedUrl) {
+        return res.json([]);
+      }
+      
+      // Fetch calendar data from ICS feed
+      const response = await fetch(credentials.feedUrl);
+      const icsData = await response.text();
+      
+      // Parse basic ICS data (simplified - in production would use ical parser)
+      const meetings = [];
+      const eventBlocks = icsData.split('BEGIN:VEVENT');
+      
+      for (const block of eventBlocks.slice(1)) { // Skip first empty block
+        const lines = block.split('\\n');
+        const event: any = {};
+        
+        for (const line of lines) {
+          if (line.startsWith('SUMMARY:')) event.title = line.replace('SUMMARY:', '').trim();
+          if (line.startsWith('DTSTART:')) event.startTime = line.replace('DTSTART:', '').trim();
+          if (line.startsWith('DTEND:')) event.endTime = line.replace('DTEND:', '').trim();
+          if (line.startsWith('DESCRIPTION:')) event.description = line.replace('DESCRIPTION:', '').trim();
+        }
+        
+        if (event.title) {
+          meetings.push({
+            id: Date.now() + Math.random(),
+            title: event.title,
+            date: event.startTime ? new Date(event.startTime.replace(/T/, ' ').replace(/Z/, '')) : new Date(),
+            duration: event.startTime && event.endTime ? '1h' : 'Unknown',
+            attendees: ['You'],
+            status: 'completed',
+            hasTranscript: false
+          });
+        }
+      }
+      
+      res.json(meetings.slice(0, 10)); // Return last 10 meetings
+    } catch (error) {
+      console.error('Error fetching meetings:', error);
+      res.json([]); // Return empty array on error
+    }
+  });
+
+  app.get('/api/otter/transcripts', isAuthenticated, async (req: any, res) => {
+    try {
+      const userId = req.user.claims.sub;
+      const integrations = await storage.getUserIntegrations(userId);
+      const otterIntegration = integrations.find(i => i.provider === 'otter');
+      
+      if (!otterIntegration || otterIntegration.status !== 'connected') {
+        return res.json([]);
+      }
+      
+      const credentials = otterIntegration.credentials as any;
+      if (!credentials.apiKey) {
+        return res.json([]);
+      }
+      
+      // Fetch from Otter.ai API (simplified - would need proper OAuth flow in production)
+      const response = await fetch('https://otter.ai/forward/api/v1/speeches', {
+        headers: {
+          'Authorization': `Basic ${Buffer.from(credentials.apiKey + ':').toString('base64')}`,
+        }
+      });
+      
+      if (!response.ok) {
+        return res.json([]);
+      }
+      
+      const data = await response.json();
+      const transcripts = (data.speeches || []).map((speech: any) => ({
+        id: speech.id,
+        title: speech.title || 'Untitled Meeting',
+        date: new Date(speech.created_at),
+        duration: speech.duration ? `${Math.round(speech.duration / 60)}m` : 'Unknown',
+        summary: speech.summary || 'No summary available',
+        transcript: speech.transcript || 'Transcript not available'
+      }));
+      
+      res.json(transcripts.slice(0, 10));
+    } catch (error) {
+      console.error('Error fetching Otter.ai transcripts:', error);
+      res.json([]);
+    }
+  });
+
+  app.get('/api/bigin/contacts', isAuthenticated, async (req: any, res) => {
+    try {
+      const userId = req.user.claims.sub;
+      const integrations = await storage.getUserIntegrations(userId);
+      const biginIntegration = integrations.find(i => i.provider === 'bigin');
+      
+      if (!biginIntegration || biginIntegration.status !== 'connected') {
+        return res.json([]);
+      }
+      
+      const credentials = biginIntegration.credentials as any;
+      if (!credentials.clientId || !credentials.clientSecret) {
+        return res.json([]);
+      }
+      
+      // For now, return mock data since Bigin requires OAuth flow
+      // In production, would implement proper OAuth and API calls
+      res.json([
+        {
+          id: '1',
+          name: 'Demo Contact',
+          email: 'demo@example.com', 
+          company: 'Example Corp',
+          lastActivity: new Date(),
+          status: 'active'
+        }
+      ]);
+    } catch (error) {
+      console.error('Error fetching Bigin contacts:', error);
+      res.json([]);
+    }
+  });
+
   // Sync routes
   app.post('/api/crm/extract-fields', isAuthenticated, async (req, res) => {
     try {

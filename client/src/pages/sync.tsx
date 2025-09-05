@@ -22,6 +22,27 @@ export default function Sync() {
     enabled: isAuthenticated,
     retry: false,
   });
+
+  // Fetch actual meeting data
+  const { data: meetings = [] } = useQuery({
+    queryKey: ['/api/meetings'],
+    enabled: isAuthenticated,
+    retry: false,
+  });
+
+  // Fetch Otter.ai transcripts
+  const { data: transcripts = [] } = useQuery({
+    queryKey: ['/api/otter/transcripts'],
+    enabled: isAuthenticated,
+    retry: false,
+  });
+
+  // Fetch Bigin contacts
+  const { data: contacts = [] } = useQuery({
+    queryKey: ['/api/bigin/contacts'],
+    enabled: isAuthenticated,
+    retry: false,
+  });
   
   // Helper function to get integration status
   const getIntegrationStatus = (provider: string) => {
@@ -225,23 +246,56 @@ export default function Sync() {
               </CardDescription>
             </CardHeader>
             <CardContent>
-              <div className="text-center py-12">
-                <i className="fas fa-calendar-check text-4xl text-muted-foreground mb-4"></i>
-                <h3 className="text-lg font-semibold text-foreground mb-2">No meetings captured yet</h3>
-                <p className="text-muted-foreground text-center mb-4">
-                  Once you connect your Outlook calendar and Otter.ai account, meetings will appear here for review and sync to Bigin by Zoho.
-                </p>
-                <Button 
-                  variant="outline" 
-                  data-testid="button-connect-calendar"
-                  onClick={() => {
-                    setLocation('/integrations');
-                  }}
-                >
-                  <i className="fas fa-calendar-plus mr-2"></i>
-                  Connect Calendar
-                </Button>
-              </div>
+              {meetings.length === 0 ? (
+                <div className="text-center py-12">
+                  <i className="fas fa-calendar-check text-4xl text-muted-foreground mb-4"></i>
+                  <h3 className="text-lg font-semibold text-foreground mb-2">No meetings found</h3>
+                  <p className="text-muted-foreground text-center mb-4">
+                    {getIntegrationStatus('outlook') === 'Connected' 
+                      ? 'Your calendar feed is connected but no recent meetings were found.'
+                      : 'Connect your Outlook calendar and Otter.ai account to see meetings here.'
+                    }
+                  </p>
+                  <Button 
+                    variant="outline" 
+                    data-testid="button-connect-calendar"
+                    onClick={() => {
+                      setLocation('/integrations');
+                    }}
+                  >
+                    <i className="fas fa-calendar-plus mr-2"></i>
+                    Connect Calendar
+                  </Button>
+                </div>
+              ) : (
+                <div className="space-y-4">
+                  {meetings.map((meeting: any) => (
+                    <div key={meeting.id} className="flex items-center justify-between p-4 border rounded-lg">
+                      <div className="flex-1">
+                        <h4 className="font-medium">{meeting.title}</h4>
+                        <p className="text-sm text-muted-foreground">
+                          {new Date(meeting.date).toLocaleDateString()} • {meeting.duration}
+                        </p>
+                        <p className="text-xs text-muted-foreground mt-1">
+                          {meeting.attendees.join(', ')} • {meeting.status}
+                        </p>
+                      </div>
+                      <div className="flex items-center space-x-2">
+                        {meeting.hasTranscript && (
+                          <Badge variant="outline">
+                            <i className="fas fa-file-text mr-1"></i>
+                            Transcript
+                          </Badge>
+                        )}
+                        <Button size="sm" variant="outline">
+                          <i className="fas fa-sync mr-1"></i>
+                          Sync to CRM
+                        </Button>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
             </CardContent>
           </Card>
 
@@ -253,7 +307,7 @@ export default function Sync() {
                 <i className="fas fa-calendar-check text-green-500"></i>
               </CardHeader>
               <CardContent>
-                <div className="text-2xl font-bold" data-testid="text-meetings-synced">0</div>
+                <div className="text-2xl font-bold" data-testid="text-meetings-synced">{meetings.length}</div>
                 <p className="text-xs text-muted-foreground">this month</p>
               </CardContent>
             </Card>
@@ -264,7 +318,7 @@ export default function Sync() {
                 <i className="fas fa-microphone text-purple-500"></i>
               </CardHeader>
               <CardContent>
-                <div className="text-2xl font-bold" data-testid="text-voice-updates">0</div>
+                <div className="text-2xl font-bold" data-testid="text-voice-updates">{transcripts.length}</div>
                 <p className="text-xs text-muted-foreground">processed</p>
               </CardContent>
             </Card>
