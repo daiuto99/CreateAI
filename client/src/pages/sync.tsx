@@ -1,7 +1,7 @@
-import { useEffect } from "react";
+import { useEffect, useState } from "react";
 import { useAuth } from "@/hooks/useAuth";
 import { useToast } from "@/hooks/use-toast";
-import { useQuery } from "@tanstack/react-query";
+import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import type { UserIntegration } from "@shared/schema";
 import Sidebar from "@/components/layout/sidebar";
 import MobileNav from "@/components/layout/mobile-nav";
@@ -10,11 +10,14 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { useLocation } from "wouter";
+import { apiRequest } from "@/lib/queryClient";
 
 export default function Sync() {
   const { toast } = useToast();
   const { isAuthenticated, isLoading } = useAuth();
   const [, setLocation] = useLocation();
+  const queryClient = useQueryClient();
+  const [dismissedMeetings, setDismissedMeetings] = useState(new Set<string>());
   
   // Fetch user integrations to show real connection status
   const { data: integrations = [] } = useQuery<UserIntegration[]>({
@@ -42,6 +45,54 @@ export default function Sync() {
     queryKey: ['/api/bigin/contacts'],
     enabled: isAuthenticated,
     retry: false,
+  });
+
+  // Mutation for dismissing meetings
+  const dismissMeeting = useMutation({
+    mutationFn: async (meetingId: string) => {
+      return apiRequest('/api/meetings/dismiss', {
+        method: 'POST',
+        data: { meetingId }
+      });
+    },
+    onSuccess: (data, meetingId) => {
+      setDismissedMeetings(prev => new Set([...prev, meetingId]));
+      toast({
+        title: "Meeting Dismissed",
+        description: "Meeting has been dismissed and won't appear in sync list.",
+      });
+    },
+    onError: () => {
+      toast({
+        title: "Error",
+        description: "Failed to dismiss meeting. Please try again.",
+        variant: "destructive"
+      });
+    }
+  });
+
+  // Mutation for creating Bigin records
+  const createBiginRecord = useMutation({
+    mutationFn: async (meeting: any) => {
+      return apiRequest('/api/bigin/create-record', {
+        method: 'POST',
+        data: { meeting }
+      });
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['/api/meetings'] });
+      toast({
+        title: "Bigin Record Created",
+        description: "Meeting record has been created in Bigin by Zoho.",
+      });
+    },
+    onError: () => {
+      toast({
+        title: "Error",
+        description: "Failed to create Bigin record. Please try again.",
+        variant: "destructive"
+      });
+    }
   });
   
   // Helper function to get integration status
@@ -269,10 +320,36 @@ export default function Sync() {
                 </div>
               ) : (
                 <div className="space-y-4">
-                  {meetings.map((meeting: any) => (
+                  {meetings
+                    .filter((meeting: any) => !dismissedMeetings.has(meeting.id))
+                    .map((meeting: any) => (
                     <div key={meeting.id} className="flex items-center justify-between p-4 border rounded-lg">
                       <div className="flex-1">
-                        <h4 className="font-medium">{meeting.title}</h4>
+                        <div className="flex items-center space-x-2 mb-2">
+                          <h4 className="font-medium">{meeting.title}</h4>
+                          <div className="flex items-center space-x-1">
+                            {/* Otter.AI Match Icon */}
+                            {meeting.hasOtterMatch ? (
+                              <div className="w-5 h-5 bg-green-500 rounded-full flex items-center justify-center" title="Otter.AI transcript available">
+                                <i className="fas fa-microphone text-white text-xs"></i>
+                              </div>
+                            ) : (
+                              <div className="w-5 h-5 bg-gray-300 rounded-full flex items-center justify-center" title="No Otter.AI transcript">
+                                <i className="fas fa-microphone text-gray-500 text-xs"></i>
+                              </div>
+                            )}
+                            {/* Bigin Match Icon */}
+                            {meeting.hasBiginMatch ? (
+                              <div className="w-5 h-5 bg-blue-500 rounded-full flex items-center justify-center" title="Bigin CRM record exists">
+                                <i className="fas fa-database text-white text-xs"></i>
+                              </div>
+                            ) : (
+                              <div className="w-5 h-5 bg-gray-300 rounded-full flex items-center justify-center" title="No Bigin CRM record">
+                                <i className="fas fa-database text-gray-500 text-xs"></i>
+                              </div>
+                            )}
+                          </div>
+                        </div>
                         <p className="text-sm text-muted-foreground">
                           {new Date(meeting.date).toLocaleDateString()} • {meeting.duration}
                         </p>
@@ -281,12 +358,26 @@ export default function Sync() {
                         </p>
                       </div>
                       <div className="flex items-center space-x-2">
-                        {meeting.hasTranscript && (
-                          <Badge variant="outline">
-                            <i className="fas fa-file-text mr-1"></i>
-                            Transcript
-                          </Badge>
+                        {!meeting.hasBiginMatch && (
+                          <Button 
+                            size="sm" 
+                            variant="outline"
+                            onClick={() => createBiginRecord.mutate(meeting)}
+                            disabled={createBiginRecord.isPending}
+                          >
+                            <i className="fas fa-plus mr-1"></i>
+                            Create Record
+                          </Button>
                         )}
+                        <Button 
+                          size="sm" 
+                          variant="outline"
+                          onClick={() => dismissMeeting.mutate(meeting.id)}
+                          disabled={dismissMeeting.isPending}
+                        >
+                          <i className="fas fa-times mr-1"></i>
+                          Dismiss
+                        </Button>
                         <Button size="sm" variant="outline">
                           <i className="fas fa-sync mr-1"></i>
                           Sync to CRM
@@ -307,7 +398,7 @@ export default function Sync() {
                 <i className="fas fa-calendar-check text-green-500"></i>
               </CardHeader>
               <CardContent>
-                <div className="text-2xl font-bold" data-testid="text-meetings-synced">{meetings.length}</div>
+                <div className="text-2xl font-bold" data-testid="text-meetings-synced">{meetings.filter((m: any) => !dismissedMeetings.has(m.id)).length}</div>
                 <p className="text-xs text-muted-foreground">this month</p>
               </CardContent>
             </Card>

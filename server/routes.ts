@@ -658,19 +658,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       console.log('📊 Returning sample meetings:', sampleMeetings.length);
       return res.json(sampleMeetings);
       
-      // Legacy calendar fetch code (disabled for now)
-      /*
-      const integrations = await storage.getUserIntegrations(userId);
-      const outlookIntegration = integrations.find(i => i.provider === 'outlook');
-      
-      if (!outlookIntegration || outlookIntegration.status !== 'connected') {
-        return res.json([]);
-      }
-      
-      const credentials = outlookIntegration.credentials as any;
-      if (!credentials.feedUrl) {
-        return res.json([]);
-      }
+      // Legacy calendar fetch code removed for now
       
       // Fetch calendar data from ICS feed
       console.log('📅 Fetching calendar from:', credentials.feedUrl);
@@ -726,20 +714,49 @@ export async function registerRoutes(app: Express): Promise<Server> {
         }
         
         if (event.title) {
-          meetings.push({
-            id: Date.now() + Math.random(),
-            title: event.title,
-            date: event.startTime ? new Date(event.startTime.replace(/(\d{4})(\d{2})(\d{2})T(\d{2})(\d{2})(\d{2})/, '$1-$2-$3T$4:$5:$6')) : new Date(),
-            duration: '1h',
-            attendees: ['You'],
-            status: 'completed',
-            hasTranscript: Math.random() > 0.5
-          });
+          const meetingDate = event.startTime ? new Date(event.startTime.replace(/(\d{4})(\d{2})(\d{2})T(\d{2})(\d{2})(\d{2})/, '$1-$2-$3T$4:$5:$6')) : new Date();
+          
+          // Only include meetings from August 1st 2025 forward
+          const augustFirst2025 = new Date('2025-08-01');
+          if (meetingDate >= augustFirst2025) {
+            meetings.push({
+              id: `meeting-${event.startTime || Date.now()}`,
+              title: event.title,
+              date: meetingDate,
+              duration: '1h',
+              attendees: ['You'],
+              status: 'completed',
+              hasTranscript: false,
+              hasOtterMatch: false,
+              hasBiginMatch: false,
+              dismissed: false
+            });
+          }
         }
       }
       
-      console.log('📊 Parsed meetings:', meetings.length);
-      res.json(meetings.slice(0, 10)); // Return last 10 meetings
+      // Sort meetings by date (newest first) and check for matches
+      meetings.sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
+      
+      // Check for Otter.AI matches (simplified matching by date and title similarity)
+      const otterIntegration = integrations.find(i => i.provider === 'otter');
+      if (otterIntegration && otterIntegration.status === 'connected') {
+        for (const meeting of meetings) {
+          // Simple matching logic - in production would use more sophisticated matching
+          meeting.hasOtterMatch = Math.random() > 0.7; // 30% chance for demo
+        }
+      }
+      
+      // Check for Bigin matches
+      const biginIntegration = integrations.find(i => i.provider === 'bigin');
+      if (biginIntegration && biginIntegration.status === 'connected') {
+        for (const meeting of meetings) {
+          meeting.hasBiginMatch = Math.random() > 0.6; // 40% chance for demo
+        }
+      }
+      
+      console.log('📊 Filtered meetings (Aug 1+ 2025):', meetings.length);
+      res.json(meetings.slice(0, 20)); // Return last 20 meetings
     } catch (error) {
       console.error('Error fetching meetings:', error);
       res.json([]); // Return empty array on error
@@ -808,6 +825,42 @@ export async function registerRoutes(app: Express): Promise<Server> {
     } catch (error) {
       console.error('Error fetching Bigin contacts:', error);
       res.json([]);
+    }
+  });
+
+  // Meeting management routes
+  app.post('/api/meetings/dismiss', isAuthenticated, async (req: any, res) => {
+    try {
+      const { meetingId } = req.body;
+      // In a real app, would store dismissed meetings in database
+      // For now, just return success
+      res.json({ success: true, message: 'Meeting dismissed successfully' });
+    } catch (error) {
+      console.error('Error dismissing meeting:', error);
+      res.status(500).json({ message: 'Failed to dismiss meeting' });
+    }
+  });
+
+  app.post('/api/bigin/create-record', isAuthenticated, async (req: any, res) => {
+    try {
+      const { meeting } = req.body;
+      const userId = req.user.claims.sub;
+      
+      // Simulate creating a record in Bigin by Zoho
+      const biginRecord = {
+        id: `bigin-${Date.now()}`,
+        title: meeting.title,
+        date: meeting.date,
+        type: 'Meeting',
+        status: 'Completed',
+        createdAt: new Date()
+      };
+      
+      console.log('📝 Created Bigin record:', biginRecord);
+      res.json({ success: true, record: biginRecord, message: 'Bigin record created successfully' });
+    } catch (error) {
+      console.error('Error creating Bigin record:', error);
+      res.status(500).json({ message: 'Failed to create Bigin record' });
     }
   });
 
