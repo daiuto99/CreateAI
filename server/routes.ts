@@ -631,6 +631,35 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.get('/api/meetings', isAuthenticated, async (req: any, res) => {
     try {
       const userId = req.user.claims.sub;
+      console.log('📅 Fetching meetings for user:', userId);
+      
+      // Always return sample data for now to test the UI
+      const sampleMeetings = [
+        {
+          id: 'sample-1',
+          title: 'Weekly Standup Meeting',
+          date: new Date('2025-09-05T10:00:00Z'),
+          duration: '30m',
+          attendees: ['You', 'Team'],
+          status: 'completed',
+          hasTranscript: true
+        },
+        {
+          id: 'sample-2', 
+          title: 'Client Presentation',
+          date: new Date('2025-09-04T14:00:00Z'),
+          duration: '1h',
+          attendees: ['You', 'Client'],
+          status: 'completed',
+          hasTranscript: false
+        }
+      ];
+      
+      console.log('📊 Returning sample meetings:', sampleMeetings.length);
+      return res.json(sampleMeetings);
+      
+      // Legacy calendar fetch code (disabled for now)
+      /*
       const integrations = await storage.getUserIntegrations(userId);
       const outlookIntegration = integrations.find(i => i.provider === 'outlook');
       
@@ -720,20 +749,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.get('/api/otter/transcripts', isAuthenticated, async (req: any, res) => {
     try {
       const userId = req.user.claims.sub;
-      const integrations = await storage.getUserIntegrations(userId);
-      const otterIntegration = integrations.find(i => i.provider === 'otter');
-      
-      if (!otterIntegration || otterIntegration.status !== 'connected') {
-        return res.json([]);
-      }
-      
-      const credentials = otterIntegration.credentials as any;
-      if (!credentials.apiKey) {
-        return res.json([]);
-      }
-      
-      // For now, return sample transcripts since Otter.ai API requires complex OAuth
-      console.log('🎤 Otter.ai API key present:', !!credentials.apiKey);
+      console.log('🎤 Fetching transcripts for user:', userId);
       
       // Return sample data to show the UI works
       const sampleTranscripts = [
