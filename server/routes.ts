@@ -760,41 +760,11 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const otterIntegration = integrations.find(i => i.provider === 'otter');
       const biginIntegration = integrations.find(i => i.provider === 'bigin');
       
-      // Fetch REAL Otter.AI transcripts from API
-      let transcripts = [];
-      if (otterIntegration?.status === 'connected') {
-        try {
-          // Make actual API call to get real transcripts
-          const otterResponse = await fetch('http://localhost:5000/api/otter/transcripts', {
-            headers: {
-              'Cookie': req.headers.cookie || ''
-            }
-          });
-          if (otterResponse.ok) {
-            transcripts = await otterResponse.json();
-          }
-        } catch (error) {
-          console.error('Failed to fetch real Otter transcripts:', error);
-        }
-      }
+      // NO FAKE DATA - Use empty arrays until real integrations are built
+      const transcripts: any[] = [];
+      const contacts: any[] = [];
       
-      // Fetch REAL Bigin contacts from API
-      let contacts = [];
-      if (biginIntegration?.status === 'connected') {
-        try {
-          // Make actual API call to get real contacts
-          const biginResponse = await fetch('http://localhost:5000/api/bigin/contacts', {
-            headers: {
-              'Cookie': req.headers.cookie || ''
-            }
-          });
-          if (biginResponse.ok) {
-            contacts = await biginResponse.json();
-          }
-        } catch (error) {
-          console.error('Failed to fetch real Bigin contacts:', error);
-        }
-      }
+      console.log('🔄 Using NO fake data - all arrays empty until real APIs connected');
       
       console.log('🎤 Available Otter transcripts for matching:', transcripts.length);
       console.log('📧 Transcript titles:', transcripts.map((t: any) => t.title));
@@ -868,27 +838,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const userId = req.user.claims.sub;
       console.log('🎤 Fetching transcripts for user:', userId);
       
-      // Return sample data to show the UI works
-      const sampleTranscripts = [
-        {
-          id: 'transcript-1',
-          title: 'Weekly Team Meeting - Sept 5',
-          date: new Date('2025-09-05T10:00:00Z'),
-          duration: '45m',
-          summary: 'Discussed project milestones, budget allocation, and upcoming deadlines. Team agreed on new sprint goals.',
-          transcript: 'Meeting started at 10:00 AM. John presented the quarterly results...'
-        },
-        {
-          id: 'transcript-2',
-          title: 'Client Call - ABC Corp',
-          date: new Date('2025-09-04T14:30:00Z'),
-          duration: '30m', 
-          summary: 'Client feedback session on the new product features. Mostly positive reception with minor UI adjustments requested.',
-          transcript: 'Good afternoon everyone. Thanks for joining today...'
-        }
-      ];
-      
-      res.json(sampleTranscripts);
+      // NO FAKE DATA - Return empty array until real Otter.AI integration
+      res.json([]);
     } catch (error) {
       console.error('Error fetching Otter.ai transcripts:', error);
       res.json([]);
@@ -898,30 +849,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.get('/api/bigin/contacts', isAuthenticated, async (req: any, res) => {
     try {
       const userId = req.user.claims.sub;
-      const integrations = await storage.getUserIntegrations(userId);
-      const biginIntegration = integrations.find(i => i.provider === 'bigin');
+      console.log('📋 Fetching contacts for user:', userId);
       
-      if (!biginIntegration || biginIntegration.status !== 'connected') {
-        return res.json([]);
-      }
-      
-      const credentials = biginIntegration.credentials as any;
-      if (!credentials.clientId || !credentials.clientSecret) {
-        return res.json([]);
-      }
-      
-      // For now, return mock data since Bigin requires OAuth flow
-      // In production, would implement proper OAuth and API calls
-      res.json([
-        {
-          id: '1',
-          name: 'Demo Contact',
-          email: 'demo@example.com', 
-          company: 'Example Corp',
-          lastActivity: new Date(),
-          status: 'active'
-        }
-      ]);
+      // NO FAKE DATA - Return empty array until real Bigin integration
+      res.json([]);
     } catch (error) {
       console.error('Error fetching Bigin contacts:', error);
       res.json([]);
