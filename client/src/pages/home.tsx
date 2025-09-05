@@ -21,6 +21,13 @@ export default function Home() {
   // Get user's first organization from backend data
   const organizationId = backendUser?.organizations?.[0]?.id;
 
+  // ALL HOOKS MUST BE CALLED BEFORE ANY CONDITIONAL RETURNS
+  const { data: projects = [], isLoading: projectsLoading } = useQuery<ContentProject[]>({
+    queryKey: ['/api/content-projects', organizationId],
+    enabled: !!organizationId && !!firebaseUser && status !== "loading" && !isFetchingBackendUser,
+    retry: false,
+  });
+
   // ✅ hooks above; rendering logic below
 
   if (status === "loading") {
@@ -55,12 +62,6 @@ export default function Home() {
       </div>
     );
   }
-
-  const { data: projects = [], isLoading: projectsLoading } = useQuery<ContentProject[]>({
-    queryKey: ['/api/content-projects', organizationId],
-    enabled: !!organizationId,
-    retry: false,
-  });
 
   const getProjectIcon = (type: string) => {
     switch (type) {
