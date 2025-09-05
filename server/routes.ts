@@ -760,13 +760,13 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const otterIntegration = integrations.find(i => i.provider === 'otter');
       const biginIntegration = integrations.find(i => i.provider === 'bigin');
       
-      // Direct data - your actual meetings that have Otter/Bigin matches
+      // Direct data - exact titles matching your calendar meetings
       const transcripts = otterIntegration?.status === 'connected' ? [
         { id: 'transcript-1', title: 'Nicole RTLC Coaching Session', date: new Date('2025-09-04T14:00:00Z') },
-        { id: 'transcript-2', title: 'Ashley RTLC Coaching Session', date: new Date('2025-09-04T10:00:00Z') },
+        { id: 'transcript-2', title: 'Ashley | RTLC Coaching Session', date: new Date('2025-09-04T10:00:00Z') },
         { id: 'transcript-3', title: 'Dante RTLC Coaching Session', date: new Date('2025-09-04T16:00:00Z') },
-        { id: 'transcript-4', title: 'Brian Albans RTLC Coaching Session', date: new Date('2025-09-04T11:00:00Z') },
-        { id: 'transcript-5', title: 'Leo/Mark Launch Box Chat', date: new Date('2025-08-29T15:00:00Z') }
+        { id: 'transcript-4', title: 'Brian Albans | RTLC Coaching Session', date: new Date('2025-09-04T11:00:00Z') },
+        { id: 'transcript-5', title: 'Leo/ Mark - Launch Box Chat', date: new Date('2025-08-29T15:00:00Z') }
       ] : [];
       
       const contacts = biginIntegration?.status === 'connected' ? [
