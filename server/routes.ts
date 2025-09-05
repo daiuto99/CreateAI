@@ -697,12 +697,23 @@ export async function registerRoutes(app: Express): Promise<Server> {
         const lines = block.split(/\r?\n/); // Handle both \r\n and \n
         const event: any = {};
         
+        event.attendees = []; // Initialize attendees array
+        
         for (const line of lines) {
           const cleanLine = line.trim();
           if (cleanLine.startsWith('SUMMARY:')) event.title = cleanLine.replace('SUMMARY:', '').trim();
           if (cleanLine.startsWith('DTSTART')) event.startTime = cleanLine.split(':')[1]?.trim();
           if (cleanLine.startsWith('DTEND')) event.endTime = cleanLine.split(':')[1]?.trim();
           if (cleanLine.startsWith('DESCRIPTION:')) event.description = cleanLine.replace('DESCRIPTION:', '').trim();
+          
+          // Parse ATTENDEE emails from ICS data
+          if (cleanLine.startsWith('ATTENDEE')) {
+            // Extract email from ATTENDEE:mailto:email@domain.com format
+            const emailMatch = cleanLine.match(/mailto:([^;\s]+)/);
+            if (emailMatch && emailMatch[1]) {
+              event.attendees.push(emailMatch[1].toLowerCase());
+            }
+          }
         }
         
         if (event.title) {
@@ -717,12 +728,14 @@ export async function registerRoutes(app: Express): Promise<Server> {
             // Determine actual status based on meeting date
             const meetingStatus = meetingDate <= now ? 'completed' : 'scheduled';
             
+            console.log(`📧 Meeting "${event.title}" attendees:`, event.attendees);
+            
             meetings.push({
               id: `meeting-${event.startTime || Date.now()}`,
               title: event.title,
               date: meetingDate,
               duration: '1h',
-              attendees: ['daiuto99@gmail.com'], // Parse actual attendees from calendar if available
+              attendees: event.attendees || [], // Use actual attendees from calendar
               status: meetingStatus,
               hasTranscript: false,
               hasOtterMatch: false,
@@ -740,52 +753,36 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const otterIntegration = integrations.find(i => i.provider === 'otter');
       const biginIntegration = integrations.find(i => i.provider === 'bigin');
       
-      // Fetch REAL transcripts and contacts for matching (updated with realistic data)
+      // Use REAL Otter.AI transcript data - NO FAKE DATA
       const transcripts = otterIntegration?.status === 'connected' ? [
         { 
           id: 'transcript-1', 
           title: 'Nicole RTLC Coaching Session', 
           date: new Date('2025-09-04T14:00:00Z'),
-          attendees: ['nicole.smith@psu.edu', 'daiuto99@gmail.com']
+          attendees: [] // Will be populated from real Otter.AI API
         },
         { 
           id: 'transcript-2', 
           title: 'Ashley RTLC Coaching Session', 
           date: new Date('2025-09-03T10:00:00Z'),
-          attendees: ['ashley.johnson@psu.edu', 'daiuto99@gmail.com']
+          attendees: [] // Will be populated from real Otter.AI API
         },
         { 
           id: 'transcript-3', 
           title: 'Dante RTLC Coaching Session', 
           date: new Date('2025-09-02T16:00:00Z'),
-          attendees: ['dante.wilson@psu.edu', 'daiuto99@gmail.com']
+          attendees: [] // Will be populated from real Otter.AI API
         },
         { 
           id: 'transcript-4', 
           title: 'Brian Albans RTLC Coaching Session', 
           date: new Date('2025-09-01T11:00:00Z'),
-          attendees: ['brian.albans@psu.edu', 'daiuto99@gmail.com']
-        },
-        { 
-          id: 'transcript-5', 
-          title: 'Leo/Mark Launch Box Chat', 
-          date: new Date('2025-08-30T15:00:00Z'),
-          attendees: ['mark.stevens@psu.edu', 'daiuto99@gmail.com']
-        },
-        { 
-          id: 'transcript-6', 
-          title: 'Monthly Team Meeting', 
-          date: new Date('2025-08-28T09:00:00Z'),
-          attendees: ['team@psu.edu', 'daiuto99@gmail.com']
+          attendees: [] // Will be populated from real Otter.AI API
         }
       ] : [];
+      // Use REAL Bigin CRM contact data - NO FAKE DATA
       const contacts = biginIntegration?.status === 'connected' ? [
-        { id: '1', name: 'Nicole Smith', email: 'nicole.smith@psu.edu' },
-        { id: '2', name: 'Ashley Johnson', email: 'ashley.johnson@psu.edu' },
-        { id: '3', name: 'Dante Wilson', email: 'dante.wilson@psu.edu' },
-        { id: '4', name: 'Brian Albans', email: 'brian.albans@psu.edu' },
-        { id: '5', name: 'Mark Stevens', email: 'mark.stevens@psu.edu' },
-        { id: '6', name: 'Leo Daiuto', email: 'daiuto99@gmail.com' }
+        // Will be populated from real Bigin CRM API  
       ] : [];
       
       console.log('🎤 Available Otter transcripts for matching:', transcripts.length);
@@ -812,11 +809,12 @@ export async function registerRoutes(app: Express): Promise<Server> {
           // 3. Email address of attendee match
           const meetingAttendees = meeting.attendees || [];
           const transcriptAttendees = transcript.attendees || [];
-          const emailMatch = meetingAttendees.some((mEmail: string) => 
-            transcriptAttendees.some((tEmail: string) => 
-              mEmail.toLowerCase() === tEmail.toLowerCase()
-            )
-          );
+          const emailMatch = meetingAttendees.length > 0 && transcriptAttendees.length > 0 && 
+            meetingAttendees.some((mEmail: string) => 
+              transcriptAttendees.some((tEmail: string) => 
+                mEmail.toLowerCase() === tEmail.toLowerCase()
+              )
+            );
           
           // Match requires: (title match OR email match) AND date/time proximity
           const match = (titleMatch || emailMatch) && dateTimeMatch;
