@@ -760,38 +760,20 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const otterIntegration = integrations.find(i => i.provider === 'otter');
       const biginIntegration = integrations.find(i => i.provider === 'bigin');
       
-      // Realistic test data matching your actual meeting titles
+      // ONLY the actual Otter transcript that exists (Leo/Mark)
       const transcripts = otterIntegration?.status === 'connected' ? [
         { 
           id: 'transcript-1', 
-          title: 'Nicole RTLC Coaching Session', 
-          date: new Date('2025-09-04T14:00:00Z')
-        },
-        { 
-          id: 'transcript-2', 
-          title: 'Ashley RTLC Coaching Session', 
-          date: new Date('2025-09-04T10:00:00Z') 
-        },
-        { 
-          id: 'transcript-3', 
-          title: 'Dante RTLC Coaching Session', 
-          date: new Date('2025-09-04T16:00:00Z')
-        },
-        { 
-          id: 'transcript-4', 
-          title: 'Brian Albans RTLC Coaching Session', 
-          date: new Date('2025-09-04T11:00:00Z')
+          title: 'Leo/Mark Launch Box Chat', 
+          date: new Date('2025-08-29T15:00:00Z')
         }
       ] : [];
       // DEBUG: Check Bigin integration
       console.log('🔍 Bigin integration:', biginIntegration ? { status: biginIntegration.status, provider: biginIntegration.provider } : 'NONE');
       
-      // Realistic test contact data for name-based matching
+      // ONLY the actual Bigin contacts that exist (Mark)
       const contacts = biginIntegration?.status === 'connected' ? [
-        { id: '1', name: 'Nicole', email: 'nicole@unknown.com' },
-        { id: '2', name: 'Ashley', email: 'ashley@unknown.com' },
-        { id: '3', name: 'Dante', email: 'dante@unknown.com' },
-        { id: '4', name: 'Brian Albans', email: 'brian.albans@unknown.com' }
+        { id: '1', name: 'Mark', email: 'mark@company.com' }
       ] : [];
       console.log('📋 Bigin contacts created:', contacts.map(c => c.name));
       
