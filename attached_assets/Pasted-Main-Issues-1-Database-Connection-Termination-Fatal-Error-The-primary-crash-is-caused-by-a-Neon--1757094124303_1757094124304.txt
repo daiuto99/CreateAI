@@ -1,0 +1,53 @@
+Main Issues:
+1. Database Connection Termination (Fatal Error)
+The primary crash is caused by a Neon database connection being terminated by the administrator:
+error: terminating connection due to administrator command
+This suggests either:
+
+Your Neon database reached connection limits
+The database instance was restarted/recycled
+Connection timeout or resource limits were exceeded
+
+2. Authentication Failures
+Your Otter and Bigin API calls are failing with 401 errors:
+📧 REAL Otter API returned: { message: 'Authentication required' }
+👥 REAL Bigin API returned: { message: 'Authentication required' }
+3. Type Error in Meeting Processing
+javascriptError fetching meetings: TypeError: transcripts.map is not a function
+    at <anonymous> (/home/runner/workspace/server/routes.ts:791:56)
+This happens because the transcripts variable is undefined due to the failed API calls above.
+Recommended Fixes:
+1. Fix Database Connection Issues
+Add connection pooling and error handling:
+javascript// Add connection retry logic
+const pool = new Pool({
+  connectionString: process.env.DATABASE_URL,
+  max: 5, // Reduce max connections
+  idleTimeoutMillis: 30000,
+  connectionTimeoutMillis: 10000,
+});
+
+// Add error handling for database operations
+pool.on('error', (err) => {
+  console.error('Database pool error:', err);
+});
+2. Add Null Checks for API Responses
+In your routes.ts file around line 791:
+javascript// Before using transcripts.map(), check if transcripts exists
+const transcripts = await fetchTranscripts(userId);
+if (transcripts && Array.isArray(transcripts)) {
+  const processedTranscripts = transcripts.map(/* your mapping logic */);
+} else {
+  console.warn('No transcripts available or API call failed');
+  const processedTranscripts = []; // fallback to empty array
+}
+3. Fix API Authentication
+Check your environment variables and API credentials for Otter and Bigin integrations. The 401 errors suggest expired or missing tokens.
+4. Add Better Error Handling
+Wrap your database and API calls in try-catch blocks to prevent crashes:
+javascripttry {
+  // Your database/API operations
+} catch (error) {
+  console.error('Operation failed:', error);
+  // Return appropriate fallback response
+}

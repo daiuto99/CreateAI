@@ -766,10 +766,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
       
       console.log('🔄 Using NO fake data - all arrays empty until real APIs connected');
       
-      console.log('🎤 Available Otter transcripts for matching:', transcripts.length);
-      console.log('📧 Transcript titles:', transcripts.map((t: any) => t.title));
-      console.log('📋 Available Bigin contacts for matching:', contacts.length);
-      console.log('👥 Contact names:', contacts.map((c: any) => c.name));
+      console.log('🎤 Available Otter transcripts for matching:', transcripts?.length || 0);
+      console.log('📧 Transcript titles:', Array.isArray(transcripts) ? transcripts.map((t: any) => t.title) : []);
+      console.log('📋 Available Bigin contacts for matching:', contacts?.length || 0);
+      console.log('👥 Contact names:', Array.isArray(contacts) ? contacts.map((c: any) => c.name) : []);
       
       // ENHANCED matching logic with better name parsing
       for (const meeting of meetings) {
@@ -778,7 +778,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         
         // UPDATED Otter.AI matching: title + date proximity (no emails available in calendar)
         console.log(`  🔍 Otter matching for "${meeting.title}"...`);
-        meeting.hasOtterMatch = transcripts.some((transcript: any) => {
+        meeting.hasOtterMatch = Array.isArray(transcripts) && transcripts.some((transcript: any) => {
           const transcriptTitle = transcript.title.toLowerCase();
           
           // 1. Meeting title match (exact or very close)
@@ -802,7 +802,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         
         // UPDATED Bigin matching: extract names from meeting titles (no emails available)
         console.log(`  🔍 Bigin matching for "${meeting.title}"...`);
-        meeting.hasBiginMatch = contacts.some((contact: any) => {
+        meeting.hasBiginMatch = Array.isArray(contacts) && contacts.some((contact: any) => {
           const contactName = contact.name.toLowerCase();
           
           // Check if contact name appears in meeting title
