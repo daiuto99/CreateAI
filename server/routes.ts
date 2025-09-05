@@ -1,7 +1,14 @@
 import type { Express } from "express";
 import { createServer, type Server } from "http";
 import { storage } from "./storage";
-import { setupAuth, isAuthenticated } from "./replitAuth";
+// Basic auth middleware for Firebase sessions
+const isAuthenticated = (req: any, res: any, next: any) => {
+  if (req.session && req.session.user && req.session.user.claims) {
+    req.user = req.session.user;
+    return next();
+  }
+  return res.status(401).json({ message: "Authentication required" });
+};
 import { openaiService } from "./services/openai";
 import { 
   insertContentProjectSchema,
@@ -12,7 +19,37 @@ import { z } from "zod";
 
 export async function registerRoutes(app: Express): Promise<Server> {
   // Auth middleware
-  await setupAuth(app);
+  // Setup basic session middleware for Firebase auth
+  const sessionTtl = 7 * 24 * 60 * 60 * 1000; // 1 week
+  const session = (await import('express-session')).default;
+  const connectPg = (await import('connect-pg-simple')).default;
+  const pgStore = connectPg(session);
+  const sessionStore = new pgStore({
+    conString: process.env.DATABASE_URL,
+    createTableIfMissing: false,
+    ttl: sessionTtl,
+    tableName: "sessions",
+  });
+  
+  app.set("trust proxy", 1);
+  app.use(session({
+    secret: process.env.SESSION_SECRET!,
+    store: sessionStore,
+    resave: false,
+    saveUninitialized: false,
+    cookie: {
+      httpOnly: true,
+      secure: process.env.NODE_ENV === 'production',
+      maxAge: sessionTtl,
+    },
+  }));
+  
+  // Firebase logout endpoint
+  app.get('/api/logout', (req, res) => {
+    req.session.destroy(() => {
+      res.redirect('/');
+    });
+  });
 
   // Firebase auth bridge - converts Firebase tokens to backend sessions
   app.post('/api/auth/firebase-bridge', async (req: any, res) => {
@@ -40,13 +77,14 @@ export async function registerRoutes(app: Express): Promise<Server> {
         if (!user) {
           // Create new user
           console.log('Creating new user from Firebase:', { firebaseUserId, email, displayName });
-          user = await storage.createUser({
+          await storage.upsertUser({
             id: firebaseUserId,
             email: email,
             firstName: displayName?.split(' ')[0] || '',
             lastName: displayName?.split(' ').slice(1).join(' ') || '',
-            avatar: payload.picture || null
+            profileImageUrl: payload.picture || null
           });
+          user = await storage.getUser(firebaseUserId);
         }
         
         // Set up session (mimic what Replit auth would do)
@@ -70,7 +108,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         req.session.user = sessionUser;
         
         // Force session save
-        req.session.save((err) => {
+        req.session.save((err: any) => {
           if (err) {
             console.error('Session save error:', err);
           } else {
