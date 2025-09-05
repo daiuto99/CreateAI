@@ -20,18 +20,7 @@ export function useBackendUser(firebaseUser: User | null) {
       //   timestamp: new Date().toISOString()
       // });
       
-      // Get Firebase ID token for authentication
-      const idToken = await firebaseUser?.getIdToken();
-      
-      const headers: HeadersInit = { 'Content-Type': 'application/json' };
-      if (idToken) {
-        headers['Authorization'] = `Bearer ${idToken}`;
-      }
-      
-      const res = await fetch("/api/auth/user", { 
-        credentials: "include",
-        headers
-      });
+      const res = await fetch("/api/auth/user", { credentials: "include" });
       
       // console.log('👤 Backend user response:', {
       //   status: res.status,

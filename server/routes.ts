@@ -1,7 +1,7 @@
 import type { Express } from "express";
 import { createServer, type Server } from "http";
 import { storage } from "./storage";
-import { isAuthenticated } from "./firebaseAuth";
+import { setupAuth, isAuthenticated } from "./replitAuth";
 import { openaiService } from "./services/openai";
 import { 
   insertContentProjectSchema,
@@ -11,7 +11,83 @@ import {
 import { z } from "zod";
 
 export async function registerRoutes(app: Express): Promise<Server> {
-  // Firebase auth is handled by middleware - no setup needed
+  // Auth middleware
+  await setupAuth(app);
+
+  // Firebase auth bridge - converts Firebase tokens to backend sessions
+  app.post('/api/auth/firebase-bridge', async (req: any, res) => {
+    try {
+      const { idToken } = req.body;
+      
+      if (!idToken) {
+        return res.status(400).json({ message: 'Firebase ID token required' });
+      }
+
+      // For now, we'll trust the token and extract user info from it
+      // In production, you'd verify this with Firebase Admin SDK
+      try {
+        // Parse the Firebase token (JWT) to get user info
+        const [,payloadBase64] = idToken.split('.');
+        const payload = JSON.parse(Buffer.from(payloadBase64, 'base64').toString());
+        
+        const firebaseUserId = payload.sub;
+        const email = payload.email;
+        const displayName = payload.name;
+        
+        // Check if user exists in our database
+        let user = await storage.getUser(firebaseUserId);
+        
+        if (!user) {
+          // Create new user
+          console.log('Creating new user from Firebase:', { firebaseUserId, email, displayName });
+          user = await storage.createUser({
+            id: firebaseUserId,
+            email: email,
+            firstName: displayName?.split(' ')[0] || '',
+            lastName: displayName?.split(' ').slice(1).join(' ') || '',
+            avatar: payload.picture || null
+          });
+        }
+        
+        // Set up session (mimic what Replit auth would do)
+        // The session needs to have the same structure as the Replit auth session
+        const expiresAt = Math.floor(Date.now() / 1000) + 7 * 24 * 60 * 60; // 7 days from now
+        const sessionUser = {
+          claims: {
+            sub: firebaseUserId,
+            email: email,
+            name: displayName,
+            first_name: displayName?.split(' ')[0] || '',
+            last_name: displayName?.split(' ').slice(1).join(' ') || '',
+            profile_image_url: payload.picture || null,
+            exp: expiresAt
+          },
+          expires_at: expiresAt,
+          access_token: idToken, // Use Firebase token as access token
+          refresh_token: 'firebase-refresh' // Placeholder since we don't need it for Firebase
+        };
+        
+        req.session.user = sessionUser;
+        
+        // Force session save
+        req.session.save((err) => {
+          if (err) {
+            console.error('Session save error:', err);
+          } else {
+            console.log('✅ Session saved successfully for user:', firebaseUserId);
+          }
+        });
+        
+        return res.json({ success: true, user });
+      } catch (error) {
+        console.error('Error parsing Firebase token:', error);
+        return res.status(401).json({ message: 'Invalid Firebase token' });
+      }
+    } catch (error) {
+      console.error('Firebase bridge error:', error);
+      return res.status(500).json({ message: 'Authentication failed' });
+    }
+  });
 
   // Auth routes
   app.get('/api/auth/user', isAuthenticated, async (req: any, res) => {

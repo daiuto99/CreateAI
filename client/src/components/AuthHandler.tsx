@@ -1,9 +1,12 @@
 import { useEffect } from 'react';
 import { useLocation } from 'wouter';
 import { handleRedirectResult } from '@/lib/firebase';
+import { useAuth } from '@/hooks/useAuth';
+import { apiRequest } from '@/lib/queryClient';
 
 export function AuthHandler() {
   const [, setLocation] = useLocation();
+  const { firebaseUser } = useAuth();
 
   useEffect(() => {
     const handleAuthRedirect = async () => {
@@ -43,6 +46,23 @@ export function AuthHandler() {
 
     handleAuthRedirect();
   }, [setLocation]);
+
+  // Bridge Firebase auth to backend when user is authenticated
+  useEffect(() => {
+    if (firebaseUser) {
+      const bridgeAuth = async () => {
+        try {
+          const idToken = await firebaseUser.getIdToken();
+          await apiRequest('POST', '/api/auth/firebase-bridge', { idToken });
+          console.log('✅ Firebase auth bridged to backend successfully');
+        } catch (error) {
+          console.error('❌ Failed to bridge Firebase auth to backend:', error);
+        }
+      };
+      
+      bridgeAuth();
+    }
+  }, [firebaseUser]);
 
   return null; // This component doesn't render anything
 }
