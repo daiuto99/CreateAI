@@ -9,10 +9,12 @@ import Header from "@/components/layout/header";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
+import { useLocation } from "wouter";
 
 export default function Sync() {
   const { toast } = useToast();
   const { isAuthenticated, isLoading } = useAuth();
+  const [, setLocation] = useLocation();
   
   // Fetch user integrations to show real connection status
   const { data: integrations = [] } = useQuery<UserIntegration[]>({
@@ -134,7 +136,30 @@ export default function Sync() {
                   </ol>
                 </div>
 
-                <Button className="w-full" data-testid="button-setup-meeting-intelligence">
+                <Button 
+                  className="w-full" 
+                  data-testid="button-setup-meeting-intelligence"
+                  onClick={() => {
+                    // Check if all integrations are connected
+                    const outlookConnected = getIntegrationStatus('outlook') === 'Connected';
+                    const otterConnected = getIntegrationStatus('otter') === 'Connected';
+                    const biginConnected = getIntegrationStatus('bigin') === 'Connected';
+                    
+                    if (outlookConnected && otterConnected && biginConnected) {
+                      toast({
+                        title: "Meeting Intelligence Ready!",
+                        description: "All integrations connected. Meeting data will be automatically processed.",
+                      });
+                    } else {
+                      toast({
+                        title: "Setup Required",
+                        description: "Please connect all integrations first: Outlook, Otter.ai, and Bigin CRM.",
+                        variant: "destructive",
+                      });
+                      setLocation('/integrations');
+                    }
+                  }}
+                >
                   <i className="fas fa-rocket mr-2"></i>
                   Setup Meeting Intelligence
                 </Button>
@@ -206,7 +231,13 @@ export default function Sync() {
                 <p className="text-muted-foreground text-center mb-4">
                   Once you connect your Outlook calendar and Otter.ai account, meetings will appear here for review and sync to Bigin by Zoho.
                 </p>
-                <Button variant="outline" data-testid="button-connect-calendar">
+                <Button 
+                  variant="outline" 
+                  data-testid="button-connect-calendar"
+                  onClick={() => {
+                    setLocation('/integrations');
+                  }}
+                >
                   <i className="fas fa-calendar-plus mr-2"></i>
                   Connect Calendar
                 </Button>
