@@ -633,32 +633,20 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const userId = req.user.claims.sub;
       console.log('📅 Fetching meetings for user:', userId);
       
-      // Always return sample data for now to test the UI
-      const sampleMeetings = [
-        {
-          id: 'sample-1',
-          title: 'Weekly Standup Meeting',
-          date: new Date('2025-09-05T10:00:00Z'),
-          duration: '30m',
-          attendees: ['You', 'Team'],
-          status: 'completed',
-          hasTranscript: true
-        },
-        {
-          id: 'sample-2', 
-          title: 'Client Presentation',
-          date: new Date('2025-09-04T14:00:00Z'),
-          duration: '1h',
-          attendees: ['You', 'Client'],
-          status: 'completed',
-          hasTranscript: false
-        }
-      ];
+      // Fetch user's Outlook integration
+      const integration = await storage.getUserIntegrations(userId);
+      const outlookIntegration = integration.find(int => int.provider === 'outlook');
       
-      console.log('📊 Returning sample meetings:', sampleMeetings.length);
-      return res.json(sampleMeetings);
+      if (!outlookIntegration || !outlookIntegration.isActive) {
+        console.log('⚠️ No active Outlook integration found');
+        return res.json([]);
+      }
       
-      // Legacy calendar fetch code removed for now
+      const credentials = outlookIntegration.credentials as any;
+      if (!credentials?.feedUrl) {
+        console.log('⚠️ No calendar feed URL found');
+        return res.json([]);
+      }
       
       // Fetch calendar data from ICS feed
       console.log('📅 Fetching calendar from:', credentials.feedUrl);
@@ -674,27 +662,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       
       if (icsData.length < 50) {
         console.log('⚠️ ICS data seems too short:', icsData);
-        // Return sample data to show the UI works
-        return res.json([
-          {
-            id: 'sample-1',
-            title: 'Weekly Standup Meeting',
-            date: new Date('2025-09-05T10:00:00Z'),
-            duration: '30m',
-            attendees: ['You', 'Team'],
-            status: 'completed',
-            hasTranscript: true
-          },
-          {
-            id: 'sample-2', 
-            title: 'Client Presentation',
-            date: new Date('2025-09-04T14:00:00Z'),
-            duration: '1h',
-            attendees: ['You', 'Client'],
-            status: 'completed',
-            hasTranscript: false
-          }
-        ]);
+        return res.json([]);
       }
       
       // Parse ICS data (improved parsing)
