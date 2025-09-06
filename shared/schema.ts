@@ -113,7 +113,7 @@ export const integrationProviderEnum = pgEnum('integration_provider', [
 
 // Integration status enum
 export const integrationStatusEnum = pgEnum('integration_status', [
-  'connected', 'error', 'expired', 'disabled', 'setup_required'
+  'connected', 'needs_oauth', 'error', 'expired', 'disabled', 'setup_required'
 ]);
 
 // User integrations
@@ -126,6 +126,7 @@ export const userIntegrations = pgTable("user_integrations", {
   settings: jsonb("settings").default({}),
   quotaUsage: jsonb("quota_usage").default({}),
   lastSync: timestamp("last_sync"),
+  last_validated: timestamp("last_validated"), // When connection was last validated
   createdAt: timestamp("created_at").defaultNow(),
   updatedAt: timestamp("updated_at").defaultNow(),
 }, (table) => ({

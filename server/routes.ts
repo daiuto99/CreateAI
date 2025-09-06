@@ -692,8 +692,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
             
             // Check if validation is needed (daily or on demand)
             const lastValidated = otterCreds.last_validated ? new Date(otterCreds.last_validated) : null;
-            const now = new Date();
-            const daysSinceValidation = lastValidated ? Math.floor((now.getTime() - lastValidated.getTime()) / (1000 * 60 * 60 * 24)) : 999;
+            const currentTime = new Date();
+            const daysSinceValidation = lastValidated ? Math.floor((currentTime.getTime() - lastValidated.getTime()) / (1000 * 60 * 60 * 24)) : 999;
             
             console.log('🧪 [DEBUG] Validation check:', {
               lastValidated: lastValidated?.toISOString() || 'Never',
@@ -721,7 +721,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
                 // Update credentials with validation timestamp
                 const updatedCredentials = {
                   ...otterCreds,
-                  last_validated: now.toISOString(),
+                  last_validated: currentTime.toISOString(),
                   validation_status: 'valid'
                 };
                 
@@ -730,7 +730,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
                   ...integration, 
                   credentials: updatedCredentials,
                   status: 'connected' as any,
-                  last_validated: now.toISOString()
+                  last_validated: currentTime.toISOString()
                 });
               } else if (otterTestResponse.status === 401 || otterTestResponse.status === 403) {
                 // Clear invalid key and mark for renewal
@@ -752,7 +752,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
                 await storage.upsertUserIntegration({ 
                   ...integration, 
                   status: 'connected' as any,
-                  last_validated: now.toISOString()
+                  last_validated: currentTime.toISOString()
                 });
               } else {
                 const errorText = await otterTestResponse.text();

@@ -132,6 +132,58 @@ export default function Integrations() {
   const [formData, setFormData] = useState<Record<string, string>>({});
   const [isModalOpen, setIsModalOpen] = useState(false);
 
+  // Handle OAuth callback success/error messages
+  useEffect(() => {
+    const urlParams = new URLSearchParams(window.location.search);
+    const success = urlParams.get('success');
+    const error = urlParams.get('error');
+    const details = urlParams.get('details');
+
+    if (success === 'bigin_connected') {
+      toast({
+        title: 'Bigin Connected!',
+        description: 'Your Bigin integration has been successfully authorized and is now connected.'
+      });
+      // Clear URL parameters
+      window.history.replaceState({}, document.title, window.location.pathname);
+      // Refresh integrations list
+      queryClient.invalidateQueries({ queryKey: ['/api/integrations'] });
+    } else if (error) {
+      let errorMessage = 'Integration connection failed';
+      switch (error) {
+        case 'oauth_failed':
+          errorMessage = `OAuth authorization failed: ${details || 'Unknown error'}`;
+          break;
+        case 'invalid_callback':
+          errorMessage = 'Invalid OAuth callback - missing authorization code';
+          break;
+        case 'invalid_state':
+          errorMessage = 'Security validation failed - please try again';
+          break;
+        case 'missing_credentials':
+          errorMessage = 'Client credentials not found - please configure Bigin first';
+          break;
+        case 'token_exchange_failed':
+          errorMessage = `Token exchange failed: ${details || 'Unknown error'}`;
+          break;
+        case 'callback_failed':
+          errorMessage = `OAuth process failed: ${details || 'Unknown error'}`;
+          break;
+        default:
+          errorMessage = details || error;
+      }
+      
+      toast({
+        title: 'OAuth Connection Failed',
+        description: errorMessage,
+        variant: 'destructive'
+      });
+      
+      // Clear URL parameters
+      window.history.replaceState({}, document.title, window.location.pathname);
+    }
+  }, [toast, queryClient]);
+
   const { data: integrations = [], isLoading } = useQuery<Integration[]>({
     queryKey: ['/api/integrations'],
   });
