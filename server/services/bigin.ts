@@ -23,6 +23,8 @@ interface BiginOAuthCredentials {
   client_id: string;
   client_secret: string;
   expires_at?: number;
+  token_type?: string;
+  scope?: string;
 }
 
 export class BiginService {
@@ -319,32 +321,87 @@ export class BiginService {
       body: options.body
     };
 
+    // Check if token needs refresh before making the request
+    if (this.isTokenExpired()) {
+      console.log('🔄 [DEBUG] Token is expired, attempting refresh before API call...');
+      const refreshSuccess = await this.refreshAccessToken();
+      
+      if (!refreshSuccess) {
+        console.error('❌ [DEBUG] Token refresh failed - API call will likely fail');
+        throw new Error('OAuth token refresh failed - user needs to re-authorize');
+      }
+      // Update auth header with new token
+      headers['Authorization'] = `Zoho-oauthtoken ${this.credentials.access_token}`;
+      fetchOptions.headers = headers;
+    }
+
+    console.log('🌍 [DEBUG] Making authenticated Bigin API request:', {
+      url: finalUrl,
+      method: options.method,
+      hasAuth: !!headers.Authorization,
+      tokenPrefix: this.credentials.access_token?.substring(0, 10) + '...'
+    });
+
     let response = await fetch(finalUrl, fetchOptions);
 
-    // Handle token refresh if unauthorized
+    // Handle token expiry during API call (fallback)
     if (response.status === 401) {
-      console.log('🔄 Access token expired, attempting refresh...');
+      console.log('🔄 [DEBUG] Got 401 during API call - token may have expired, attempting refresh...');
       
       const refreshSuccess = await this.refreshAccessToken();
       if (refreshSuccess) {
+        console.log('🔄 [DEBUG] Token refreshed successfully, retrying API call...');
         // Update authorization header and retry
         headers['Authorization'] = `Zoho-oauthtoken ${this.credentials.access_token}`;
         fetchOptions.headers = headers;
         response = await fetch(finalUrl, fetchOptions);
+        
+        console.log('🔄 [DEBUG] Retry API call result:', {
+          status: response.status,
+          ok: response.ok
+        });
       } else {
-        console.error('❌ Token refresh failed, request will fail');
+        console.error('❌ [DEBUG] Token refresh failed after 401 - user needs to re-authorize');
       }
     }
+
+    console.log('🌍 [DEBUG] API request completed:', {
+      status: response.status,
+      ok: response.ok,
+      statusText: response.statusText
+    });
 
     return response;
   }
 
   /**
-   * Refresh OAuth access token using refresh token
+   * Check if access token is expired or will expire soon
    */
+  private isTokenExpired(): boolean {
+    if (!this.credentials.expires_at) {
+      console.log('⚠️ [DEBUG] No token expiry set, assuming valid');
+      return false;
+    }
+
+    const now = Date.now() / 1000;
+    const bufferTime = 300; // 5 minutes buffer
+    const isExpired = (this.credentials.expires_at - bufferTime) <= now;
+    
+    if (isExpired) {
+      console.log('⏰ [DEBUG] Token is expired or expiring soon:', {
+        expiresAt: new Date(this.credentials.expires_at * 1000).toISOString(),
+        now: new Date(now * 1000).toISOString(),
+        expiredSeconds: Math.floor(now - this.credentials.expires_at)
+      });
+    }
+    
+    return isExpired;
+  }
+
   async refreshAccessToken(): Promise<boolean> {
     try {
-      console.log('🔄 Refreshing Bigin access token...');
+      console.log('🔄 [DEBUG] Attempting to refresh Bigin OAuth token...');
+      console.log('🔄 [DEBUG] Current token expiry:', this.credentials.expires_at ? new Date(this.credentials.expires_at * 1000).toISOString() : 'Not set');
 
       const tokenUrl = 'https://accounts.zoho.com/oauth/v2/token';
       const tokenData = new URLSearchParams({
@@ -354,6 +411,8 @@ export class BiginService {
         grant_type: 'refresh_token'
       });
 
+      console.log('🔄 [DEBUG] Making token refresh request to:', tokenUrl);
+
       const response = await fetch(tokenUrl, {
         method: 'POST',
         headers: {
@@ -362,30 +421,62 @@ export class BiginService {
         body: tokenData
       });
 
+      console.log('🔄 [DEBUG] Token refresh response:', {
+        status: response.status,
+        statusText: response.statusText,
+        ok: response.ok
+      });
+
       if (!response.ok) {
-        console.error('❌ Token refresh failed:', response.status, response.statusText);
-        return false;
+        const errorText = await response.text();
+        console.error('❌ [DEBUG] Token refresh failed:', {
+          status: response.status,
+          statusText: response.statusText,
+          error: errorText
+        });
+
+        // Check if refresh token is invalid (need re-authorization)
+        if (response.status === 400 || errorText.includes('invalid_grant')) {
+          console.error('🚨 [DEBUG] Refresh token is invalid - user needs to re-authorize');
+          return false;
+        }
+        
+        throw new Error(`Token refresh failed: ${response.status} ${errorText}`);
       }
 
       const tokenResponse = await response.json();
+      console.log('✅ [DEBUG] Token refresh successful:', {
+        hasNewAccessToken: !!tokenResponse.access_token,
+        newTokenLength: tokenResponse.access_token?.length || 0,
+        expiresIn: tokenResponse.expires_in,
+        tokenType: tokenResponse.token_type
+      });
       
       if (tokenResponse.access_token) {
-        // Update credentials with new access token
+        // Update credentials with new access token (fix timestamp calculation)
+        const newExpiresAt = Date.now() / 1000 + (tokenResponse.expires_in || 3600);
         this.credentials.access_token = tokenResponse.access_token;
-        this.credentials.expires_at = Date.now() + (tokenResponse.expires_in * 1000);
+        this.credentials.expires_at = newExpiresAt;
+        if (tokenResponse.token_type) {
+          this.credentials.token_type = tokenResponse.token_type;
+        }
 
         // Update stored credentials
         await this.updateStoredCredentials();
         
-        console.log('✅ Successfully refreshed Bigin access token');
+        console.log('✅ [DEBUG] Token refresh completed successfully, new expiry:', new Date(newExpiresAt * 1000).toISOString());
         return true;
       } else {
-        console.error('❌ No access token in refresh response:', tokenResponse);
+        console.error('❌ [DEBUG] No access token in refresh response:', tokenResponse);
         return false;
       }
 
     } catch (error: any) {
-      console.error('🚨 Error refreshing Bigin access token:', error?.message);
+      console.error('🚨 [DEBUG] Token refresh exception:', {
+        error: error.message,
+        name: error.name,
+        stack: error.stack
+      });
       return false;
     }
   }
