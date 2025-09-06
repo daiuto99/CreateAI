@@ -1012,16 +1012,16 @@ export async function registerRoutes(app: Express): Promise<Server> {
           const otterService = await OtterService.createFromUserIntegration(storage, userId);
           
           if (otterService) {
-            // Fetch transcripts with timeout protection
-            const thirtyDaysAgo = new Date();
-            thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
+            // Fetch transcripts with timeout protection and expanded date range
+            const sixtyDaysAgo = new Date();
+            sixtyDaysAgo.setDate(sixtyDaysAgo.getDate() - 60);
             const today = new Date();
             
-            console.log('📅 [SYNC] API Call: Fetching from', thirtyDaysAgo.toISOString().split('T')[0], 'to', today.toISOString().split('T')[0]);
+            console.log('📅 [SYNC] API Call: Fetching from', sixtyDaysAgo.toISOString().split('T')[0], 'to', today.toISOString().split('T')[0]);
             
             // API call with 5-second timeout
             const apiTranscripts = await Promise.race([
-              otterService.getSpeeches(thirtyDaysAgo, today),
+              otterService.getSpeeches(sixtyDaysAgo, today),
               new Promise((_, reject) => setTimeout(() => reject(new Error('API timeout after 5 seconds')), 5000))
             ]);
             

@@ -174,22 +174,6 @@ export default function Sync() {
               <CardDescription>
                 Recent meetings captured and processed
               </CardDescription>
-              {/* DEBUG: Manual refresh button to test loading states */}
-              <div className="px-6 pb-2">
-                <Button 
-                  size="sm" 
-                  variant="outline" 
-                  onClick={() => {
-                    console.log('🔄 Manual refresh triggered');
-                    refetchMeetings();
-                    refetchTranscripts();
-                    refetchContacts();
-                  }}
-                  className="text-xs"
-                >
-                  🔄 Test Loading States
-                </Button>
-              </div>
             </CardHeader>
             <CardContent>
               {meetingsLoading ? (
