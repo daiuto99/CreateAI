@@ -1,0 +1,64 @@
+# Replit Agent Prompt: Strengthen SYNC Function
+
+## Task
+Improve the reliability and error handling of the SYNC function in my CreateAI application without breaking existing functionality.
+
+## Current Problem
+The SYNC function that connects Outlook calendar meetings with Otter.AI transcripts and Bigin CRM records is fragile and often fails silently. Users can't tell when or why sync operations fail.
+
+## Required Changes
+
+### 1. Enhanced Error Handling in routes.ts
+Replace the existing `/api/meetings` route with improved error handling that:
+- Adds comprehensive logging for debugging
+- Provides clear error messages when integrations fail
+- Includes timeout handling for calendar feed requests
+- Uses confidence scoring for meeting matches instead of simple true/false
+- Filters to show only syncable meetings (completed meetings with good matches)
+
+### 2. Add New Sync Execution Endpoint
+Create a new `/api/sync/execute` endpoint that:
+- Takes an array of meeting IDs to sync
+- Validates that required integrations are connected
+- Processes each meeting with proper error handling
+- Returns detailed results including success/failure status and confidence scores
+- Provides comprehensive logging throughout the process
+
+### 3. String Matching Utilities
+Add helper functions for better meeting-to-transcript matching:
+- String similarity calculation using Levenshtein distance
+- Confidence scoring for matches
+- Fallback matching when AI matching isn't available
+
+## Implementation Requirements
+- Must be backward compatible with existing frontend
+- No breaking changes to current API responses
+- No new npm dependencies required
+- No database schema changes
+- All improvements should enhance existing functionality without removing features
+
+## Key Improvements
+- Replace silent failures with clear error messages
+- Add confidence scores to all matches
+- Implement proper timeout handling for external API calls
+- Provide detailed logging for debugging sync issues
+- Create a testable sync execution endpoint
+
+## Files to Modify
+- `server/routes.ts` - Enhance existing `/api/meetings` route and add new `/api/sync/execute` route
+- Add utility functions for string matching at the bottom of routes.ts
+
+## Testing
+After implementation, the enhanced error handling should:
+- Show clear error messages in console when calendar feeds fail
+- Provide confidence scores for Otter and Bigin matches
+- Allow testing sync operations through the new execute endpoint
+- Maintain all existing functionality while being more reliable
+
+## Important Notes
+- Keep all existing route signatures and response formats
+- The calendar feed integration should remain as-is (ICS parsing)
+- Maintain the current simulation approach for Otter and Bigin while adding proper error handling
+- All changes should be additive, not replacements
+
+Implement these changes to make the SYNC function more robust and debuggable while maintaining full compatibility with the existing application.
