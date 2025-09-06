@@ -1288,12 +1288,22 @@ export async function registerRoutes(app: Express): Promise<Server> {
         const meetingTitle = meeting.title.toLowerCase();
         console.log(`\n🔍 Analyzing meeting: "${meeting.title}"`);
         
-        // ENHANCED Otter.AI matching with confidence scoring
+        // ENHANCED Otter.AI matching with confidence scoring - BUT ONLY FOR PAST MEETINGS
+        const meetingDate = new Date(meeting.date);
+        const now = new Date();
+        const isFutureMeeting = meetingDate > now;
+        
         console.log(`  🔍 Otter matching for "${meeting.title}"...`);
         let bestOtterMatch = null;
         let highestOtterConfidence = 0;
         
-        if (Array.isArray(transcripts)) {
+        if (isFutureMeeting) {
+          // Future meetings cannot have transcripts yet - skip matching entirely
+          console.log(`  ⏭️ Future meeting detected (${meetingDate.toDateString()}) - skipping transcript matching`);
+          meeting.hasOtterMatch = false;
+          (meeting as any).otterConfidence = 0;
+          (meeting as any).bestOtterMatch = null;
+        } else if (Array.isArray(transcripts)) {
           for (const transcript of transcripts) {
             try {
               const confidence = calculateMatchConfidence(meeting, transcript);
@@ -1310,15 +1320,18 @@ export async function registerRoutes(app: Express): Promise<Server> {
           }
         }
         
-        // Set match if confidence is above threshold (60%)
-        meeting.hasOtterMatch = highestOtterConfidence >= 60;
-        (meeting as any).otterConfidence = highestOtterConfidence;
-        (meeting as any).bestOtterMatch = bestOtterMatch;
-        
-        if (meeting.hasOtterMatch) {
-          console.log(`  ✅ Otter match found: "${bestOtterMatch?.title}" (confidence: ${highestOtterConfidence}%)`);
-        } else {
-          console.log(`  ⚪ No Otter match found (highest confidence: ${highestOtterConfidence}%)`);
+        // Only set match results for past meetings (future meetings already handled above)
+        if (!isFutureMeeting) {
+          // Set match if confidence is above threshold (60%)
+          meeting.hasOtterMatch = highestOtterConfidence >= 60;
+          (meeting as any).otterConfidence = highestOtterConfidence;
+          (meeting as any).bestOtterMatch = bestOtterMatch;
+          
+          if (meeting.hasOtterMatch) {
+            console.log(`  ✅ Otter match found: "${bestOtterMatch?.title}" (confidence: ${highestOtterConfidence}%)`);
+          } else {
+            console.log(`  ⚪ No Otter match found (highest confidence: ${highestOtterConfidence}%)`);
+          }
         }
         
         // ENHANCED Airtable matching with confidence scoring
