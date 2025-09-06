@@ -73,6 +73,22 @@ export class BiginService {
         accessTokenLength: credentials?.access_token?.length || 0,
         refreshTokenLength: credentials?.refresh_token?.length || 0
       });
+
+      // Show detailed credential analysis with masked values
+      console.log('🔍 [DEBUG] EXACT CREDENTIAL VALUES (masked for security):');
+      console.log('  📋 clientId:', credentials?.client_id ? `"${credentials.client_id.substring(0, 8)}...${credentials.client_id.substring(-4)}" (length: ${credentials.client_id.length})` : 'MISSING');
+      console.log('  🔑 clientSecret:', credentials?.client_secret ? `"${credentials.client_secret.substring(0, 8)}...${credentials.client_secret.substring(-4)}" (length: ${credentials.client_secret.length})` : 'MISSING');
+      console.log('  🎫 access_token:', credentials?.access_token ? `"${credentials.access_token.substring(0, 12)}...${credentials.access_token.substring(-6)}" (length: ${credentials.access_token.length})` : 'MISSING');
+      console.log('  🔄 refresh_token:', credentials?.refresh_token ? `"${credentials.refresh_token.substring(0, 12)}...${credentials.refresh_token.substring(-6)}" (length: ${credentials.refresh_token.length})` : 'MISSING');
+      
+      // Show all credential keys that actually exist
+      console.log('🔍 [DEBUG] All credential keys found:', Object.keys(credentials || {}));
+      console.log('🔍 [DEBUG] Raw credential structure (values hidden):', 
+        Object.keys(credentials || {}).reduce((acc, key) => {
+          acc[key] = typeof credentials?.[key] === 'string' ? `[STRING:${credentials[key]?.length || 0}]` : credentials?.[key];
+          return acc;
+        }, {} as any)
+      );
       
       if (!credentials?.access_token || !credentials?.refresh_token) {
         console.log('❌ [DEBUG] Missing required OAuth credentials');
