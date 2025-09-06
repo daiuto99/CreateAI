@@ -81,20 +81,26 @@ export class OtterService {
       }, 15000);
 
       // Use the correct Otter.ai export endpoint (max 3 most recent recordings)
-      const url = `${this.baseUrl}/speech/export`;
+      // Add cache-busting timestamp to force fresh data
+      const timestamp = Date.now();
+      const url = `${this.baseUrl}/speech/export?_t=${timestamp}&fresh=true`;
       
       console.log('🔗 [DEBUG] Otter.ai API request details:', {
         url: url,
         method: 'GET',
         apiKeyFirst15Chars: this.apiKey?.substring(0, 15) || 'NONE',
-        note: 'Using official /api/public/speech/export endpoint'
+        note: 'Using official /api/public/speech/export endpoint with cache-busting'
       });
       
       const response = await fetch(url, {
         method: 'GET',
         headers: {
           'Authorization': `Bearer ${this.apiKey}`,
-          'Content-Type': 'application/json'
+          'Content-Type': 'application/json',
+          // Cache-busting headers to force fresh data
+          'Cache-Control': 'no-cache, no-store, must-revalidate',
+          'Pragma': 'no-cache',
+          'If-None-Match': '*'
         },
         signal: controller.signal
       });

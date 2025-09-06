@@ -122,10 +122,16 @@ export class AirtableService {
       console.log('📇 [AirtableService] Fetching contacts from base:', this.baseId);
       
       // First, get the base schema to find the first table
-      const tablesResponse = await fetch(`https://api.airtable.com/v0/meta/bases/${this.baseId}/tables`, {
+      // Add cache-busting timestamp to force fresh data
+      const timestamp = Date.now();
+      const tablesResponse = await fetch(`https://api.airtable.com/v0/meta/bases/${this.baseId}/tables?_t=${timestamp}`, {
         headers: {
           'Authorization': `Bearer ${this.apiKey}`,
-          'Content-Type': 'application/json'
+          'Content-Type': 'application/json',
+          // Cache-busting headers to force fresh data
+          'Cache-Control': 'no-cache, no-store, must-revalidate',
+          'Pragma': 'no-cache',
+          'If-None-Match': '*'
         }
       });
 
@@ -145,10 +151,16 @@ export class AirtableService {
       console.log('📊 [AirtableService] Using table:', firstTable.name);
 
       // Fetch records from the first table
-      const recordsResponse = await fetch(`${this.baseUrl}/${encodeURIComponent(firstTable.name)}?maxRecords=100`, {
+      // Add cache-busting timestamp to force fresh data
+      const recordsTimestamp = Date.now();
+      const recordsResponse = await fetch(`${this.baseUrl}/${encodeURIComponent(firstTable.name)}?maxRecords=100&_t=${recordsTimestamp}&fresh=true`, {
         headers: {
           'Authorization': `Bearer ${this.apiKey}`,
-          'Content-Type': 'application/json'
+          'Content-Type': 'application/json',
+          // Cache-busting headers to force fresh data
+          'Cache-Control': 'no-cache, no-store, must-revalidate',
+          'Pragma': 'no-cache',
+          'If-None-Match': '*'
         }
       });
 
