@@ -22,10 +22,11 @@ import outlookLogo from '@assets/generated_images/Microsoft_Outlook_professional
 interface Integration {
   id: string;
   provider: string;
-  status: 'connected' | 'error' | 'expired' | 'disabled' | 'setup_required';
+  status: 'connected' | 'error' | 'needs_oauth' | 'expired' | 'disabled' | 'setup_required';
   credentials?: any;
   settings?: any;
   lastSync?: string;
+  last_validated?: string;
   createdAt: string;
   updatedAt: string;
 }
@@ -203,21 +204,59 @@ export default function Integrations() {
   const getStatusColor = (status: string) => {
     switch (status) {
       case 'connected': return 'bg-green-100 text-green-800';
+      case 'needs_oauth': return 'bg-yellow-100 text-yellow-800';
       case 'error': return 'bg-red-100 text-red-800';
-      case 'expired': return 'bg-yellow-100 text-yellow-800';
+      case 'expired': return 'bg-orange-100 text-orange-800';
       case 'disabled': return 'bg-gray-100 text-gray-800';
       default: return 'bg-blue-100 text-blue-800';
     }
   };
 
-  const getStatusText = (status: string) => {
+  const getStatusText = (status: string, lastValidated?: string) => {
+    const getTimeAgo = (dateStr?: string) => {
+      if (!dateStr) return '';
+      const diff = Date.now() - new Date(dateStr).getTime();
+      const days = Math.floor(diff / (1000 * 60 * 60 * 24));
+      const hours = Math.floor(diff / (1000 * 60 * 60));
+      if (days > 0) return ` (${days}d ago)`;
+      if (hours > 0) return ` (${hours}h ago)`;
+      return ' (Recent)';
+    };
+
+    const timeAgo = getTimeAgo(lastValidated);
+    
     switch (status) {
-      case 'connected': return 'Connected';
+      case 'connected': return `Connected${timeAgo}`;
+      case 'needs_oauth': return 'Needs Authorization';
       case 'error': return 'Connection Error';
       case 'expired': return 'Credentials Expired';
       case 'disabled': return 'Disabled';
       case 'setup_required': return 'Needs Testing';
       default: return 'Setup Required';
+    }
+  };
+
+  // OAuth flow for Bigin
+  const handleBiginOAuth = async (provider: string) => {
+    try {
+      const response = await fetch('/api/auth/bigin/start', {
+        method: 'GET',
+        headers: { 'Content-Type': 'application/json' }
+      });
+      
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(errorData.error || 'Failed to start OAuth flow');
+      }
+      
+      const { authUrl } = await response.json();
+      window.location.href = authUrl;
+    } catch (error: any) {
+      toast({ 
+        title: 'OAuth flow failed', 
+        description: error.message,
+        variant: 'destructive' 
+      });
     }
   };
 
@@ -311,7 +350,7 @@ export default function Integrations() {
                   </div>
                   {integration && (
                     <Badge className={getStatusColor(integration.status)}>
-                      {getStatusText(integration.status)}
+                      {getStatusText(integration.status, integration.last_validated)}
                     </Badge>
                   )}
                 </div>
@@ -320,10 +359,10 @@ export default function Integrations() {
                 {isConnected ? (
                   <div className="space-y-3">
                     <div className="flex items-center justify-between text-sm">
-                      <span className="text-gray-600">Last synced:</span>
+                      <span className="text-gray-600">Last validated:</span>
                       <span className="font-medium">
-                        {integration?.lastSync 
-                          ? new Date(integration.lastSync).toLocaleDateString()
+                        {integration?.last_validated 
+                          ? new Date(integration.last_validated).toLocaleDateString()
                           : 'Never'
                         }
                       </span>
@@ -343,6 +382,34 @@ export default function Integrations() {
                         Disconnect
                       </Button>
                     </div>
+                  </div>
+                ) : integration?.status === 'needs_oauth' ? (
+                  <div className="space-y-3">
+                    <p className="text-sm text-muted-foreground">
+                      Authorization required to access {config.name} API.
+                    </p>
+                    <Button 
+                      onClick={() => provider === 'bigin' ? handleBiginOAuth(provider) : handleConnect(provider)}
+                      className="w-full"
+                      data-testid={`button-oauth-${provider}`}
+                    >
+                      {provider === 'bigin' ? 'Authorize with Bigin' : `Connect ${config.name}`}
+                    </Button>
+                  </div>
+                ) : integration?.status === 'error' && provider === 'bigin' && (integration.credentials as any)?.clientId ? (
+                  <div className="space-y-3">
+                    <div className="p-3 bg-red-50 border border-red-200 rounded-md">
+                      <p className="text-sm text-red-800">
+                        Connection failed. Please authorize access.
+                      </p>
+                    </div>
+                    <Button 
+                      onClick={() => handleBiginOAuth(provider)}
+                      className="w-full"
+                      data-testid={`button-reconnect-${provider}`}
+                    >
+                      Reconnect Bigin
+                    </Button>
                   </div>
                 ) : (
                   <Button 

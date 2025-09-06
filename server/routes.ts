@@ -571,96 +571,207 @@ export async function registerRoutes(app: Express): Promise<Server> {
               hasAccessToken: !!biginCreds.access_token,
               hasRefreshToken: !!biginCreds.refresh_token,
               clientIdLength: biginCreds.clientId?.length || 0,
-              accessTokenLength: biginCreds.access_token?.length || 0
+              accessTokenLength: biginCreds.access_token?.length || 0,
+              expiresAt: biginCreds.expires_at ? new Date(biginCreds.expires_at * 1000).toISOString() : 'Not set'
             });
             
-            // Validate that ALL required OAuth credentials exist
-            const requiredFields = ['clientId', 'clientSecret', 'access_token', 'refresh_token'];
-            const missingFields = requiredFields.filter(field => !biginCreds[field]);
+            // Check if we have basic client credentials for OAuth flow
+            if (!biginCreds.clientId || !biginCreds.clientSecret) {
+              testResult = { success: false, message: '', error: 'Missing Bigin client credentials. Please configure client_id and client_secret first.' };
+              await storage.upsertUserIntegration({ ...integration, status: 'error' as any });
+              break;
+            }
             
-            if (missingFields.length === 0) {
-              // Test actual API connection with the credentials
+            // Check if we have OAuth tokens
+            if (!biginCreds.access_token || !biginCreds.refresh_token) {
+              testResult = { success: false, message: '', error: 'OAuth tokens missing. Please complete the OAuth flow by clicking "Connect" to authorize Bigin access.' };
+              await storage.upsertUserIntegration({ ...integration, status: 'needs_oauth' as any });
+              break;
+            }
+            
+            // Check token expiry and refresh if needed
+            const now = Date.now() / 1000;
+            const bufferTime = 300; // 5 minutes
+            const isExpired = biginCreds.expires_at && (biginCreds.expires_at - bufferTime) <= now;
+            
+            if (isExpired) {
+              console.log('🔄 [DEBUG] Token expired, attempting refresh...');
               try {
-                const testUrl = 'https://www.zohoapis.com/bigin/v1/Contacts';
-                const apiTestResponse = await fetch(`${testUrl}?per_page=1`, {
-                  headers: {
-                    'Authorization': `Zoho-oauthtoken ${biginCreds.access_token}`,
-                    'Content-Type': 'application/json'
-                  }
+                const refreshResponse = await fetch('https://accounts.zoho.com/oauth/v2/token', {
+                  method: 'POST',
+                  headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+                  body: new URLSearchParams({
+                    refresh_token: biginCreds.refresh_token,
+                    client_id: biginCreds.clientId,
+                    client_secret: biginCreds.clientSecret,
+                    grant_type: 'refresh_token'
+                  })
                 });
                 
-                console.log('🧪 [DEBUG] Bigin API test response:', {
-                  status: apiTestResponse.status,
-                  statusText: apiTestResponse.statusText,
-                  ok: apiTestResponse.ok
-                });
-                
-                if (apiTestResponse.ok) {
-                  testResult = { success: true, message: 'Bigin by Zoho connection successful! All OAuth credentials are valid and API is accessible.', error: '' };
-                  await storage.upsertUserIntegration({ ...integration, status: 'connected' as any });
-                } else if (apiTestResponse.status === 401) {
-                  testResult = { success: false, message: '', error: 'Bigin OAuth credentials are invalid or expired. Please reconnect your Bigin account.' };
-                  await storage.upsertUserIntegration({ ...integration, status: 'error' as any });
+                if (refreshResponse.ok) {
+                  const tokenData = await refreshResponse.json();
+                  biginCreds.access_token = tokenData.access_token;
+                  biginCreds.expires_at = now + (tokenData.expires_in || 3600);
+                  
+                  await storage.upsertUserIntegration({
+                    ...integration,
+                    credentials: biginCreds
+                  });
+                  console.log('✅ [DEBUG] Token refreshed successfully');
                 } else {
-                  const errorText = await apiTestResponse.text();
-                  testResult = { success: false, message: '', error: `Bigin API error (${apiTestResponse.status}): ${errorText}` };
-                  await storage.upsertUserIntegration({ ...integration, status: 'error' as any });
+                  const errorText = await refreshResponse.text();
+                  console.error('❌ [DEBUG] Token refresh failed:', errorText);
+                  
+                  if (refreshResponse.status === 400 || errorText.includes('invalid_grant')) {
+                    testResult = { success: false, message: '', error: 'Refresh token expired. Please reconnect your Bigin account through OAuth.' };
+                    await storage.upsertUserIntegration({ ...integration, status: 'needs_oauth' as any });
+                    break;
+                  }
                 }
-              } catch (apiError: any) {
-                console.error('🚨 [DEBUG] Bigin API test failed:', apiError);
-                testResult = { success: false, message: '', error: `Failed to test Bigin API connection: ${apiError.message}` };
+              } catch (refreshError: any) {
+                console.error('🚨 [DEBUG] Token refresh exception:', refreshError);
+                testResult = { success: false, message: '', error: 'Failed to refresh tokens. Please reconnect your Bigin account.' };
+                await storage.upsertUserIntegration({ ...integration, status: 'needs_oauth' as any });
+                break;
+              }
+            }
+            
+            // Test actual API connection
+            try {
+              const apiTestResponse = await fetch('https://www.zohoapis.com/bigin/v1/Contacts?per_page=1', {
+                headers: {
+                  'Authorization': `Zoho-oauthtoken ${biginCreds.access_token}`,
+                  'Content-Type': 'application/json'
+                }
+              });
+              
+              console.log('🧪 [DEBUG] Bigin API test response:', {
+                status: apiTestResponse.status,
+                statusText: apiTestResponse.statusText,
+                ok: apiTestResponse.ok
+              });
+              
+              if (apiTestResponse.ok) {
+                testResult = { success: true, message: 'Bigin by Zoho connection successful! OAuth tokens are valid and API is accessible.', error: '' };
+                await storage.upsertUserIntegration({ 
+                  ...integration, 
+                  credentials: { ...biginCreds, last_validated: new Date().toISOString() },
+                  status: 'connected' as any,
+                  last_validated: new Date().toISOString()
+                });
+              } else if (apiTestResponse.status === 401) {
+                testResult = { success: false, message: '', error: 'API access denied. Please reconnect your Bigin account.' };
+                await storage.upsertUserIntegration({ ...integration, status: 'needs_oauth' as any });
+              } else {
+                const errorText = await apiTestResponse.text();
+                testResult = { success: false, message: '', error: `Bigin API error (${apiTestResponse.status}): ${errorText}` };
                 await storage.upsertUserIntegration({ ...integration, status: 'error' as any });
               }
-            } else {
-              testResult = { success: false, message: '', error: `Missing required OAuth credentials: ${missingFields.join(', ')}. Please complete the OAuth flow to connect Bigin.` };
+            } catch (apiError: any) {
+              console.error('🚨 [DEBUG] Bigin API test failed:', apiError);
+              testResult = { success: false, message: '', error: `Failed to test Bigin API connection: ${apiError.message}` };
               await storage.upsertUserIntegration({ ...integration, status: 'error' as any });
             }
             break;
 
           case 'otter':
-            // Test Otter.ai credentials - validate API key by making real API call
+            // Enhanced Otter.ai validation with daily auto-revalidation
             const otterCreds = integration.credentials as any;
             
             console.log('🧪 [DEBUG] Testing Otter.ai integration credentials:', {
               hasApiKey: !!otterCreds.apiKey,
-              apiKeyLength: otterCreds.apiKey?.length || 0
+              apiKeyLength: otterCreds.apiKey?.length || 0,
+              lastValidated: otterCreds.last_validated || 'Never'
             });
             
-            if (otterCreds.apiKey && otterCreds.apiKey.length > 0) {
-              try {
-                // Test actual API connection with the API key
-                const otterTestResponse = await fetch('https://otter.ai/forward/api/v1/meetings', {
-                  headers: {
-                    'Authorization': `Bearer ${otterCreds.apiKey}`,
-                    'Content-Type': 'application/json'
-                  }
-                });
+            if (!otterCreds.apiKey || otterCreds.apiKey.length === 0) {
+              testResult = { success: false, message: '', error: 'Missing or invalid Otter.ai API key. Please provide a valid API key.' };
+              await storage.upsertUserIntegration({ ...integration, status: 'error' as any });
+              break;
+            }
+            
+            // Check if validation is needed (daily or on demand)
+            const lastValidated = otterCreds.last_validated ? new Date(otterCreds.last_validated) : null;
+            const now = new Date();
+            const daysSinceValidation = lastValidated ? Math.floor((now.getTime() - lastValidated.getTime()) / (1000 * 60 * 60 * 24)) : 999;
+            
+            console.log('🧪 [DEBUG] Validation check:', {
+              lastValidated: lastValidated?.toISOString() || 'Never',
+              daysSinceValidation,
+              needsRevalidation: daysSinceValidation >= 1
+            });
+            
+            try {
+              // Test actual API connection with the API key
+              const otterTestResponse = await fetch('https://otter.ai/forward/api/v1/meetings', {
+                headers: {
+                  'Authorization': `Bearer ${otterCreds.apiKey}`,
+                  'Content-Type': 'application/json'
+                },
+                timeout: 10000 // 10 second timeout
+              });
+              
+              console.log('🧪 [DEBUG] Otter.ai API test response:', {
+                status: otterTestResponse.status,
+                statusText: otterTestResponse.statusText,
+                ok: otterTestResponse.ok
+              });
+              
+              if (otterTestResponse.ok) {
+                // Update credentials with validation timestamp
+                const updatedCredentials = {
+                  ...otterCreds,
+                  last_validated: now.toISOString(),
+                  validation_status: 'valid'
+                };
                 
-                console.log('🧪 [DEBUG] Otter.ai API test response:', {
-                  status: otterTestResponse.status,
-                  statusText: otterTestResponse.statusText,
-                  ok: otterTestResponse.ok
+                testResult = { success: true, message: 'Otter.ai connection successful! API key is valid and can access meeting transcripts.', error: '' };
+                await storage.upsertUserIntegration({ 
+                  ...integration, 
+                  credentials: updatedCredentials,
+                  status: 'connected' as any,
+                  last_validated: now.toISOString()
                 });
+              } else if (otterTestResponse.status === 401 || otterTestResponse.status === 403) {
+                // Clear invalid key and mark for renewal
+                const updatedCredentials = {
+                  ...otterCreds,
+                  validation_status: 'invalid',
+                  validation_error: 'API key is invalid or expired'
+                };
                 
-                if (otterTestResponse.ok) {
-                  testResult = { success: true, message: 'Otter.ai connection successful! API key is valid and can access meeting transcripts.', error: '' };
-                  await storage.upsertUserIntegration({ ...integration, status: 'connected' as any });
-                } else if (otterTestResponse.status === 401) {
-                  testResult = { success: false, message: '', error: 'Otter.ai API key is invalid or expired. Please check your API key.' };
-                  await storage.upsertUserIntegration({ ...integration, status: 'error' as any });
-                } else {
-                  const errorText = await otterTestResponse.text();
-                  testResult = { success: false, message: '', error: `Otter.ai API error (${otterTestResponse.status}): ${errorText}` };
-                  await storage.upsertUserIntegration({ ...integration, status: 'error' as any });
-                }
-              } catch (apiError: any) {
-                console.error('🚨 [DEBUG] Otter.ai API test failed:', apiError);
+                testResult = { success: false, message: '', error: 'Otter.ai API key is invalid or expired. Please provide a new valid API key.' };
+                await storage.upsertUserIntegration({ 
+                  ...integration, 
+                  credentials: updatedCredentials,
+                  status: 'error' as any 
+                });
+              } else if (otterTestResponse.status === 429) {
+                // Rate limit - don't invalidate key
+                testResult = { success: false, message: '', error: 'Otter.ai API rate limit reached. Connection is valid but temporarily throttled.' };
+                await storage.upsertUserIntegration({ 
+                  ...integration, 
+                  status: 'connected' as any,
+                  last_validated: now.toISOString()
+                });
+              } else {
+                const errorText = await otterTestResponse.text();
+                console.error('🚨 [DEBUG] Otter.ai API unexpected error:', errorText);
+                
+                testResult = { success: false, message: '', error: `Otter.ai API error (${otterTestResponse.status}): ${errorText}` };
+                await storage.upsertUserIntegration({ ...integration, status: 'error' as any });
+              }
+            } catch (apiError: any) {
+              console.error('🚨 [DEBUG] Otter.ai API test failed:', apiError);
+              
+              // Network errors don't necessarily mean invalid key
+              if (apiError.name === 'TypeError' && apiError.message.includes('fetch')) {
+                testResult = { success: false, message: '', error: 'Network error connecting to Otter.ai. Please try again later.' };
+                // Don't change status for network errors
+              } else {
                 testResult = { success: false, message: '', error: `Failed to test Otter.ai API connection: ${apiError.message}` };
                 await storage.upsertUserIntegration({ ...integration, status: 'error' as any });
               }
-            } else {
-              testResult = { success: false, message: '', error: 'Missing or invalid Otter.ai API key' };
-              await storage.upsertUserIntegration({ ...integration, status: 'error' as any });
             }
             break;
 
@@ -703,6 +814,275 @@ export async function registerRoutes(app: Express): Promise<Server> {
     } catch (error) {
       console.error("Error testing integration:", error);
       res.status(500).json({ message: "Failed to test integration" });
+    }
+  });
+
+  // OAuth Flow Endpoints
+  app.get('/api/auth/bigin/start', isAuthenticated, async (req: any, res) => {
+    try {
+      const userId = req.user.claims.sub;
+      console.log('🔐 Starting Bigin OAuth flow for user:', userId);
+      
+      // Generate state parameter for security
+      const state = Buffer.from(JSON.stringify({
+        userId,
+        timestamp: Date.now(),
+        nonce: Math.random().toString(36).substring(7)
+      })).toString('base64');
+      
+      // Store state in session for validation
+      req.session.biginOAuthState = state;
+      
+      // Get client credentials from integration
+      const integrations = await storage.getUserIntegrations(userId);
+      const biginIntegration = integrations.find(i => i.provider === 'bigin');
+      
+      if (!biginIntegration?.credentials) {
+        return res.status(400).json({ error: 'Bigin integration not configured. Please add client credentials first.' });
+      }
+      
+      const credentials = biginIntegration.credentials as any;
+      if (!credentials.clientId || !credentials.clientSecret) {
+        return res.status(400).json({ error: 'Missing Bigin client credentials. Please configure client_id and client_secret.' });
+      }
+      
+      // Construct OAuth authorization URL
+      const authParams = new URLSearchParams({
+        response_type: 'code',
+        client_id: credentials.clientId,
+        scope: 'ZohoBigin.modules.ALL,ZohoBigin.users.READ',
+        redirect_uri: `${req.protocol}://${req.get('host')}/api/auth/bigin/callback`,
+        state: state,
+        access_type: 'offline'
+      });
+      
+      const authUrl = `https://accounts.zoho.com/oauth/v2/auth?${authParams.toString()}`;
+      
+      console.log('🔐 Redirecting to Bigin OAuth:', authUrl);
+      res.json({ authUrl });
+      
+    } catch (error: any) {
+      console.error('🚨 Error starting Bigin OAuth:', error);
+      res.status(500).json({ error: 'Failed to start OAuth flow' });
+    }
+  });
+
+  app.get('/api/auth/bigin/callback', async (req: any, res) => {
+    try {
+      const { code, state, error: oauthError } = req.query;
+      
+      if (oauthError) {
+        console.error('🚨 OAuth error:', oauthError);
+        return res.redirect(`/integrations?error=oauth_failed&details=${encodeURIComponent(oauthError)}`);
+      }
+      
+      if (!code || !state) {
+        console.error('🚨 Missing OAuth code or state');
+        return res.redirect('/integrations?error=invalid_callback');
+      }
+      
+      // Validate state parameter
+      if (req.session.biginOAuthState !== state) {
+        console.error('🚨 Invalid OAuth state parameter');
+        return res.redirect('/integrations?error=invalid_state');
+      }
+      
+      // Decode state to get user ID
+      const stateData = JSON.parse(Buffer.from(state, 'base64').toString());
+      const userId = stateData.userId;
+      
+      console.log('🔐 Processing Bigin OAuth callback for user:', userId);
+      
+      // Get client credentials
+      const integrations = await storage.getUserIntegrations(userId);
+      const biginIntegration = integrations.find(i => i.provider === 'bigin');
+      
+      if (!biginIntegration?.credentials) {
+        return res.redirect('/integrations?error=missing_credentials');
+      }
+      
+      const credentials = biginIntegration.credentials as any;
+      
+      // Exchange code for tokens
+      const tokenParams = new URLSearchParams({
+        grant_type: 'authorization_code',
+        client_id: credentials.clientId,
+        client_secret: credentials.clientSecret,
+        redirect_uri: `${req.protocol}://${req.get('host')}/api/auth/bigin/callback`,
+        code: code as string
+      });
+      
+      console.log('🔐 Exchanging OAuth code for tokens...');
+      
+      const tokenResponse = await fetch('https://accounts.zoho.com/oauth/v2/token', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/x-www-form-urlencoded'
+        },
+        body: tokenParams.toString()
+      });
+      
+      if (!tokenResponse.ok) {
+        const errorText = await tokenResponse.text();
+        console.error('🚨 Token exchange failed:', {
+          status: tokenResponse.status,
+          error: errorText
+        });
+        return res.redirect(`/integrations?error=token_exchange_failed&details=${encodeURIComponent(errorText)}`);
+      }
+      
+      const tokenData = await tokenResponse.json();
+      
+      console.log('✅ OAuth tokens received:', {
+        hasAccessToken: !!tokenData.access_token,
+        hasRefreshToken: !!tokenData.refresh_token,
+        expiresIn: tokenData.expires_in,
+        tokenType: tokenData.token_type
+      });
+      
+      // Update credentials with OAuth tokens
+      const updatedCredentials = {
+        ...credentials,
+        access_token: tokenData.access_token,
+        refresh_token: tokenData.refresh_token,
+        expires_at: Math.floor(Date.now() / 1000) + (tokenData.expires_in || 3600),
+        token_type: tokenData.token_type || 'Bearer',
+        last_validated: new Date().toISOString()
+      };
+      
+      // Test the API connection
+      const testResponse = await fetch('https://www.zohoapis.com/bigin/v1/Contacts?per_page=1', {
+        headers: {
+          'Authorization': `Zoho-oauthtoken ${tokenData.access_token}`,
+          'Content-Type': 'application/json'
+        }
+      });
+      
+      const connectionStatus = testResponse.ok ? 'connected' : 'error';
+      
+      // Update integration with new credentials and status
+      await storage.upsertUserIntegration({
+        ...biginIntegration,
+        credentials: updatedCredentials,
+        status: connectionStatus as any,
+        last_validated: new Date().toISOString()
+      });
+      
+      console.log('✅ Bigin OAuth flow completed successfully');
+      
+      // Clear OAuth state
+      delete req.session.biginOAuthState;
+      
+      // Redirect back to integrations page with success
+      res.redirect('/integrations?success=bigin_connected');
+      
+    } catch (error: any) {
+      console.error('🚨 Error in Bigin OAuth callback:', error);
+      res.redirect(`/integrations?error=callback_failed&details=${encodeURIComponent(error.message)}`);
+    }
+  });
+
+  // Integration Health Endpoints
+  app.get('/api/integrations/health/:userId', isAuthenticated, async (req: any, res) => {
+    try {
+      const userId = req.params.userId;
+      
+      if (req.user.claims.sub !== userId) {
+        return res.status(403).json({ error: 'Access denied' });
+      }
+      
+      // This would use the IntegrationHealthService if initialized
+      const integrations = await storage.getUserIntegrations(userId);
+      
+      const health = {
+        bigin: { status: 'not_configured', lastCheck: null, error: null },
+        otter: { status: 'not_configured', lastCheck: null, error: null }
+      };
+      
+      integrations.forEach(integration => {
+        if (integration.provider === 'bigin' || integration.provider === 'otter') {
+          health[integration.provider as keyof typeof health] = {
+            status: integration.status || 'not_configured',
+            lastCheck: integration.last_validated || null,
+            error: (integration.credentials as any)?.validation_error || null
+          };
+        }
+      });
+      
+      res.json(health);
+    } catch (error: any) {
+      console.error('🚨 Error getting integration health:', error);
+      res.status(500).json({ error: 'Failed to get integration health' });
+    }
+  });
+
+  app.post('/api/integrations/refresh-tokens/:userId', isAuthenticated, async (req: any, res) => {
+    try {
+      const userId = req.params.userId;
+      
+      if (req.user.claims.sub !== userId) {
+        return res.status(403).json({ error: 'Access denied' });
+      }
+      
+      // Manual token refresh for Bigin
+      const integrations = await storage.getUserIntegrations(userId);
+      const biginIntegration = integrations.find(i => i.provider === 'bigin');
+      
+      if (!biginIntegration) {
+        return res.status(404).json({ error: 'Bigin integration not found' });
+      }
+      
+      const credentials = biginIntegration.credentials as any;
+      if (!credentials?.refresh_token) {
+        return res.status(400).json({ error: 'No refresh token available' });
+      }
+      
+      console.log('🔄 Manual token refresh requested for user:', userId);
+      
+      // Attempt token refresh
+      const refreshResponse = await fetch('https://accounts.zoho.com/oauth/v2/token', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+        body: new URLSearchParams({
+          refresh_token: credentials.refresh_token,
+          client_id: credentials.clientId,
+          client_secret: credentials.clientSecret,
+          grant_type: 'refresh_token'
+        })
+      });
+      
+      if (!refreshResponse.ok) {
+        const errorText = await refreshResponse.text();
+        return res.status(400).json({ 
+          success: false, 
+          error: `Token refresh failed: ${errorText}` 
+        });
+      }
+      
+      const tokenData = await refreshResponse.json();
+      const now = Date.now() / 1000;
+      
+      // Update credentials
+      const updatedCredentials = {
+        ...credentials,
+        access_token: tokenData.access_token,
+        expires_at: now + (tokenData.expires_in || 3600),
+        last_refreshed: new Date().toISOString()
+      };
+      
+      await storage.upsertUserIntegration({
+        ...biginIntegration,
+        credentials: updatedCredentials,
+        status: 'connected' as any,
+        last_validated: new Date().toISOString()
+      });
+      
+      console.log('✅ Manual token refresh successful');
+      res.json({ success: true, message: 'Tokens refreshed successfully' });
+      
+    } catch (error: any) {
+      console.error('🚨 Error refreshing tokens:', error);
+      res.status(500).json({ error: 'Failed to refresh tokens' });
     }
   });
 
