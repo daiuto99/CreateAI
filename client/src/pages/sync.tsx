@@ -411,7 +411,14 @@ export default function Sync() {
                 <i className="fas fa-calendar-check text-green-500"></i>
               </CardHeader>
               <CardContent>
-                <div className="text-2xl font-bold" data-testid="text-meetings-synced">{meetings.filter((m: any) => !dismissedMeetings.has(m.id)).length}</div>
+                {meetingsLoading ? (
+                  <div className="flex items-center space-x-2">
+                    <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-green-500"></div>
+                    <span className="text-sm text-muted-foreground">Loading...</span>
+                  </div>
+                ) : (
+                  <div className="text-2xl font-bold" data-testid="text-meetings-synced">{meetings.filter((m: any) => !dismissedMeetings.has(m.id)).length}</div>
+                )}
                 <p className="text-xs text-muted-foreground">this month</p>
               </CardContent>
             </Card>
@@ -422,7 +429,14 @@ export default function Sync() {
                 <i className="fas fa-microphone text-purple-500"></i>
               </CardHeader>
               <CardContent>
-                <div className="text-2xl font-bold" data-testid="text-voice-updates">{transcripts.length}</div>
+                {transcriptsLoading ? (
+                  <div className="flex items-center space-x-2">
+                    <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-purple-500"></div>
+                    <span className="text-sm text-muted-foreground">Loading...</span>
+                  </div>
+                ) : (
+                  <div className="text-2xl font-bold" data-testid="text-voice-updates">{transcripts.length}</div>
+                )}
                 <p className="text-xs text-muted-foreground">processed</p>
               </CardContent>
             </Card>
