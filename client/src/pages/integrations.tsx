@@ -131,6 +131,12 @@ export default function Integrations() {
   const [selectedService, setSelectedService] = useState<string | null>(null);
   const [formData, setFormData] = useState<Record<string, string>>({});
   const [isModalOpen, setIsModalOpen] = useState(false);
+  const [showManualTokens, setShowManualTokens] = useState<Record<string, boolean>>({});
+  const [manualTokenData, setManualTokenData] = useState({
+    accessToken: '',
+    refreshToken: '',
+    apiDomain: 'www.zohoapis.com'
+  });
 
   // Handle OAuth callback success/error messages
   useEffect(() => {
@@ -249,6 +255,36 @@ export default function Integrations() {
     },
   });
 
+  const manualTokenMutation = useMutation({
+    mutationFn: async (data: { provider: string; accessToken: string; refreshToken: string; apiDomain: string }) => {
+      const response = await fetch('/api/integrations/manual-tokens', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(data),
+      });
+      
+      if (!response.ok) {
+        const error = await response.json();
+        throw new Error(error.message || 'Failed to save tokens');
+      }
+      
+      return response.json();
+    },
+    onSuccess: (result) => {
+      if (result.success) {
+        toast({ title: 'Tokens saved and validated!', description: result.message });
+        queryClient.invalidateQueries({ queryKey: ['/api/integrations'] });
+        setShowManualTokens(prev => ({ ...prev, [result.provider]: false }));
+        setManualTokenData({ accessToken: '', refreshToken: '', apiDomain: 'www.zohoapis.com' });
+      } else {
+        toast({ title: 'Token validation failed', description: result.error, variant: 'destructive' });
+      }
+    },
+    onError: (error) => {
+      toast({ title: 'Failed to save tokens', description: error.message, variant: 'destructive' });
+    },
+  });
+
   const getIntegrationByProvider = (provider: string) => {
     return integrations.find(integration => integration.provider === provider);
   };
@@ -326,6 +362,23 @@ export default function Integrations() {
       provider: selectedService,
       credentials: formData,
     });
+  };
+
+  const handleManualTokenSubmit = (provider: string) => {
+    if (!manualTokenData.accessToken || !manualTokenData.refreshToken) {
+      toast({ title: 'Missing tokens', description: 'Please enter both access and refresh tokens.', variant: 'destructive' });
+      return;
+    }
+
+    manualTokenMutation.mutate({
+      provider,
+      ...manualTokenData
+    });
+  };
+
+  const toggleManualTokens = (provider: string) => {
+    setShowManualTokens(prev => ({ ...prev, [provider]: !prev[provider] }));
+    setManualTokenData({ accessToken: '', refreshToken: '', apiDomain: 'www.zohoapis.com' });
   };
 
   if (isLoading) {
@@ -440,28 +493,164 @@ export default function Integrations() {
                     <p className="text-sm text-muted-foreground">
                       Authorization required to access {config.name} API.
                     </p>
-                    <Button 
-                      onClick={() => provider === 'bigin' ? handleBiginOAuth(provider) : handleConnect(provider)}
-                      className="w-full"
-                      data-testid={`button-oauth-${provider}`}
-                    >
-                      {provider === 'bigin' ? 'Authorize with Bigin' : `Connect ${config.name}`}
-                    </Button>
+                    {provider === 'bigin' ? (
+                      <>
+                        <div className="space-y-2">
+                          <Button 
+                            onClick={() => handleBiginOAuth(provider)}
+                            className="w-full"
+                            data-testid={`button-oauth-${provider}`}
+                          >
+                            Authorize with Bigin
+                          </Button>
+                          <Button 
+                            variant="outline"
+                            onClick={() => toggleManualTokens(provider)}
+                            className="w-full"
+                            data-testid={`button-manual-tokens-${provider}`}
+                          >
+                            Enter Tokens Manually
+                          </Button>
+                        </div>
+                        {showManualTokens[provider] && (
+                          <div className="mt-4 p-4 border rounded-lg bg-gray-50">
+                            <h4 className="font-medium text-sm mb-3">Manual Token Entry</h4>
+                            <p className="text-xs text-gray-600 mb-3">
+                              Get these tokens from Zoho's developer console or by completing OAuth manually in Postman.
+                            </p>
+                            <div className="space-y-3">
+                              <div>
+                                <Label htmlFor="access-token" className="text-xs">Access Token</Label>
+                                <Input
+                                  id="access-token"
+                                  type="password"
+                                  value={manualTokenData.accessToken}
+                                  onChange={(e) => setManualTokenData(prev => ({ ...prev, accessToken: e.target.value }))}
+                                  placeholder="1000.xxx.xxx"
+                                  className="mt-1"
+                                />
+                              </div>
+                              <div>
+                                <Label htmlFor="refresh-token" className="text-xs">Refresh Token</Label>
+                                <Input
+                                  id="refresh-token"
+                                  type="password"
+                                  value={manualTokenData.refreshToken}
+                                  onChange={(e) => setManualTokenData(prev => ({ ...prev, refreshToken: e.target.value }))}
+                                  placeholder="1000.xxx.xxx"
+                                  className="mt-1"
+                                />
+                              </div>
+                              <div>
+                                <Label htmlFor="api-domain" className="text-xs">API Domain</Label>
+                                <Input
+                                  id="api-domain"
+                                  type="text"
+                                  value={manualTokenData.apiDomain}
+                                  onChange={(e) => setManualTokenData(prev => ({ ...prev, apiDomain: e.target.value }))}
+                                  placeholder="www.zohoapis.com"
+                                  className="mt-1"
+                                />
+                              </div>
+                              <Button
+                                onClick={() => handleManualTokenSubmit(provider)}
+                                disabled={manualTokenMutation.isPending}
+                                className="w-full"
+                                size="sm"
+                                data-testid="button-submit-manual-tokens"
+                              >
+                                {manualTokenMutation.isPending ? 'Testing...' : 'Test Connection'}
+                              </Button>
+                            </div>
+                          </div>
+                        )}
+                      </>
+                    ) : (
+                      <Button 
+                        onClick={() => handleConnect(provider)}
+                        className="w-full"
+                        data-testid={`button-oauth-${provider}`}
+                      >
+                        Connect {config.name}
+                      </Button>
+                    )}
                   </div>
                 ) : integration?.status === 'error' && provider === 'bigin' && (integration.credentials as any)?.clientId ? (
                   <div className="space-y-3">
                     <div className="p-3 bg-red-50 border border-red-200 rounded-md">
                       <p className="text-sm text-red-800">
-                        Connection failed. Please authorize access.
+                        Connection failed. Please authorize access or enter tokens manually.
                       </p>
                     </div>
-                    <Button 
-                      onClick={() => handleBiginOAuth(provider)}
-                      className="w-full"
-                      data-testid={`button-reconnect-${provider}`}
-                    >
-                      Reconnect Bigin
-                    </Button>
+                    <div className="space-y-2">
+                      <Button 
+                        onClick={() => handleBiginOAuth(provider)}
+                        className="w-full"
+                        data-testid={`button-reconnect-${provider}`}
+                      >
+                        Reconnect Bigin
+                      </Button>
+                      <Button 
+                        variant="outline"
+                        onClick={() => toggleManualTokens(provider)}
+                        className="w-full"
+                        data-testid={`button-manual-tokens-error-${provider}`}
+                      >
+                        Enter Tokens Manually
+                      </Button>
+                    </div>
+                    {showManualTokens[provider] && (
+                      <div className="mt-4 p-4 border rounded-lg bg-gray-50">
+                        <h4 className="font-medium text-sm mb-3">Manual Token Entry</h4>
+                        <p className="text-xs text-gray-600 mb-3">
+                          Get these tokens from Zoho's developer console or by completing OAuth manually in Postman.
+                        </p>
+                        <div className="space-y-3">
+                          <div>
+                            <Label htmlFor="access-token-error" className="text-xs">Access Token</Label>
+                            <Input
+                              id="access-token-error"
+                              type="password"
+                              value={manualTokenData.accessToken}
+                              onChange={(e) => setManualTokenData(prev => ({ ...prev, accessToken: e.target.value }))}
+                              placeholder="1000.xxx.xxx"
+                              className="mt-1"
+                            />
+                          </div>
+                          <div>
+                            <Label htmlFor="refresh-token-error" className="text-xs">Refresh Token</Label>
+                            <Input
+                              id="refresh-token-error"
+                              type="password"
+                              value={manualTokenData.refreshToken}
+                              onChange={(e) => setManualTokenData(prev => ({ ...prev, refreshToken: e.target.value }))}
+                              placeholder="1000.xxx.xxx"
+                              className="mt-1"
+                            />
+                          </div>
+                          <div>
+                            <Label htmlFor="api-domain-error" className="text-xs">API Domain</Label>
+                            <Input
+                              id="api-domain-error"
+                              type="text"
+                              value={manualTokenData.apiDomain}
+                              onChange={(e) => setManualTokenData(prev => ({ ...prev, apiDomain: e.target.value }))}
+                              placeholder="www.zohoapis.com"
+                              className="mt-1"
+                            />
+                          </div>
+                          <Button
+                            onClick={() => handleManualTokenSubmit(provider)}
+                            disabled={manualTokenMutation.isPending}
+                            className="w-full"
+                            size="sm"
+                            data-testid="button-submit-manual-tokens-error"
+                          >
+                            {manualTokenMutation.isPending ? 'Testing...' : 'Test Connection'}
+                          </Button>
+                        </div>
+                      </div>
+                    )}
                   </div>
                 ) : (
                   <Button 
