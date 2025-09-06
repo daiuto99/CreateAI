@@ -119,11 +119,30 @@ export class OtterService {
       console.log('📊 Otter API response structure:', {
         dataKeys: Object.keys(data || {}),
         hasData: !!data?.data,
-        dataType: Array.isArray(data?.data) ? 'array' : typeof data?.data
+        dataType: Array.isArray(data?.data) ? 'array' : typeof data?.data,
+        // DEBUG: Check if data is directly an array or has other structures
+        isDirectArray: Array.isArray(data),
+        hasSpeeches: !!data?.speeches,
+        hasRecordings: !!data?.recordings,
+        dataLength: data?.length
       });
 
-      // Handle the correct response format from /api/public/speech/export
-      const speeches = Array.isArray(data?.data) ? data.data : (data?.data ? [data.data] : []);
+      // Handle different possible response formats from Otter.ai API
+      let speeches = [];
+      if (Array.isArray(data?.data)) {
+        speeches = data.data;
+      } else if (Array.isArray(data?.speeches)) {
+        speeches = data.speeches;
+      } else if (Array.isArray(data?.recordings)) {
+        speeches = data.recordings;
+      } else if (Array.isArray(data)) {
+        speeches = data;
+      } else if (data?.data) {
+        speeches = [data.data];
+      } else {
+        console.log('🔍 Raw response keys for debugging:', Object.keys(data || {}));
+        console.log('🔍 First few response properties:', JSON.stringify(data, null, 2).substring(0, 500));
+      }
       
       if (!speeches || speeches.length === 0) {
         console.log('⚠️ No speeches found in Otter response');
