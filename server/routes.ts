@@ -660,13 +660,61 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.json([]);
       }
       
-      // Fetch calendar data from ICS feed
+      // Fetch calendar data with timeout and comprehensive error handling
       console.log('📅 Fetching calendar from:', credentials.feedUrl);
-      const response = await fetch(credentials.feedUrl);
+      
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => {
+        controller.abort();
+        console.error('⏰ Calendar fetch timeout after 15 seconds');
+      }, 15000); // 15 second timeout
+      
+      let response;
+      try {
+        response = await fetch(credentials.feedUrl, {
+          signal: controller.signal,
+          headers: {
+            'User-Agent': 'CreateAI-Sync/1.0'
+          }
+        });
+        clearTimeout(timeoutId);
+      } catch (fetchError: any) {
+        clearTimeout(timeoutId);
+        
+        if (fetchError.name === 'AbortError') {
+          console.error('🚨 Calendar fetch aborted due to timeout');
+          return res.json([]);
+        }
+        
+        console.error('🚨 Calendar fetch failed:', {
+          error: fetchError.message,
+          code: fetchError.code,
+          url: credentials.feedUrl
+        });
+        return res.json([]);
+      }
       
       if (!response.ok) {
-        console.error('❌ Calendar feed fetch failed:', response.status, response.statusText);
-        console.error('❌ Response headers:', Object.fromEntries(response.headers.entries()));
+        const errorDetails = {
+          status: response.status,
+          statusText: response.statusText,
+          url: credentials.feedUrl,
+          timestamp: new Date().toISOString()
+        };
+        
+        console.error('🚨 Calendar fetch failed with HTTP error:', errorDetails);
+        
+        // Specific error handling based on status code
+        if (response.status === 401) {
+          console.error('🔐 Unauthorized: Calendar credentials may be invalid');
+        } else if (response.status === 403) {
+          console.error('🚫 Forbidden: Access denied to calendar feed');
+        } else if (response.status === 404) {
+          console.error('🔍 Not Found: Calendar feed URL may be incorrect');
+        } else if (response.status >= 500) {
+          console.error('🔧 Server Error: Calendar service may be down');
+        }
+        
         return res.json([]);
       }
       
@@ -773,7 +821,12 @@ export async function registerRoutes(app: Express): Promise<Server> {
         { id: '1', name: 'Mark', email: 'mark@company.com' }
       ] : [];
       
-      console.log('✅ Using REAL meeting data - 5 Otter transcripts + 1 Bigin contact');
+      console.log('✅ Using REAL meeting data with enhanced error handling:', {
+        otterTranscripts: transcripts?.length || 0,
+        biginContacts: contacts?.length || 0,
+        otterConnected: otterIntegration?.status === 'connected',
+        biginConnected: biginIntegration?.status === 'connected'
+      });
       
       console.log('🎤 Available Otter transcripts for matching:', transcripts?.length || 0);
       console.log('📧 Transcript titles:', Array.isArray(transcripts) ? transcripts.map((t: any) => t.title) : []);
@@ -785,60 +838,90 @@ export async function registerRoutes(app: Express): Promise<Server> {
         const meetingTitle = meeting.title.toLowerCase();
         console.log(`\n🔍 Analyzing meeting: "${meeting.title}"`);
         
-        // UPDATED Otter.AI matching: title + date proximity (no emails available in calendar)
+        // ENHANCED Otter.AI matching with confidence scoring
         console.log(`  🔍 Otter matching for "${meeting.title}"...`);
-        meeting.hasOtterMatch = Array.isArray(transcripts) && transcripts.some((transcript: any) => {
-          const transcriptTitle = transcript.title.toLowerCase();
-          
-          // 1. Meeting title match (exact or very close)
-          const titleMatch = transcriptTitle.includes(meetingTitle) || meetingTitle.includes(transcriptTitle) || 
-                            transcriptTitle.replace(/[|\-]/g, '').trim() === meetingTitle.replace(/[|\-]/g, '').trim();
-          
-          // 2. Date proximity (within 24 hours since we don't have exact times)
-          const meetingDateTime = new Date(meeting.date);
-          const transcriptDateTime = new Date(transcript.date);
-          const timeDiff = Math.abs(transcriptDateTime.getTime() - meetingDateTime.getTime());
-          const dateMatch = timeDiff < (24 * 60 * 60 * 1000); // Within 24 hours
-          
-          // Match requires both title and date proximity
-          const match = titleMatch && dateMatch;
-          
-          if (match) {
-            console.log(`  ✅ Otter match found: "${transcript.title}" (title=${titleMatch}, date=${dateMatch})`);
-          }
-          return match;
-        });
+        let bestOtterMatch = null;
+        let highestOtterConfidence = 0;
         
-        // UPDATED Bigin matching: extract names from meeting titles (no emails available)
+        if (Array.isArray(transcripts)) {
+          for (const transcript of transcripts) {
+            try {
+              const confidence = calculateMatchConfidence(meeting, transcript);
+              
+              if (confidence > highestOtterConfidence) {
+                highestOtterConfidence = confidence;
+                bestOtterMatch = transcript;
+              }
+              
+              console.log(`    📊 Transcript "${transcript.title}" confidence: ${confidence}%`);
+            } catch (matchError) {
+              console.error(`    ❌ Error calculating Otter confidence for "${transcript.title}":`, matchError);
+            }
+          }
+        }
+        
+        // Set match if confidence is above threshold (60%)
+        meeting.hasOtterMatch = highestOtterConfidence >= 60;
+        meeting.otterConfidence = highestOtterConfidence;
+        meeting.bestOtterMatch = bestOtterMatch;
+        
+        if (meeting.hasOtterMatch) {
+          console.log(`  ✅ Otter match found: "${bestOtterMatch?.title}" (confidence: ${highestOtterConfidence}%)`);
+        } else {
+          console.log(`  ⚪ No Otter match found (highest confidence: ${highestOtterConfidence}%)`);
+        }
+        
+        // ENHANCED Bigin matching with confidence scoring
         console.log(`  🔍 Bigin matching for "${meeting.title}"...`);
-        meeting.hasBiginMatch = Array.isArray(contacts) && contacts.some((contact: any) => {
-          const contactName = contact.name.toLowerCase();
-          
-          // Check if contact name appears in meeting title
-          const nameInTitle = meetingTitle.includes(contactName);
-          
-          // Also check individual name parts (for "Brian Albans" vs "Brian")
-          const nameParts = contactName.split(' ');
-          const namePartMatch = nameParts.some((part: string) => 
-            part.length > 2 && meetingTitle.includes(part)
-          );
-          
-          const match = nameInTitle || namePartMatch;
-          
-          if (match) {
-            console.log(`  ✅ Bigin match found: "${contact.name}" (name in title)`);
-          }
-          return match;
-        });
+        let bestBiginMatch = null;
+        let highestBiginConfidence = 0;
         
-        console.log(`📊 Final result - "${meeting.title}": Otter=${meeting.hasOtterMatch ? '🔵' : '⚪'}, Bigin=${meeting.hasBiginMatch ? '🟢' : '⚪'}`);
+        if (Array.isArray(contacts)) {
+          for (const contact of contacts) {
+            try {
+              const confidence = calculateContactMatchConfidence(meeting, contact);
+              
+              if (confidence > highestBiginConfidence) {
+                highestBiginConfidence = confidence;
+                bestBiginMatch = contact;
+              }
+              
+              console.log(`    📊 Contact "${contact.name}" confidence: ${confidence}%`);
+            } catch (matchError) {
+              console.error(`    ❌ Error calculating Bigin confidence for "${contact.name}":`, matchError);
+            }
+          }
+        }
+        
+        // Set match if confidence is above threshold (60%)
+        meeting.hasBiginMatch = highestBiginConfidence >= 60;
+        meeting.biginConfidence = highestBiginConfidence;
+        meeting.bestBiginMatch = bestBiginMatch;
+        
+        if (meeting.hasBiginMatch) {
+          console.log(`  ✅ Bigin match found: "${bestBiginMatch?.name}" (confidence: ${highestBiginConfidence}%)`);
+        } else {
+          console.log(`  ⚪ No Bigin match found (highest confidence: ${highestBiginConfidence}%)`);
+        }
+        
+        console.log(`📊 Final result - "${meeting.title}": Otter=${meeting.hasOtterMatch ? '🔵' : '⚪'} (${meeting.otterConfidence}%), Bigin=${meeting.hasBiginMatch ? '🟢' : '⚪'} (${meeting.biginConfidence}%)`);
       }
       
       console.log('📊 Filtered meetings (Aug 1 - Sep 5, 2025):', meetings.length);
       res.json(meetings.slice(0, 20)); // Return last 20 meetings
-    } catch (error) {
-      console.error('Error fetching meetings:', error);
-      res.json([]); // Return empty array on error
+    } catch (error: any) {
+      const errorDetails = {
+        message: error?.message || 'Unknown error',
+        code: error?.code,
+        stack: error?.stack,
+        timestamp: new Date().toISOString(),
+        userId: req.user?.claims?.sub
+      };
+      
+      console.error('🚨 [/api/meetings] Critical error fetching meetings:', errorDetails);
+      
+      // Return empty array but log the error details for debugging
+      res.json([]); // Maintain backward compatibility
     }
   });
 
@@ -1332,7 +1415,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     const nameParts = contactName.split(' ').filter(part => part.length > 2);
     let bestMatch = 0;
     
-    for (const part of nameParts) {
+    for (const part: string of nameParts) {
       if (meetingTitle.includes(part)) {
         bestMatch = Math.max(bestMatch, 75);
       }
@@ -1371,7 +1454,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const otterIntegration = integrations.find(i => i.provider === 'otter');
       const biginIntegration = integrations.find(i => i.provider === 'bigin');
       
-      if (!otterIntegration?.status === 'connected' && !biginIntegration?.status === 'connected') {
+      if (otterIntegration?.status !== 'connected' && biginIntegration?.status !== 'connected') {
         return res.status(400).json({
           success: false,
           message: 'No active integrations found. Please connect Otter.AI or Bigin first.'
@@ -1381,7 +1464,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       // Get current meetings data (reuse existing logic)
       // This would normally fetch from database, but for now we'll use calendar data
       const outlookIntegration = integrations.find(i => i.provider === 'outlook');
-      if (!outlookIntegration?.status === 'connected') {
+      if (outlookIntegration?.status !== 'connected') {
         return res.status(400).json({
           success: false,
           message: 'Outlook calendar integration not found'
