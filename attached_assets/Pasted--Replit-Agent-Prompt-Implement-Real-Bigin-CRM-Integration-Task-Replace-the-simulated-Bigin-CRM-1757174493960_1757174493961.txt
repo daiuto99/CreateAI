@@ -1,0 +1,233 @@
+# Replit Agent Prompt: Implement Real Bigin CRM Integration
+
+## Task
+Replace the simulated Bigin CRM functionality with real Zoho Bigin API integration to create actual CRM records from synced meetings.
+
+## Current State
+The SYNC function uses hard-coded contact data and simulated CRM record creation. We need to connect to the actual Zoho Bigin API to perform real CRM operations using the user's stored credentials.
+
+## Implementation Requirements
+
+### 1. Create Bigin Service File
+Create a new file `server/services/bigin.ts` with the following functionality:
+
+**API Integration Features:**
+- Connect to Zoho Bigin REST API using user's OAuth credentials
+- Search for existing contacts by name and email
+- Create meeting/activity records in CRM
+- Handle OAuth token refresh automatically
+- Implement proper error handling for API failures
+
+**Core Methods Needed:**
+- `searchContacts(query)` - Find existing contacts
+- `createMeetingRecord(meetingData)` - Create CRM activity record
+- `refreshAccessToken()` - Handle token refresh
+- `createFromUserIntegration(storage, userId)` - Initialize service with user's credentials
+
+### 2. Update Routes Integration
+Modify the existing `/api/meetings` route to:
+- Use real Bigin service instead of hard-coded contact data
+- Fetch actual contacts for matching
+- Maintain the enhanced confidence scoring system
+- Keep all existing error handling and logging
+- Add smart fallback for API failures
+
+### 3. Enhanced Contact Matching
+Update the meeting-to-contact matching to use:
+- Real contact names and emails from Bigin
+- Company information when available
+- Multiple search strategies (name, email, company)
+- Fuzzy matching for name variations
+
+### 4. Real CRM Record Creation
+Implement actual CRM operations:
+- Create meeting/activity records with proper data mapping
+- Link meetings to existing contacts when found
+- Include meeting summaries and attendee information
+- Handle duplicate record prevention
+
+## Technical Specifications
+
+### Zoho Bigin API Details
+- Base URL: `https://www.zohoapis.com/bigin/v1`
+- Authentication: OAuth 2.0 with access/refresh tokens
+- Key endpoints: `/Contacts/search`, `/Events`, `/Activities`
+- Rate limits: Respect API rate limiting with exponential backoff
+
+### OAuth Token Management
+- Store access_token and refresh_token in user integrations
+- Auto-refresh tokens when they expire (401 responses)
+- Handle refresh failures gracefully
+- Update stored credentials after successful refresh
+
+### Data Transformation
+Transform meeting data to Bigin format:
+```typescript
+interface BiginMeetingRecord {
+  Subject: string;
+  Start_DateTime: string;
+  Description: string;
+  What_Id?: string; // Contact ID if found
+  Duration: number;
+  Meeting_Type: string;
+}
+```
+
+## Implementation Logic
+
+### 1. Contact Search and Matching
+```typescript
+// Smart contact search strategy:
+1. Search by exact attendee email addresses
+2. Search by name extracted from meeting title
+3. Search by company name if available
+4. Use fuzzy matching for partial name matches
+5. Return confidence scores for each match
+```
+
+### 2. Smart Fallback System
+```typescript
+// Similar to Otter integration:
+- Try real Bigin API first
+- If API fails, use fallback contact data
+- Log specific failure reasons
+- Maintain user experience regardless of API status
+- Show clear indicators of real vs. fallback data
+```
+
+### 3. CRM Record Creation
+```typescript
+// When executing sync operations:
+- Validate contact matches before creating records
+- Include meeting summary from Otter if available
+- Set proper record type and status
+- Handle duplicate prevention
+- Return creation success/failure status
+```
+
+## Enhanced /api/meetings Route Updates
+
+Add Bigin integration section:
+```typescript
+console.log('📋 [SYNC] Attempting Bigin CRM connection...');
+let contacts = [];
+let usingContactFallback = false;
+let contactFallbackReason = '';
+
+if (syncStatus.bigin.connected) {
+  try {
+    const biginService = await BiginService.createFromUserIntegration(storage, userId);
+    if (biginService) {
+      // Search for contacts that might match meeting attendees
+      const searchQueries = [...new Set([
+        ...meetings.flatMap(m => m.attendees?.map(email => email.split('@')[0]) || []),
+        ...meetings.map(m => m.title.split(' ')[0]) // First word of meeting title
+      ])].filter(q => q.length > 2);
+
+      for (const query of searchQueries.slice(0, 5)) { // Limit searches
+        try {
+          const searchResults = await biginService.searchContacts(query);
+          contacts.push(...searchResults);
+        } catch (searchError) {
+          console.warn(`⚠️ [SYNC] Contact search failed for "${query}":`, searchError.message);
+        }
+      }
+
+      // Remove duplicates
+      contacts = contacts.filter((contact, index, self) => 
+        index === self.findIndex(c => c.id === contact.id)
+      );
+
+      console.log('✅ [SYNC] Using real Bigin data:', contacts.length, 'contacts found');
+    } else {
+      usingContactFallback = true;
+      contactFallbackReason = 'Failed to initialize Bigin service';
+    }
+  } catch (error) {
+    usingContactFallback = true;
+    contactFallbackReason = `API error: ${error.message}`;
+    console.warn('⚠️ [SYNC] Bigin API failed:', error.message);
+  }
+} else {
+  usingContactFallback = true;
+  contactFallbackReason = 'Bigin not connected';
+}
+
+// Fallback contact data
+if (usingContactFallback) {
+  contacts = [
+    { id: '1', name: 'Mark', email: 'mark@company.com', company: 'Launch Box' },
+    { id: '2', name: 'Nicole', email: 'nicole@company.com', company: 'RTLC' },
+    { id: '3', name: 'Ashley', email: 'ashley@company.com', company: 'RTLC' },
+    { id: '4', name: 'Dante', email: 'dante@company.com', company: 'RTLC' },
+    { id: '5', name: 'Brian Albans', email: 'brian.albans@company.com', company: 'RTLC' }
+  ];
+  console.log('🔄 [SYNC] Using fallback contact data:', contacts.length, 'contacts');
+  console.log('📝 [SYNC] Contact fallback reason:', contactFallbackReason);
+}
+```
+
+## Update /api/sync/execute Route
+
+Enhance the sync execution to perform real CRM operations:
+```typescript
+// In the sync execution loop:
+if (biginService && !usingContactFallback) {
+  try {
+    // Create actual meeting record in Bigin
+    const crmRecord = await biginService.createMeetingRecord({
+      title: meeting.title,
+      date: new Date(meeting.date),
+      summary: otterResult?.summary || '',
+      attendees: meeting.attendees || [],
+      contactId: matchedContact?.id
+    });
+    
+    biginResult = {
+      record_id: crmRecord.id,
+      contact_matched: !!matchedContact,
+      record_type: 'Meeting'
+    };
+  } catch (crmError) {
+    console.error(`❌ [SYNC] CRM record creation failed:`, crmError.message);
+    throw new Error(`Failed to create CRM record: ${crmError.message}`);
+  }
+} else {
+  // Simulate record creation for fallback
+  biginResult = {
+    record_id: `bigin-${meetingId}-${Date.now()}`,
+    contact_matched: Math.random() > 0.3,
+    record_type: 'Meeting'
+  };
+}
+```
+
+## Expected Outcome
+
+After implementation:
+- Real contact search and matching using Zoho Bigin API
+- Actual CRM record creation for synced meetings
+- Smart fallback system maintains reliability
+- Enhanced matching using real contact database
+- Proper OAuth token management and refresh
+- Clear status indicators for real vs. fallback data
+
+## Testing Requirements
+
+- Test with valid Zoho Bigin OAuth credentials
+- Test token refresh scenarios
+- Test contact search and matching
+- Test CRM record creation
+- Verify fallback system works
+- Test error handling for various API failures
+
+## Important Notes
+
+- Handle OAuth token refresh automatically
+- Implement rate limiting respect
+- Maintain backward compatibility
+- Provide clear logging for debugging
+- Ensure graceful degradation on API failures
+- Keep all existing confidence scoring and error handling
+
+This implementation completes the real CRM integration while maintaining the reliable fallback system we established.
