@@ -915,27 +915,92 @@ export async function registerRoutes(app: Express): Promise<Server> {
           const biginService = await BiginService.createFromUserIntegration(storage, userId);
           
           if (biginService) {
-            console.log('📅 [SYNC] API Call: Searching contacts for meetings...');
+            console.log('📅 [SYNC] API Call: Enhanced contact search for meetings...');
             
-            // Get contacts with 10-second timeout
+            // ENHANCED: Extract better search terms
+            const searchTerms = new Set<string>();
+            
+            for (const meeting of meetings) {
+              // Extract names from meeting titles with better parsing
+              const titleParts = meeting.title.split(/[\s\-|/,]+/).filter(word => 
+                word.length > 2 && 
+                !['the', 'and', 'with', 'meeting', 'call', 'chat', 'session', 'box'].includes(word.toLowerCase())
+              );
+              
+              titleParts.forEach(part => {
+                searchTerms.add(part);
+                // Also try first word combinations
+                if (part.length > 3) {
+                  searchTerms.add(part.substring(0, 4)); // First 4 chars
+                }
+              });
+              
+              // Extract from attendee emails
+              if (meeting.attendees) {
+                meeting.attendees.forEach((email: string) => {
+                  const emailPrefix = email.split('@')[0];
+                  if (emailPrefix.length > 2) {
+                    searchTerms.add(emailPrefix);
+                  }
+                });
+              }
+            }
+            
+            console.log('🔍 [SYNC] Enhanced search terms:', Array.from(searchTerms));
+            
+            // Search with enhanced logic
+            const allContacts: any[] = [];
+            const maxSearches = 8; // Increased from 5
+            
+            for (const term of Array.from(searchTerms).slice(0, maxSearches)) {
+              try {
+                console.log(`🔍 [SYNC] Searching for: "${term}"`);
+                const termContacts = await biginService.findContactByVariations(term);
+                allContacts.push(...termContacts);
+                
+                if (termContacts.length > 0) {
+                  console.log(`✅ [SYNC] Found ${termContacts.length} contacts for "${term}"`);
+                }
+              } catch (searchError: any) {
+                console.warn(`⚠️ [SYNC] Search failed for "${term}":`, searchError.message);
+              }
+            }
+            
+            // Remove duplicates by ID with timeout protection
+            const uniqueContactsPromise = new Promise((resolve) => {
+              const uniqueResults = allContacts.filter((contact, index, self) => 
+                index === self.findIndex(c => c.id === contact.id)
+              );
+              resolve(uniqueResults);
+            });
+            
             const apiContacts = await Promise.race([
-              biginService.getContactsForMeetings(meetings),
-              new Promise((_, reject) => setTimeout(() => reject(new Error('Contact search timeout after 10 seconds')), 10000))
+              uniqueContactsPromise,
+              new Promise((_, reject) => setTimeout(() => reject(new Error('Contact processing timeout after 10 seconds')), 10000))
             ]);
             
-            console.log('📊 [SYNC] API Response:', {
-              contactCount: apiContacts?.length || 0,
-              hasData: Array.isArray(apiContacts) && apiContacts.length > 0
+            console.log('📊 [SYNC] Enhanced search results:', {
+              totalSearchTerms: searchTerms.size,
+              rawContactsFound: allContacts.length,
+              uniqueContactsFound: Array.isArray(apiContacts) ? apiContacts.length : 0
             });
             
             if (apiContacts && Array.isArray(apiContacts) && apiContacts.length > 0) {
               contacts = apiContacts;
-              console.log('✅ [SYNC] SUCCESS: Using real Bigin data -', contacts.length, 'contacts');
-              console.log('📋 [SYNC] Real contact names:', contacts.map((c: any) => c.name));
+              console.log('✅ [SYNC] SUCCESS: Enhanced search found', contacts.length, 'unique contacts');
+              console.log('📋 [SYNC] Found contact names:', contacts.map((c: any) => c.name));
+              
+              // SPECIFIC CHECK: Did we find Mark Murphy?
+              const markMurphy = contacts.find((c: any) => 
+                c.name.toLowerCase().includes('mark') && c.name.toLowerCase().includes('murphy')
+              );
+              if (markMurphy) {
+                console.log('🎯 [SYNC] SUCCESS: Found Mark Murphy!', markMurphy);
+              }
             } else {
               usingContactFallback = true;
-              contactFallbackReason = 'API returned no contacts (empty search results)';
-              console.log('⚠️ [SYNC] API returned empty results, switching to fallback contacts');
+              contactFallbackReason = 'Enhanced search returned no contacts';
+              console.log('⚠️ [SYNC] Enhanced search returned empty results');
             }
           } else {
             usingContactFallback = true;
