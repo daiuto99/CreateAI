@@ -151,11 +151,11 @@ export class OtterService {
   }
 
   /**
-   * Fetch speeches/meetings from specified date range
+   * Fetch ALL speeches/meetings without date filtering 
    */
   async getSpeeches(startDate: Date, endDate: Date): Promise<ExpectedTranscript[]> {
     try {
-      console.log('🎤 Fetching Otter speeches from', startDate.toISOString(), 'to', endDate.toISOString());
+      console.log('🎤 Fetching ALL Otter speeches (NO date filtering to get complete data)');
 
       const controller = new AbortController();
       const timeoutId = setTimeout(() => {
@@ -163,95 +163,123 @@ export class OtterService {
         console.error('⏰ Otter API timeout after 15 seconds');
       }, 15000);
 
-      // Use the correct Otter.ai export endpoint (max 3 most recent recordings)
+      // REMOVE ALL DATE FILTERING - get complete transcript list
       // Add cache-busting timestamp to force fresh data
       const timestamp = Date.now();
-      const url = `${this.baseUrl}/speech/export?_t=${timestamp}&fresh=true`;
       
-      console.log('🔗 [DEBUG] Otter.ai API request details:', {
-        url: url,
-        method: 'GET',
-        apiKeyFirst15Chars: this.apiKey?.substring(0, 15) || 'NONE',
-        note: 'Using official /api/public/speech/export endpoint with cache-busting'
-      });
+      // Try multiple API endpoints to get ALL transcripts
+      const possibleUrls = [
+        `${this.baseUrl}/speech/export?_t=${timestamp}&fresh=true&limit=100`, // Try with higher limit
+        `${this.baseUrl}/meetings?_t=${timestamp}&fresh=true&limit=100`, // Alternative meetings endpoint
+        `${this.baseUrl}/speech/export?_t=${timestamp}&fresh=true`, // Original endpoint
+        `${this.baseUrl}/meetings/list?_t=${timestamp}&fresh=true&limit=100` // Another potential endpoint
+      ];
       
-      const response = await fetch(url, {
-        method: 'GET',
-        headers: {
-          'Authorization': `Bearer ${this.apiKey}`,
-          'Content-Type': 'application/json',
-          // Cache-busting headers to force fresh data
-          'Cache-Control': 'no-cache, no-store, must-revalidate',
-          'Pragma': 'no-cache',
-          'If-None-Match': '*'
-        },
-        signal: controller.signal
-      });
+      // Try each endpoint until we get data
+      for (const [index, url] of possibleUrls.entries()) {
+        try {
+          console.log(`🔗 [DEBUG] Trying Otter API endpoint ${index + 1}/4:`, url);
+      
+          const response = await fetch(url, {
+            method: 'GET',
+            headers: {
+              'Authorization': `Bearer ${this.apiKey}`,
+              'Content-Type': 'application/json',
+              // Cache-busting headers to force fresh data
+              'Cache-Control': 'no-cache, no-store, must-revalidate',
+              'Pragma': 'no-cache',
+              'If-None-Match': '*'
+            },
+            signal: controller.signal
+          });
+
+          const responseBody = await response.text();
+          console.log(`🔗 [DEBUG] Endpoint ${index + 1} response:`, {
+            url: url,
+            status: response.status,
+            ok: response.ok,
+            bodyLength: responseBody.length,
+            bodyPreview: responseBody.substring(0, 200) + (responseBody.length > 200 ? '...' : '')
+          });
+
+          if (response.ok && responseBody.length > 10) {
+            clearTimeout(timeoutId);
+            
+            // Parse and analyze the response structure
+            const data = JSON.parse(responseBody);
+            console.log('📊 [COMPLETE DEBUG] Full API response structure from endpoint', index + 1, ':', {
+              url: url,
+              dataKeys: Object.keys(data || {}),
+              hasData: !!data?.data,
+              dataType: Array.isArray(data?.data) ? 'array' : typeof data?.data,
+              dataArrayLength: Array.isArray(data?.data) ? data.data.length : 'N/A',
+              isDirectArray: Array.isArray(data),
+              directArrayLength: Array.isArray(data) ? data.length : 'N/A',
+              hasSpeeches: !!data?.speeches,
+              speechesLength: Array.isArray(data?.speeches) ? data.speeches.length : 'N/A',
+              hasRecordings: !!data?.recordings,
+              recordingsLength: Array.isArray(data?.recordings) ? data.recordings.length : 'N/A',
+              hasMeetings: !!data?.meetings,
+              meetingsLength: Array.isArray(data?.meetings) ? data.meetings.length : 'N/A',
+              rawResponse: JSON.stringify(data, null, 2).substring(0, 1000)
+            });
+
+            // Handle different possible response formats from Otter.ai API
+            let speeches = [];
+            if (Array.isArray(data?.data)) {
+              speeches = data.data;
+              console.log('📋 Using data.data array format from endpoint', index + 1);
+            } else if (Array.isArray(data?.speeches)) {
+              speeches = data.speeches;
+              console.log('📋 Using data.speeches array format from endpoint', index + 1);
+            } else if (Array.isArray(data?.recordings)) {
+              speeches = data.recordings;
+              console.log('📋 Using data.recordings array format from endpoint', index + 1);
+            } else if (Array.isArray(data?.meetings)) {
+              speeches = data.meetings;
+              console.log('📋 Using data.meetings array format from endpoint', index + 1);
+            } else if (Array.isArray(data)) {
+              speeches = data;
+              console.log('📋 Using direct array format from endpoint', index + 1);
+            } else {
+              console.log('⚠️ Unrecognized response format from endpoint', index + 1, ':', data);
+              continue; // Try next endpoint
+            }
+
+            if (speeches.length > 0) {
+              console.log(`📊 SUCCESS! Found ${speeches.length} speeches from endpoint ${index + 1}`);
+              console.log('🔍 All available speech titles:', speeches.map((s: any) => s.title || s.name || 'Untitled'));
+
+              // Transform to expected format  
+              const transcripts: ExpectedTranscript[] = speeches.map((speech: any) => {
+                return {
+                  id: speech.speech_id || speech.id || 'unknown',
+                  title: speech.title || speech.name || 'Untitled Meeting',
+                  date: new Date(speech.created_at || speech.date || Date.now()),
+                  duration: speech.duration || 'Unknown',
+                  summary: speech.summary || speech.abstract_summary || speech.description,
+                  participants: speech.calendar_guests ? [speech.calendar_guests.name].filter(Boolean) : []
+                };
+              });
+
+              console.log(`✅ SUCCESS: ${transcripts.length} transcripts processed from endpoint ${index + 1}`);
+              console.log('📝 Final transcript list:', transcripts.map(t => ({ title: t.title, date: t.date.toISOString().split('T')[0] })));
+
+              return transcripts;
+            } else {
+              console.log(`⚠️ Endpoint ${index + 1} returned empty speeches array`);
+            }
+          } else {
+            console.log(`❌ Endpoint ${index + 1} failed:`, response.status, responseBody.substring(0, 100));
+          }
+        } catch (endpointError) {
+          console.log(`❌ Error with endpoint ${index + 1}:`, endpointError);
+        }
+      }
 
       clearTimeout(timeoutId);
-
-      const responseBody = await response.text();
-      console.log('🔗 [DEBUG] Otter.ai API response:', {
-        status: response.status,
-        statusText: response.statusText,
-        ok: response.ok,
-        responseBody: responseBody.substring(0, 300) + (responseBody.length > 300 ? '...' : ''),
-        fullResponseLength: responseBody.length
-      });
-
-      if (!response.ok) {
-        await this.handleApiError(response);
-        return [];
-      }
-
-      const data = JSON.parse(responseBody);
-      console.log('📊 Otter API response structure:', {
-        dataKeys: Object.keys(data || {}),
-        hasData: !!data?.data,
-        dataType: Array.isArray(data?.data) ? 'array' : typeof data?.data,
-        // DEBUG: Check if data is directly an array or has other structures
-        isDirectArray: Array.isArray(data),
-        hasSpeeches: !!data?.speeches,
-        hasRecordings: !!data?.recordings,
-        dataLength: data?.length
-      });
-
-      // Handle different possible response formats from Otter.ai API
-      let speeches = [];
-      if (Array.isArray(data?.data)) {
-        speeches = data.data;
-      } else if (Array.isArray(data?.speeches)) {
-        speeches = data.speeches;
-      } else if (Array.isArray(data?.recordings)) {
-        speeches = data.recordings;
-      } else if (Array.isArray(data)) {
-        speeches = data;
-      } else if (data?.data) {
-        speeches = [data.data];
-      } else {
-        console.log('🔍 Raw response keys for debugging:', Object.keys(data || {}));
-        console.log('🔍 First few response properties:', JSON.stringify(data, null, 2).substring(0, 500));
-      }
-      
-      if (!speeches || speeches.length === 0) {
-        console.log('⚠️ No speeches found in Otter response');
-        return [];
-      }
-
-      // Transform Otter API response to expected format
-      const transcripts: ExpectedTranscript[] = speeches.map((speech: any) => {
-        return {
-          id: speech.speech_id || speech.id || 'unknown',
-          title: speech.title || 'Untitled Meeting',
-          date: new Date(speech.created_at || Date.now()),
-          duration: speech.duration || 'Unknown',
-          summary: speech.summary || speech.abstract_summary,
-          participants: speech.calendar_guests ? [speech.calendar_guests.name].filter(Boolean) : []
-        };
-      });
-
-      console.log('✅ Successfully transformed', transcripts.length, 'Otter speeches');
-      return transcripts;
+      console.log('❌ All endpoints failed or returned empty data');
+      return [];
 
     } catch (error: any) {
       if (error.name === 'AbortError') {
