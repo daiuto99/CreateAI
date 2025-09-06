@@ -202,7 +202,12 @@ export default function Sync() {
                         <div className="animate-spin rounded-full h-5 w-5 border-b-2 border-blue-500"></div>
                         <div>
                           <p className="font-medium text-blue-900 dark:text-blue-100">Analyzing meeting matches...</p>
-                          <p className="text-sm text-blue-700 dark:text-blue-300">Matching attendees to CRM contacts and transcripts with AI confidence scoring</p>
+                          <div className="text-sm text-blue-700 dark:text-blue-300 space-y-1">
+                            {transcriptsLoading && <p>• Loading transcripts from Otter.AI...</p>}
+                            {contactsLoading && <p>• Loading contacts from Airtable...</p>}
+                            {meetingsLoading && <p>• Fetching calendar data...</p>}
+                            {!isAnalyzingMatches && <p>• Matching attendees to CRM contacts and transcripts with AI confidence scoring</p>}
+                          </div>
                         </div>
                       </div>
                     </div>
@@ -216,8 +221,12 @@ export default function Sync() {
                         <div className="flex items-center space-x-2 mb-2">
                           <h4 className="font-medium">{meeting.title}</h4>
                           <div className="flex items-center space-x-1">
-                            {/* Otter.AI Match Icon - BLUE only for real API data */}
-                            {meeting.hasOtterMatch && !meeting.isOtterFallback ? (
+                            {/* Otter.AI Match Icon - BLUE only for real API data, spinner while loading */}
+                            {transcriptsLoading ? (
+                              <div className="w-5 h-5 bg-blue-100 dark:bg-blue-900/30 rounded-full flex items-center justify-center" title="Loading transcripts from Otter.AI...">
+                                <div className="animate-spin rounded-full h-3 w-3 border-b border-blue-500"></div>
+                              </div>
+                            ) : meeting.hasOtterMatch && !meeting.isOtterFallback ? (
                               <div className="w-5 h-5 bg-blue-500 rounded-full flex items-center justify-center" title="Otter.AI transcript available">
                                 <i className="fas fa-microphone text-white text-xs"></i>
                               </div>
@@ -227,8 +236,12 @@ export default function Sync() {
                                 <i className="fas fa-microphone text-gray-500 text-xs"></i>
                               </div>
                             )}
-                            {/* Airtable Match Icon - GREEN only for real API data */}
-                            {meeting.hasAirtableMatch && !meeting.isAirtableFallback ? (
+                            {/* Airtable Match Icon - GREEN only for real API data, spinner while loading */}
+                            {contactsLoading ? (
+                              <div className="w-5 h-5 bg-green-100 dark:bg-green-900/30 rounded-full flex items-center justify-center" title="Loading contacts from Airtable...">
+                                <div className="animate-spin rounded-full h-3 w-3 border-b border-green-500"></div>
+                              </div>
+                            ) : meeting.hasAirtableMatch && !meeting.isAirtableFallback ? (
                               <div className="w-5 h-5 bg-green-500 rounded-full flex items-center justify-center" title="Airtable CRM record exists">
                                 <i className="fas fa-database text-white text-xs"></i>
                               </div>
