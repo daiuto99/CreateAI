@@ -952,12 +952,14 @@ export async function registerRoutes(app: Express): Promise<Server> {
         if (event.title) {
           const meetingDate = event.startTime ? new Date(event.startTime.replace(/(\d{4})(\d{2})(\d{2})T(\d{2})(\d{2})(\d{2})/, '$1-$2-$3T$4:$5:$6')) : new Date();
           
-          // Only include meetings from August 1st 2025 to TODAY (September 5th 2025)
-          const augustFirst2025 = new Date('2025-08-01T00:00:00');
-          const today = new Date('2025-09-05T23:59:59'); // Today's end
+          // Include meetings from a broader date range to capture more potential matches
+          const sixtyDaysAgo = new Date();
+          sixtyDaysAgo.setDate(sixtyDaysAgo.getDate() - 60);
+          const thirtyDaysFromNow = new Date();
+          thirtyDaysFromNow.setDate(thirtyDaysFromNow.getDate() + 30);
           const now = new Date();
           
-          if (meetingDate >= augustFirst2025 && meetingDate <= today) {
+          if (meetingDate >= sixtyDaysAgo && meetingDate <= thirtyDaysFromNow) {
             // Determine actual status based on meeting date
             const meetingStatus = meetingDate <= now ? 'completed' : 'scheduled';
             
@@ -1373,7 +1375,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         console.log(`📊 Final result - "${meeting.title}": Otter=${otterIcon} ${otterSource} (${(meeting as any).otterConfidence}%), Airtable=${airtableIcon} ${airtableSource} (${(meeting as any).airtableConfidence}%)`);
       }
       
-      console.log('📊 Filtered meetings (Aug 1 - Sep 5, 2025):', meetings.length);
+      console.log('📊 Filtered meetings (last 60 days + next 30 days):', meetings.length);
       res.json(meetings.slice(0, 20)); // Return last 20 meetings
     } catch (error: any) {
       const errorDetails = {
