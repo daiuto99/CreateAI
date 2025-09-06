@@ -562,25 +562,102 @@ export async function registerRoutes(app: Express): Promise<Server> {
             break;
 
           case 'bigin':
-            // Test Bigin by Zoho credentials - simplified test
+            // Test Bigin by Zoho credentials - validate OAuth credentials
             const biginCreds = integration.credentials as any;
             
-            // For now, just validate that we have the required credentials
-            if (biginCreds.clientId && biginCreds.clientSecret) {
-              testResult = { success: true, message: 'Bigin by Zoho credentials saved successfully! Connection will be tested during actual API usage.', error: '' };
-              await storage.upsertUserIntegration({ ...integration, status: 'connected' as any });
+            console.log('🧪 [DEBUG] Testing Bigin integration credentials:', {
+              hasClientId: !!biginCreds.clientId,
+              hasClientSecret: !!biginCreds.clientSecret,
+              hasAccessToken: !!biginCreds.access_token,
+              hasRefreshToken: !!biginCreds.refresh_token,
+              clientIdLength: biginCreds.clientId?.length || 0,
+              accessTokenLength: biginCreds.access_token?.length || 0
+            });
+            
+            // Validate that ALL required OAuth credentials exist
+            const requiredFields = ['clientId', 'clientSecret', 'access_token', 'refresh_token'];
+            const missingFields = requiredFields.filter(field => !biginCreds[field]);
+            
+            if (missingFields.length === 0) {
+              // Test actual API connection with the credentials
+              try {
+                const testUrl = 'https://www.zohoapis.com/bigin/v1/Contacts';
+                const apiTestResponse = await fetch(`${testUrl}?per_page=1`, {
+                  headers: {
+                    'Authorization': `Zoho-oauthtoken ${biginCreds.access_token}`,
+                    'Content-Type': 'application/json'
+                  }
+                });
+                
+                console.log('🧪 [DEBUG] Bigin API test response:', {
+                  status: apiTestResponse.status,
+                  statusText: apiTestResponse.statusText,
+                  ok: apiTestResponse.ok
+                });
+                
+                if (apiTestResponse.ok) {
+                  testResult = { success: true, message: 'Bigin by Zoho connection successful! All OAuth credentials are valid and API is accessible.', error: '' };
+                  await storage.upsertUserIntegration({ ...integration, status: 'connected' as any });
+                } else if (apiTestResponse.status === 401) {
+                  testResult = { success: false, message: '', error: 'Bigin OAuth credentials are invalid or expired. Please reconnect your Bigin account.' };
+                  await storage.upsertUserIntegration({ ...integration, status: 'error' as any });
+                } else {
+                  const errorText = await apiTestResponse.text();
+                  testResult = { success: false, message: '', error: `Bigin API error (${apiTestResponse.status}): ${errorText}` };
+                  await storage.upsertUserIntegration({ ...integration, status: 'error' as any });
+                }
+              } catch (apiError: any) {
+                console.error('🚨 [DEBUG] Bigin API test failed:', apiError);
+                testResult = { success: false, message: '', error: `Failed to test Bigin API connection: ${apiError.message}` };
+                await storage.upsertUserIntegration({ ...integration, status: 'error' as any });
+              }
             } else {
-              testResult = { success: false, message: '', error: 'Missing Client ID or Client Secret' };
+              testResult = { success: false, message: '', error: `Missing required OAuth credentials: ${missingFields.join(', ')}. Please complete the OAuth flow to connect Bigin.` };
               await storage.upsertUserIntegration({ ...integration, status: 'error' as any });
             }
             break;
 
           case 'otter':
-            // Test Otter.ai credentials - validate API key format
+            // Test Otter.ai credentials - validate API key by making real API call
             const otterCreds = integration.credentials as any;
+            
+            console.log('🧪 [DEBUG] Testing Otter.ai integration credentials:', {
+              hasApiKey: !!otterCreds.apiKey,
+              apiKeyLength: otterCreds.apiKey?.length || 0
+            });
+            
             if (otterCreds.apiKey && otterCreds.apiKey.length > 0) {
-              testResult = { success: true, message: 'Otter.ai API key saved successfully! Connection will be tested when accessing meeting transcripts.', error: '' };
-              await storage.upsertUserIntegration({ ...integration, status: 'connected' as any });
+              try {
+                // Test actual API connection with the API key
+                const otterTestResponse = await fetch('https://otter.ai/forward/api/v1/meetings', {
+                  headers: {
+                    'Authorization': `Bearer ${otterCreds.apiKey}`,
+                    'Content-Type': 'application/json'
+                  }
+                });
+                
+                console.log('🧪 [DEBUG] Otter.ai API test response:', {
+                  status: otterTestResponse.status,
+                  statusText: otterTestResponse.statusText,
+                  ok: otterTestResponse.ok
+                });
+                
+                if (otterTestResponse.ok) {
+                  testResult = { success: true, message: 'Otter.ai connection successful! API key is valid and can access meeting transcripts.', error: '' };
+                  await storage.upsertUserIntegration({ ...integration, status: 'connected' as any });
+                } else if (otterTestResponse.status === 401) {
+                  testResult = { success: false, message: '', error: 'Otter.ai API key is invalid or expired. Please check your API key.' };
+                  await storage.upsertUserIntegration({ ...integration, status: 'error' as any });
+                } else {
+                  const errorText = await otterTestResponse.text();
+                  testResult = { success: false, message: '', error: `Otter.ai API error (${otterTestResponse.status}): ${errorText}` };
+                  await storage.upsertUserIntegration({ ...integration, status: 'error' as any });
+                }
+              } catch (apiError: any) {
+                console.error('🚨 [DEBUG] Otter.ai API test failed:', apiError);
+                testResult = { success: false, message: '', error: `Failed to test Otter.ai API connection: ${apiError.message}` };
+                await storage.upsertUserIntegration({ ...integration, status: 'error' as any });
+              }
             } else {
               testResult = { success: false, message: '', error: 'Missing or invalid Otter.ai API key' };
               await storage.upsertUserIntegration({ ...integration, status: 'error' as any });
