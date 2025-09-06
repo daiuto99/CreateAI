@@ -76,20 +76,31 @@ export class BiginService {
   }
 
   /**
-   * Search for contacts by name, email, or company
+   * Search for contacts by name, email, or company with enhanced criteria
    */
   async searchContacts(query: string): Promise<BiginContact[]> {
     try {
       console.log('🔍 Searching Bigin contacts for:', query);
 
       const searchUrl = `${this.baseUrl}/Contacts/search`;
-      const searchCriteria = `((Full_Name:contains:${query}) or (Email:contains:${query}) or (Account_Name.Account_Name:contains:${query}))`;
+      
+      // ENHANCED: Multiple search strategies for better matching
+      const searchCriteria = [
+        `(Full_Name:starts_with:${query})`,  // Exact start match
+        `(Full_Name:contains:${query})`,     // Contains anywhere
+        `(Email:starts_with:${query})`,      // Email prefix
+        `(Email:contains:${query})`          // Email contains
+      ].join(' or ');
+      
+      const finalCriteria = `(${searchCriteria})`;
+      
+      console.log('🔍 Search criteria:', finalCriteria);
 
       const response = await this.makeAuthenticatedRequest(searchUrl, {
         method: 'GET',
         params: {
-          criteria: searchCriteria,
-          per_page: 20
+          criteria: finalCriteria,
+          per_page: 50  // Increased from 20 to get more results
         }
       });
 
@@ -101,7 +112,8 @@ export class BiginService {
       const data = await response.json();
       console.log('📊 Bigin contact search response:', {
         query,
-        contactCount: data.data?.length || 0
+        contactCount: data.data?.length || 0,
+        foundContacts: data.data?.map((c: any) => c.Full_Name || c.Name) || []
       });
 
       if (!data.data || !Array.isArray(data.data)) {
@@ -109,7 +121,7 @@ export class BiginService {
         return [];
       }
 
-      // Transform Bigin API response to our format
+      // Transform and SORT by relevance
       const contacts: BiginContact[] = data.data.map((contact: any) => ({
         id: contact.id,
         name: contact.Full_Name || contact.Name || 'Unknown',
@@ -117,6 +129,13 @@ export class BiginService {
         company: contact.Account_Name?.Account_Name || '',
         phone: contact.Phone || contact.Mobile || ''
       }));
+
+      // SORT by name relevance (exact matches first, then partial)
+      contacts.sort((a, b) => {
+        const aExact = a.name.toLowerCase().startsWith(query.toLowerCase()) ? 1 : 0;
+        const bExact = b.name.toLowerCase().startsWith(query.toLowerCase()) ? 1 : 0;
+        return bExact - aExact; // Exact matches first
+      });
 
       console.log('✅ Found', contacts.length, 'Bigin contacts for query:', query);
       console.log('📋 Contact names:', contacts.map(c => c.name));
@@ -412,6 +431,44 @@ export class BiginService {
       console.log('❌ Bigin API connection test failed:', errorMessage);
       return { success: false, error: errorMessage };
     }
+  }
+
+  /**
+   * Enhanced contact search with multiple variations for better matching
+   */
+  async findContactByVariations(name: string): Promise<BiginContact[]> {
+    console.log('🔍 Trying contact search variations for:', name);
+    
+    const searchVariations = [
+      name,                           // "Mark"
+      `${name}*`,                    // "Mark*" (wildcard)
+      name.toLowerCase(),            // "mark"
+      name.charAt(0).toUpperCase() + name.slice(1).toLowerCase()  // "Mark"
+    ];
+    
+    const allResults: BiginContact[] = [];
+    
+    for (const variation of searchVariations) {
+      try {
+        console.log(`  🔍 Trying variation: "${variation}"`);
+        const results = await this.searchContacts(variation);
+        allResults.push(...results);
+        
+        if (results.length > 0) {
+          console.log(`  ✅ Found ${results.length} contacts with variation: "${variation}"`);
+        }
+      } catch (error) {
+        console.log(`  ⚠️ Search failed for variation: "${variation}"`);
+      }
+    }
+    
+    // Remove duplicates by ID
+    const uniqueResults = allResults.filter((contact, index, self) => 
+      index === self.findIndex(c => c.id === contact.id)
+    );
+    
+    console.log('📊 Total unique contacts found:', uniqueResults.length);
+    return uniqueResults;
   }
 
   /**
