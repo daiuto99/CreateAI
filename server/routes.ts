@@ -1098,6 +1098,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
             credentialKeys: airtableIntegration?.credentials ? Object.keys(airtableIntegration.credentials) : []
           });
           
+          // Import AirtableService dynamically to avoid circular dependency
+          const { AirtableService } = await import('./services/airtable');
           const airtableService = await AirtableService.createFromUserIntegration(storage, userId);
           
           console.log('🔗 [DEBUG] AirtableService.createFromUserIntegration result:', {
@@ -2039,6 +2041,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
             try {
               console.log(`📋 [BIGIN] Attempting real CRM operations for: ${meeting.title}`);
               
+              // Import AirtableService dynamically
+              const { AirtableService } = await import('./services/airtable');
               const airtableService = await AirtableService.createFromUserIntegration(storage, userId);
               if (airtableService) {
                 // Search for matching contacts
