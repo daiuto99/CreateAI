@@ -796,7 +796,11 @@ export async function registerRoutes(app: Express): Promise<Server> {
               hasTranscript: false,
               hasOtterMatch: false,
               hasBiginMatch: false,
-              dismissed: false
+              dismissed: false,
+              otterConfidence: 0,
+              biginConfidence: 0,
+              bestOtterMatch: null,
+              bestBiginMatch: null
             });
           }
         }
@@ -894,8 +898,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
         
         // Set match if confidence is above threshold (60%)
         meeting.hasOtterMatch = highestOtterConfidence >= 60;
-        meeting.otterConfidence = highestOtterConfidence;
-        meeting.bestOtterMatch = bestOtterMatch;
+        (meeting as any).otterConfidence = highestOtterConfidence;
+        (meeting as any).bestOtterMatch = bestOtterMatch;
         
         if (meeting.hasOtterMatch) {
           console.log(`  ✅ Otter match found: "${bestOtterMatch?.title}" (confidence: ${highestOtterConfidence}%)`);
@@ -927,8 +931,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
         
         // Set match if confidence is above threshold (60%)
         meeting.hasBiginMatch = highestBiginConfidence >= 60;
-        meeting.biginConfidence = highestBiginConfidence;
-        meeting.bestBiginMatch = bestBiginMatch;
+        (meeting as any).biginConfidence = highestBiginConfidence;
+        (meeting as any).bestBiginMatch = bestBiginMatch;
         
         if (meeting.hasBiginMatch) {
           console.log(`  ✅ Bigin match found: "${bestBiginMatch?.name}" (confidence: ${highestBiginConfidence}%)`);
@@ -936,7 +940,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
           console.log(`  ⚪ No Bigin match found (highest confidence: ${highestBiginConfidence}%)`);
         }
         
-        console.log(`📊 Final result - "${meeting.title}": Otter=${meeting.hasOtterMatch ? '🔵' : '⚪'} (${meeting.otterConfidence}%), Bigin=${meeting.hasBiginMatch ? '🟢' : '⚪'} (${meeting.biginConfidence}%)`);
+        console.log(`📊 Final result - "${meeting.title}": Otter=${meeting.hasOtterMatch ? '🔵' : '⚪'} (${(meeting as any).otterConfidence}%), Bigin=${meeting.hasBiginMatch ? '🟢' : '⚪'} (${(meeting as any).biginConfidence}%)`);
       }
       
       console.log('📊 Filtered meetings (Aug 1 - Sep 5, 2025):', meetings.length);
@@ -1444,10 +1448,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
     if (meetingTitle.includes(contactName)) return 95;
     
     // Check name parts
-    const nameParts = contactName.split(' ').filter(part => part.length > 2);
+    const nameParts = contactName.split(' ').filter((part: string) => part.length > 2);
     let bestMatch = 0;
     
-    for (const part: string of nameParts) {
+    for (const part of nameParts) {
       if (meetingTitle.includes(part)) {
         bestMatch = Math.max(bestMatch, 75);
       }
