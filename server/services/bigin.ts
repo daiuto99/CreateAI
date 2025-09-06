@@ -325,12 +325,12 @@ export class BiginService {
       
       if (biginIntegration) {
         const updatedCredentials = {
-          ...biginIntegration.credentials,
+          ...(biginIntegration.credentials as object),
           access_token: this.credentials.access_token,
           expires_at: this.credentials.expires_at
         };
 
-        await this.storage.updateUserIntegration(this.userId, biginIntegration.id, {
+        await this.storage.upsertUserIntegration({
           ...biginIntegration,
           credentials: updatedCredentials
         });
