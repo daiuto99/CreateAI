@@ -289,7 +289,7 @@ export default function Integrations() {
     }
   };
 
-  // OAuth flow for Bigin
+  // Connection handling for integrations
 
   const handleConnect = (provider: string) => {
     setSelectedService(provider);
