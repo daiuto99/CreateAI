@@ -851,7 +851,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         response_type: 'code',
         client_id: credentials.clientId,
         scope: 'ZohoBigin.modules.ALL,ZohoBigin.users.READ',
-        redirect_uri: `${req.protocol}://${req.get('host')}/api/auth/bigin/callback`,
+        redirect_uri: 'https://rest-express.replit.app/api/auth/bigin/callback',
         state: state,
         access_type: 'offline'
       });
