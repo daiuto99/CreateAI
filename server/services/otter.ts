@@ -32,7 +32,7 @@ interface ExpectedTranscript {
 
 export class OtterService {
   private apiKey: string;
-  private baseUrl = 'https://otter.ai/forward/api/v1';
+  private baseUrl = 'https://otter.ai/forward/api/public';
 
   constructor(apiKey: string) {
     this.apiKey = apiKey;
@@ -80,52 +80,67 @@ export class OtterService {
         console.error('⏰ Otter API timeout after 15 seconds');
       }, 15000);
 
-      const url = `${this.baseUrl}/speeches?created_after=${startDate.toISOString()}&created_before=${endDate.toISOString()}`;
+      // Use the correct Otter.ai export endpoint (max 3 most recent recordings)
+      const url = `${this.baseUrl}/speech/export`;
+      
+      console.log('🔗 [DEBUG] Otter.ai API request details:', {
+        url: url,
+        method: 'GET',
+        apiKeyFirst15Chars: this.apiKey?.substring(0, 15) || 'NONE',
+        note: 'Using official /api/public/speech/export endpoint'
+      });
       
       const response = await fetch(url, {
         method: 'GET',
         headers: {
           'Authorization': `Bearer ${this.apiKey}`,
-          'Content-Type': 'application/json',
-          'User-Agent': 'CreateAI-OtterIntegration/1.0'
+          'Content-Type': 'application/json'
         },
         signal: controller.signal
       });
 
       clearTimeout(timeoutId);
 
+      const responseBody = await response.text();
+      console.log('🔗 [DEBUG] Otter.ai API response:', {
+        status: response.status,
+        statusText: response.statusText,
+        ok: response.ok,
+        responseBody: responseBody.substring(0, 300) + (responseBody.length > 300 ? '...' : ''),
+        fullResponseLength: responseBody.length
+      });
+
       if (!response.ok) {
         await this.handleApiError(response);
         return [];
       }
 
-      const data = await response.json();
-      console.log('📊 Otter API response:', {
-        speechCount: data.speeches?.length || 0,
-        hasNextPage: data.has_next_page || false
+      const data = JSON.parse(responseBody);
+      console.log('📊 Otter API response structure:', {
+        dataKeys: Object.keys(data || {}),
+        hasData: !!data?.data,
+        dataType: Array.isArray(data?.data) ? 'array' : typeof data?.data
       });
 
-      if (!data.speeches || !Array.isArray(data.speeches)) {
+      // Handle the correct response format from /api/public/speech/export
+      const speeches = Array.isArray(data?.data) ? data.data : (data?.data ? [data.data] : []);
+      
+      if (!speeches || speeches.length === 0) {
         console.log('⚠️ No speeches found in Otter response');
         return [];
       }
 
       // Transform Otter API response to expected format
-      const transcripts: ExpectedTranscript[] = await Promise.all(
-        data.speeches.map(async (speech: OtterSpeech) => {
-          // Get summary for each speech (if available)
-          const summary = await this.getSpeechSummary(speech.id);
-          
-          return {
-            id: speech.id,
-            title: speech.title || 'Untitled Meeting',
-            date: new Date(speech.created_at),
-            duration: this.formatDuration(speech.duration),
-            summary: summary?.summary,
-            participants: speech.participants?.map(p => p.name) || []
-          };
-        })
-      );
+      const transcripts: ExpectedTranscript[] = speeches.map((speech: any) => {
+        return {
+          id: speech.speech_id || speech.id || 'unknown',
+          title: speech.title || 'Untitled Meeting',
+          date: new Date(speech.created_at || Date.now()),
+          duration: speech.duration || 'Unknown',
+          summary: speech.summary || speech.abstract_summary,
+          participants: speech.calendar_guests ? [speech.calendar_guests.name].filter(Boolean) : []
+        };
+      });
 
       console.log('✅ Successfully transformed', transcripts.length, 'Otter speeches');
       return transcripts;
@@ -155,7 +170,11 @@ export class OtterService {
         controller.abort();
       }, 10000); // 10 second timeout for summaries
 
-      const response = await fetch(`${this.baseUrl}/speeches/${speechId}/summary`, {
+      // Since summaries are included in /api/public/speech/export, this method is no longer needed
+      console.log('⚠️ getSpeechSummary called but summaries are included in main export response');
+      return null;
+      
+      const response = await fetch(`${this.baseUrl}/me`, {
         method: 'GET',
         headers: {
           'Authorization': `Bearer ${this.apiKey}`,
@@ -256,7 +275,7 @@ export class OtterService {
     try {
       console.log('🧪 Testing Otter API connection...');
 
-      const response = await fetch(`${this.baseUrl}/speeches?limit=1`, {
+      const response = await fetch(`${this.baseUrl}/me`, {
         method: 'GET',
         headers: {
           'Authorization': `Bearer ${this.apiKey}`,

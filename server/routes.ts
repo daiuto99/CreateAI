@@ -613,9 +613,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
             
             try {
               // Test actual API connection with the correct endpoint
-              const testUrl = 'https://otter.ai/forward/api/v1/speeches';
+              const testUrl = 'https://otter.ai/forward/api/public/me';
               const requestHeaders = {
-                'Authorization': `Bearer ${otterCreds.apiKey}`
+                'Authorization': `Bearer ${otterCreds.apiKey}`,
+                'Content-Type': 'application/json'
               };
               
               console.log('🧪 [DEBUG] Otter.ai API test request details:', {
@@ -623,7 +624,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
                 method: 'GET',
                 headers: requestHeaders,
                 apiKeyFirst15Chars: otterCreds.apiKey?.substring(0, 15) || 'NONE',
-                apiKeyLength: otterCreds.apiKey?.length || 0
+                apiKeyLength: otterCreds.apiKey?.length || 0,
+                note: 'Using official /api/public/me endpoint for authentication test'
               });
               
               const otterTestResponse = await fetch(testUrl, {
@@ -639,7 +641,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
                 statusText: otterTestResponse.statusText,
                 ok: otterTestResponse.ok,
                 responseBody: responseBody.substring(0, 200) + (responseBody.length > 200 ? '...' : ''),
-                fullResponseLength: responseBody.length
+                fullResponseLength: responseBody.length,
+                expectedResponse: 'Should return user name and email if successful'
               });
               
               if (otterTestResponse.ok) {
