@@ -157,6 +157,9 @@ export class OtterService {
     try {
       console.log('🎤 Fetching ALL Otter speeches (NO date filtering to get complete data)');
 
+      // FIRST: Verify which account we're accessing
+      await this.verifyAccountAccess();
+
       const controller = new AbortController();
       const timeoutId = setTimeout(() => {
         controller.abort();
@@ -279,7 +282,10 @@ export class OtterService {
 
       clearTimeout(timeoutId);
       console.log('❌ All endpoints failed or returned empty data');
-      return [];
+      
+      // FINAL: Try specific date queries for September 4th
+      console.log('🔍 [FINAL ATTEMPT] Trying specific September 4th date queries...');
+      return await this.trySpecificDateQueries();
 
     } catch (error: any) {
       if (error.name === 'AbortError') {
@@ -292,6 +298,155 @@ export class OtterService {
         code: error?.code,
         stack: error?.stack?.substring(0, 500)
       });
+      return [];
+    }
+  }
+
+  /**
+   * Verify which Otter.AI account we're accessing
+   */
+  private async verifyAccountAccess(): Promise<void> {
+    try {
+      console.log('🔍 [ACCOUNT VERIFICATION] Checking Otter.AI account details...');
+      
+      const accountEndpoints = [
+        `${this.baseUrl}/me`,
+        `${this.baseUrl}/user`,
+        `${this.baseUrl}/account`,
+        `${this.baseUrl}/profile`
+      ];
+
+      for (const endpoint of accountEndpoints) {
+        try {
+          const response = await fetch(endpoint, {
+            method: 'GET',
+            headers: {
+              'Authorization': `Bearer ${this.apiKey}`,
+              'Content-Type': 'application/json'
+            },
+            signal: AbortSignal.timeout(5000)
+          });
+
+          if (response.ok) {
+            const accountData = await response.json();
+            console.log('✅ [ACCOUNT VERIFIED] Otter.AI Account Details:', {
+              endpoint: endpoint,
+              accountInfo: JSON.stringify(accountData, null, 2),
+              apiKeyLast4: this.apiKey?.slice(-4) || 'NONE'
+            });
+            break;
+          }
+        } catch (err) {
+          console.log(`❌ Account endpoint ${endpoint} failed:`, err);
+        }
+      }
+    } catch (error) {
+      console.error('🚨 [ACCOUNT VERIFICATION] Failed:', error);
+    }
+  }
+
+  /**
+   * Try specific date queries for September 4th transcripts
+   */
+  private async trySpecificDateQueries(): Promise<ExpectedTranscript[]> {
+    try {
+      console.log('🔍 [DATE SPECIFIC] Trying September 4th specific queries...');
+      
+      const sept4Queries = [
+        // Try different date formats for September 4th, 2025
+        `${this.baseUrl}/speech/export?date=2025-09-04`,
+        `${this.baseUrl}/speech/export?start_date=2025-09-04&end_date=2025-09-05`,
+        `${this.baseUrl}/speech/export?from=2025-09-04&to=2025-09-05`,
+        `${this.baseUrl}/meetings?date=2025-09-04`,
+        `${this.baseUrl}/meetings?created_after=2025-09-04T00:00:00Z`,
+        `${this.baseUrl}/speech/export?created_at_gte=2025-09-04`,
+        // Try timestamp formats
+        `${this.baseUrl}/speech/export?after=1725408000`, // Sept 4, 2025 timestamp
+        `${this.baseUrl}/meetings?since=1725408000`,
+        // Try ISO formats
+        `${this.baseUrl}/speech/export?start=2025-09-04T00:00:00.000Z`,
+        `${this.baseUrl}/meetings?created_since=2025-09-04T00:00:00.000Z`
+      ];
+
+      for (const [index, url] of sept4Queries.entries()) {
+        try {
+          console.log(`🔗 [SEPT 4 QUERY ${index + 1}] Trying:`, url);
+          
+          const response = await fetch(url, {
+            method: 'GET',
+            headers: {
+              'Authorization': `Bearer ${this.apiKey}`,
+              'Content-Type': 'application/json',
+              'Cache-Control': 'no-cache'
+            },
+            signal: AbortSignal.timeout(10000)
+          });
+
+          const responseBody = await response.text();
+          console.log(`📊 [SEPT 4 RESPONSE ${index + 1}]:`, {
+            url: url,
+            status: response.status,
+            bodyLength: responseBody.length,
+            fullResponse: responseBody // Log COMPLETE response
+          });
+
+          if (response.ok && responseBody.length > 10) {
+            const data = JSON.parse(responseBody);
+            
+            // Look for ANY data that might contain Nicole/Ashley/Dante
+            console.log(`🔍 [SEPT 4 ANALYSIS ${index + 1}] Full response structure:`, {
+              dataKeys: Object.keys(data || {}),
+              completeData: JSON.stringify(data, null, 2) // FULL DATA
+            });
+
+            // Search for Nicole/Ashley/Dante in the response
+            const responseText = JSON.stringify(data).toLowerCase();
+            const hasNicole = responseText.includes('nicole');
+            const hasAshley = responseText.includes('ashley'); 
+            const hasDante = responseText.includes('dante');
+            
+            console.log(`🎯 [SEPT 4 SEARCH ${index + 1}] Looking for missing transcripts:`, {
+              hasNicole,
+              hasAshley,
+              hasDante,
+              foundAny: hasNicole || hasAshley || hasDante
+            });
+
+            if (hasNicole || hasAshley || hasDante) {
+              console.log('🎉 [BREAKTHROUGH] Found Nicole/Ashley/Dante data in response!');
+              // Parse and return any found transcripts
+              let speeches = [];
+              if (Array.isArray(data?.data)) speeches = data.data;
+              else if (Array.isArray(data?.speeches)) speeches = data.speeches;
+              else if (Array.isArray(data?.recordings)) speeches = data.recordings;
+              else if (Array.isArray(data?.meetings)) speeches = data.meetings;
+              else if (Array.isArray(data)) speeches = data;
+
+              if (speeches.length > 0) {
+                const transcripts: ExpectedTranscript[] = speeches.map((speech: any) => ({
+                  id: speech.speech_id || speech.id || 'unknown',
+                  title: speech.title || speech.name || 'Untitled Meeting',
+                  date: new Date(speech.created_at || speech.date || Date.now()),
+                  duration: speech.duration || 'Unknown',
+                  summary: speech.summary || speech.abstract_summary || speech.description,
+                  participants: speech.calendar_guests ? [speech.calendar_guests.name].filter(Boolean) : []
+                }));
+
+                console.log('✅ [SEPT 4 SUCCESS] Returning transcripts from date-specific query');
+                return transcripts;
+              }
+            }
+          }
+        } catch (queryError) {
+          console.log(`❌ September 4th query ${index + 1} failed:`, queryError);
+        }
+      }
+
+      console.log('❌ [SEPT 4 FAILED] No September 4th transcripts found with any date format');
+      return [];
+
+    } catch (error) {
+      console.error('🚨 [SEPT 4 ERROR] Date-specific queries failed:', error);
       return [];
     }
   }
