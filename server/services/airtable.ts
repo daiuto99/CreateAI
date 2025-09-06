@@ -75,21 +75,33 @@ export class AirtableService {
   async testConnection(): Promise<{ success: boolean; error?: string }> {
     try {
       console.log('🧪 [AirtableService] Testing connection to base:', this.baseId);
+      console.log('🔗 [AirtableService] Testing URL: https://api.airtable.com/v0/meta/bases/' + this.baseId + '/tables');
       
-      const response = await fetch(`${this.baseUrl}?maxRecords=1`, {
+      // Test connection by fetching base metadata (this doesn't require a table name)
+      const response = await fetch(`https://api.airtable.com/v0/meta/bases/${this.baseId}/tables`, {
         headers: {
           'Authorization': `Bearer ${this.apiKey}`,
           'Content-Type': 'application/json'
         }
       });
 
+      console.log('🧪 [AirtableService] Response status:', response.status, response.statusText);
+
       if (response.ok) {
-        console.log('✅ [AirtableService] Connection test successful');
+        const data = await response.json();
+        console.log('✅ [AirtableService] Connection test successful - found', data.tables?.length || 0, 'tables');
         return { success: true };
       } else {
-        const errorData = await response.json() as AirtableError;
-        const errorMessage = errorData.error?.message || `HTTP ${response.status}`;
-        console.log('❌ [AirtableService] Connection test failed:', errorMessage);
+        const errorText = await response.text();
+        console.log('❌ [AirtableService] Connection test failed - Response body:', errorText);
+        let errorMessage = `HTTP ${response.status}`;
+        try {
+          const errorData = JSON.parse(errorText) as AirtableError;
+          errorMessage = errorData.error?.message || errorMessage;
+        } catch {
+          // If not JSON, use status text
+          errorMessage = response.statusText || errorMessage;
+        }
         return { success: false, error: errorMessage };
       }
     } catch (error: any) {
