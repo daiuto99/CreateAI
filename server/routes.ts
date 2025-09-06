@@ -965,6 +965,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         console.log('🔄 [SYNC] FALLBACK ACTIVE: Using realistic contact data -', contacts.length, 'contacts');
         console.log('📝 [SYNC] Contact fallback reason:', contactFallbackReason);
         console.log('📋 [SYNC] Fallback contact names:', contacts.map((c: any) => c.name));
+        console.log('⚠️ [SYNC] IMPORTANT: Fallback data will NOT show green circles in UI - only real API matches are displayed');
       }
       
       console.log('✅ Meeting Intelligence System Status:', {
@@ -1064,7 +1065,12 @@ export async function registerRoutes(app: Express): Promise<Server> {
           }
         }
         
-        console.log(`📊 Final result - "${meeting.title}": Otter=${meeting.hasOtterMatch ? '🔵' : '⚪'} (${(meeting as any).otterConfidence}%), Bigin=${meeting.hasBiginMatch ? '🟢' : '⚪'} (${(meeting as any).biginConfidence}%)`);
+        const otterIcon = meeting.hasOtterMatch ? '🔵' : '⚪';
+        const biginIcon = meeting.hasBiginMatch ? '🟢' : '⚪';
+        const biginSource = usingContactFallback ? '[FALLBACK-NO MATCHES]' : '[REAL API]';
+        const otterSource = usingFallback ? '[FALLBACK]' : '[REAL API]';
+        
+        console.log(`📊 Final result - "${meeting.title}": Otter=${otterIcon} ${otterSource} (${(meeting as any).otterConfidence}%), Bigin=${biginIcon} ${biginSource} (${(meeting as any).biginConfidence}%)`);
       }
       
       console.log('📊 Filtered meetings (Aug 1 - Sep 5, 2025):', meetings.length);
