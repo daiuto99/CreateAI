@@ -27,14 +27,16 @@ export default function Sync() {
   });
 
   // Fetch actual meeting data with loading state
-  const { data: meetings = [], isLoading: meetingsLoading } = useQuery<any[]>({
+  const { data: meetings = [], isLoading: meetingsLoading, refetch: refetchMeetings } = useQuery<any[]>({
     queryKey: ['/api/meetings'],
     enabled: isAuthenticated,
     retry: false,
+    staleTime: 0, // Force fresh data
+    cacheTime: 0, // Don't cache
   });
 
   // Fetch Otter.ai transcripts with loading state
-  const { data: transcripts = [], isLoading: transcriptsLoading } = useQuery<any[]>({
+  const { data: transcripts = [], isLoading: transcriptsLoading, refetch: refetchTranscripts } = useQuery<any[]>({
     queryKey: ['/api/otter/transcripts'],
     enabled: isAuthenticated,
     retry: false,
@@ -43,7 +45,7 @@ export default function Sync() {
   });
 
   // Fetch Airtable contacts with loading state  
-  const { data: contacts = [], isLoading: contactsLoading } = useQuery<any[]>({
+  const { data: contacts = [], isLoading: contactsLoading, refetch: refetchContacts } = useQuery<any[]>({
     queryKey: ['/api/airtable/contacts'],
     enabled: isAuthenticated,
     retry: false,
@@ -172,6 +174,22 @@ export default function Sync() {
               <CardDescription>
                 Recent meetings captured and processed
               </CardDescription>
+              {/* DEBUG: Manual refresh button to test loading states */}
+              <div className="px-6 pb-2">
+                <Button 
+                  size="sm" 
+                  variant="outline" 
+                  onClick={() => {
+                    console.log('🔄 Manual refresh triggered');
+                    refetchMeetings();
+                    refetchTranscripts();
+                    refetchContacts();
+                  }}
+                  className="text-xs"
+                >
+                  🔄 Test Loading States
+                </Button>
+              </div>
             </CardHeader>
             <CardContent>
               {meetingsLoading ? (
