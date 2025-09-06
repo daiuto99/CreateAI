@@ -56,14 +56,14 @@ const serviceConfigs: Record<string, ServiceConfig> = {
       { key: 'apiKey', label: 'API Key', type: 'password', placeholder: 'sk-...', required: true }
     ]
   },
-  freshdesk: {
-    name: 'Freshdesk',
-    description: 'Sync meeting intelligence and voice updates into your customer support system',
-    logo: freshdeskLogo,
-    helpText: 'In Freshdesk, go to Profile Settings → API Key section → Copy your API key. Also provide your Freshdesk domain (e.g., "yourcompany" from yourcompany.freshdesk.com).',
+  airtable: {
+    name: 'Airtable',
+    description: 'Sync meeting intelligence and contact management with your Airtable bases',
+    logo: freshdeskLogo, // TODO: Replace with Airtable logo
+    helpText: 'In Airtable, go to your account → Generate API key. Also provide your base ID from the URL (e.g., "appXXXXXXXXXX").',
     fields: [
-      { key: 'apiKey', label: 'API Key', type: 'password', placeholder: 'Your Freshdesk API key', required: true },
-      { key: 'domain', label: 'Domain', type: 'text', placeholder: 'yourcompany (from yourcompany.freshdesk.com)', required: true }
+      { key: 'apiKey', label: 'API Key', type: 'password', placeholder: 'Your Airtable API key', required: true },
+      { key: 'baseId', label: 'Base ID', type: 'text', placeholder: 'appXXXXXXXXXX (from Airtable URL)', required: true }
     ]
   },
   wordpress: {

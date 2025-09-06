@@ -40,9 +40,9 @@ export default function Sync() {
     retry: false,
   });
 
-  // Fetch Freshdesk contacts
+  // Fetch Airtable contacts
   const { data: contacts = [] } = useQuery<any[]>({
-    queryKey: ['/api/freshdesk/contacts'],
+    queryKey: ['/api/airtable/contacts'],
     enabled: isAuthenticated,
     retry: false,
   });
@@ -73,10 +73,10 @@ export default function Sync() {
     }
   });
 
-  // Mutation for creating Freshdesk records
-  const createFreshdeskRecord = useMutation({
+  // Mutation for creating Airtable records
+  const createAirtableRecord = useMutation({
     mutationFn: async (meeting: any) => {
-      const response = await fetch('/api/freshdesk/create-record', {
+      const response = await fetch('/api/airtable/create-record', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ meeting })
@@ -86,14 +86,14 @@ export default function Sync() {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['/api/meetings'] });
       toast({
-        title: "Freshdesk Record Created",
-        description: "Meeting record has been created in Freshdesk.",
+        title: "Airtable Record Created",
+        description: "Meeting record has been created in Airtable.",
       });
     },
     onError: () => {
       toast({
         title: "Error",
-        description: "Failed to create Freshdesk record. Please try again.",
+        description: "Failed to create Airtable record. Please try again.",
         variant: "destructive"
       });
     }
@@ -201,14 +201,14 @@ export default function Sync() {
                                 <i className="fas fa-microphone text-gray-500 text-xs"></i>
                               </div>
                             )}
-                            {/* Freshdesk Match Icon - GREEN only for real API data */}
-                            {meeting.hasFreshdeskMatch && !meeting.isFreshdeskFallback ? (
-                              <div className="w-5 h-5 bg-green-500 rounded-full flex items-center justify-center" title="Freshdesk CRM record exists">
+                            {/* Airtable Match Icon - GREEN only for real API data */}
+                            {meeting.hasAirtableMatch && !meeting.isAirtableFallback ? (
+                              <div className="w-5 h-5 bg-green-500 rounded-full flex items-center justify-center" title="Airtable CRM record exists">
                                 <i className="fas fa-database text-white text-xs"></i>
                               </div>
                             ) : (
                               <div className="w-5 h-5 bg-gray-300 rounded-full flex items-center justify-center" 
-                                   title={meeting.isFreshdeskFallback ? "Using sample data - connect Freshdesk CRM for real contacts" : "No Freshdesk CRM record"}>
+                                   title={meeting.isAirtableFallback ? "Using sample data - connect Airtable CRM for real contacts" : "No Airtable CRM record"}>
                                 <i className="fas fa-database text-gray-500 text-xs"></i>
                               </div>
                             )}
@@ -222,12 +222,12 @@ export default function Sync() {
                         </p>
                       </div>
                       <div className="flex items-center space-x-2">
-                        {!meeting.hasFreshdeskMatch && (
+                        {!meeting.hasAirtableMatch && (
                           <Button 
                             size="sm" 
                             variant="outline"
-                            onClick={() => createFreshdeskRecord.mutate(meeting)}
-                            disabled={createFreshdeskRecord.isPending}
+                            onClick={() => createAirtableRecord.mutate(meeting)}
+                            disabled={createAirtableRecord.isPending}
                           >
                             <i className="fas fa-plus mr-1"></i>
                             Create Record
@@ -259,7 +259,7 @@ export default function Sync() {
                   Meeting Intelligence
                 </CardTitle>
                 <CardDescription>
-                  Automatically sync Outlook calendar and Otter.ai transcripts to Freshdesk
+                  Automatically sync Outlook calendar and Otter.ai transcripts to Airtable
                 </CardDescription>
               </CardHeader>
               <CardContent className="space-y-4">
@@ -294,12 +294,12 @@ export default function Sync() {
                     <div className="flex items-center space-x-3">
                       <i className="fas fa-chart-line text-green-500"></i>
                       <div>
-                        <p className="font-medium">Freshdesk CRM</p>
+                        <p className="font-medium">Airtable CRM</p>
                         <p className="text-sm text-muted-foreground">Contact and deal management</p>
                       </div>
                     </div>
-                    <Badge variant={getStatusVariant('freshdesk')} data-testid="badge-freshdesk-status">
-                      {getIntegrationStatus('freshdesk')}
+                    <Badge variant={getStatusVariant('airtable')} data-testid="badge-airtable-status">
+                      {getIntegrationStatus('airtable')}
                     </Badge>
                   </div>
                 </div>
@@ -308,10 +308,10 @@ export default function Sync() {
                   <h4 className="font-medium mb-3">How it works:</h4>
                   <ol className="text-sm text-muted-foreground space-y-1">
                     <li>1. Import calendar events from Outlook</li>
-                    <li>2. Match meeting attendees to Freshdesk contacts</li>
+                    <li>2. Match meeting attendees to Airtable contacts</li>
                     <li>3. Fetch Otter.ai transcripts and summaries</li>
                     <li>4. Generate AI-powered meeting insights</li>
-                    <li>5. One-click sync to Freshdesk timeline</li>
+                    <li>5. One-click sync to Airtable timeline</li>
                   </ol>
                 </div>
 

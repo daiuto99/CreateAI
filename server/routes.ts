@@ -11,7 +11,6 @@ const isAuthenticated = (req: any, res: any, next: any) => {
 };
 import { openaiService } from "./services/openai";
 import { OtterService } from "./services/otter";
-import { BiginService } from "./services/bigin";
 import { 
   insertContentProjectSchema,
   insertContentItemSchema,
@@ -561,16 +560,16 @@ export async function registerRoutes(app: Express): Promise<Server> {
             }
             break;
 
-          case 'freshdesk':
-            const freshdeskCreds = integration.credentials as any;
-            if (freshdeskCreds.apiKey && freshdeskCreds.domain) {
+          case 'airtable':
+            const airtableCreds = integration.credentials as any;
+            if (airtableCreds.apiKey && airtableCreds.baseId) {
               try {
-                const { FreshdeskService } = await import('./services/freshdesk');
-                const freshdeskService = new FreshdeskService(freshdeskCreds.apiKey, freshdeskCreds.domain);
-                const connectionTest = await freshdeskService.testConnection();
+                const { AirtableService } = await import('./services/airtable');
+                const airtableService = new AirtableService(airtableCreds.apiKey, airtableCreds.baseId);
+                const connectionTest = await airtableService.testConnection();
                 
                 if (connectionTest.success) {
-                  testResult = { success: true, message: 'Freshdesk API connection successful!', error: '' };
+                  testResult = { success: true, message: 'Airtable API connection successful!', error: '' };
                   await storage.upsertUserIntegration({ ...integration, status: 'connected' as any });
                 } else {
                   testResult = { success: false, message: '', error: connectionTest.error || 'Connection failed' };
@@ -581,7 +580,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
                 await storage.upsertUserIntegration({ ...integration, status: 'error' as any });
               }
             } else {
-              testResult = { success: false, message: '', error: 'Missing API key or domain' };
+              testResult = { success: false, message: '', error: 'Missing API key or base ID' };
             }
             break;
 
@@ -743,12 +742,11 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const integrations = await storage.getUserIntegrations(userId);
       
       const health = {
-        bigin: { status: 'not_configured', lastCheck: null, error: null },
         otter: { status: 'not_configured', lastCheck: null, error: null }
       };
       
       integrations.forEach(integration => {
-        if (integration.provider === 'bigin' || integration.provider === 'otter') {
+        if (integration.provider === 'otter') {
           health[integration.provider as keyof typeof health] = {
             status: integration.status || 'not_configured',
             lastCheck: integration.last_validated || null,
@@ -764,75 +762,6 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  app.post('/api/integrations/refresh-tokens/:userId', isAuthenticated, async (req: any, res) => {
-    try {
-      const userId = req.params.userId;
-      
-      if (req.user.claims.sub !== userId) {
-        return res.status(403).json({ error: 'Access denied' });
-      }
-      
-      // Manual token refresh for Bigin
-      const integrations = await storage.getUserIntegrations(userId);
-      const biginIntegration = integrations.find(i => i.provider === 'bigin');
-      
-      if (!biginIntegration) {
-        return res.status(404).json({ error: 'Bigin integration not found' });
-      }
-      
-      const credentials = biginIntegration.credentials as any;
-      if (!credentials?.refresh_token) {
-        return res.status(400).json({ error: 'No refresh token available' });
-      }
-      
-      console.log('🔄 Manual token refresh requested for user:', userId);
-      
-      // Attempt token refresh
-      const refreshResponse = await fetch('https://accounts.zoho.com/oauth/v2/token', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-        body: new URLSearchParams({
-          refresh_token: credentials.refresh_token,
-          client_id: credentials.clientId,
-          client_secret: credentials.clientSecret,
-          grant_type: 'refresh_token'
-        })
-      });
-      
-      if (!refreshResponse.ok) {
-        const errorText = await refreshResponse.text();
-        return res.status(400).json({ 
-          success: false, 
-          error: `Token refresh failed: ${errorText}` 
-        });
-      }
-      
-      const tokenData = await refreshResponse.json();
-      const now = Date.now() / 1000;
-      
-      // Update credentials
-      const updatedCredentials = {
-        ...credentials,
-        access_token: tokenData.access_token,
-        expires_at: now + (tokenData.expires_in || 3600),
-        last_refreshed: new Date().toISOString()
-      };
-      
-      await storage.upsertUserIntegration({
-        ...biginIntegration,
-        credentials: updatedCredentials,
-        status: 'connected' as any,
-        last_validated: new Date().toISOString()
-      });
-      
-      console.log('✅ Manual token refresh successful');
-      res.json({ success: true, message: 'Tokens refreshed successfully' });
-      
-    } catch (error: any) {
-      console.error('🚨 Error refreshing tokens:', error);
-      res.status(500).json({ error: 'Failed to refresh tokens' });
-    }
-  });
 
   // Data fetching routes
   app.get('/api/meetings', isAuthenticated, async (req: any, res) => {
@@ -1001,12 +930,12 @@ export async function registerRoutes(app: Express): Promise<Server> {
               status: meetingStatus,
               hasTranscript: false,
               hasOtterMatch: false,
-              hasBiginMatch: false,
+              hasAirtableMatch: false,
               dismissed: false,
               otterConfidence: 0,
-              biginConfidence: 0,
+              airtableConfidence: 0,
               bestOtterMatch: null,
-              bestBiginMatch: null
+              bestAirtableMatch: null
             });
           }
         }
@@ -1017,7 +946,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       
       // REAL matching logic - no fake random assignment
       const otterIntegration = integrations.find(i => i.provider === 'otter');
-      const biginIntegration = integrations.find(i => i.provider === 'bigin');
+      const airtableIntegration = integrations.find(i => i.provider === 'airtable');
       
       // SMART Otter.AI integration with fallback to realistic test data
       console.log('🎤 [SYNC] Attempting Otter.AI API connection...');
@@ -1098,8 +1027,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
         console.log('📋 [SYNC] Fallback transcript titles:', transcripts.map((t: any) => t.title));
       }
       
-      // SMART Bigin CRM integration with fallback to realistic contact data
-      console.log('📋 [SYNC] Attempting Bigin CRM connection...');
+      // SMART Airtable CRM integration with fallback to realistic contact data
+      console.log('📋 [SYNC] Attempting Airtable CRM connection...');
       let contacts: any[] = [];
       let usingContactFallback = false;
       let contactFallbackReason = '';
@@ -1113,28 +1042,28 @@ export async function registerRoutes(app: Express): Promise<Server> {
         { id: '5', name: 'Brian Albans', email: 'brian.albans@company.com', company: 'RTLC' }
       ];
       
-      if (biginIntegration?.status === 'connected') {
-        console.log('🔗 [SYNC] Bigin integration connected, attempting real API...');
+      if (airtableIntegration?.status === 'connected') {
+        console.log('🔗 [SYNC] Airtable integration connected, attempting real API...');
         
         try {
-          console.log('🔗 [DEBUG] Attempting to create Bigin service for user:', userId);
-          console.log('🔗 [DEBUG] Bigin integration status:', biginIntegration?.status);
-          console.log('🔗 [DEBUG] Bigin integration details:', {
-            id: biginIntegration?.id,
-            provider: biginIntegration?.provider,
-            status: biginIntegration?.status,
-            hasCredentials: !!biginIntegration?.credentials,
-            credentialKeys: biginIntegration?.credentials ? Object.keys(biginIntegration.credentials) : []
+          console.log('🔗 [DEBUG] Attempting to create Airtable service for user:', userId);
+          console.log('🔗 [DEBUG] Airtable integration status:', airtableIntegration?.status);
+          console.log('🔗 [DEBUG] Airtable integration details:', {
+            id: airtableIntegration?.id,
+            provider: airtableIntegration?.provider,
+            status: airtableIntegration?.status,
+            hasCredentials: !!airtableIntegration?.credentials,
+            credentialKeys: airtableIntegration?.credentials ? Object.keys(airtableIntegration.credentials) : []
           });
           
-          const biginService = await BiginService.createFromUserIntegration(storage, userId);
+          const airtableService = await AirtableService.createFromUserIntegration(storage, userId);
           
-          console.log('🔗 [DEBUG] BiginService.createFromUserIntegration result:', {
-            success: !!biginService,
-            serviceExists: biginService !== null
+          console.log('🔗 [DEBUG] AirtableService.createFromUserIntegration result:', {
+            success: !!airtableService,
+            serviceExists: airtableService !== null
           });
           
-          if (biginService) {
+          if (airtableService) {
             console.log('📅 [SYNC] API Call: Enhanced contact search for meetings...');
             
             // ENHANCED: Extract better search terms with detailed logging
@@ -1190,7 +1119,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
             try {
               console.log('🔍 [SYNC] Using getContactsForMeetings method...');
               
-              const allFoundContacts = await biginService.getContactsForMeetings(meetings);
+              const allFoundContacts = await airtableService.getContactsForMeetings(meetings);
               allContacts.push(...allFoundContacts);
               
               console.log(`📊 [DEBUG] getContactsForMeetings returned ${allFoundContacts.length} contacts`);
@@ -1256,14 +1185,14 @@ export async function registerRoutes(app: Express): Promise<Server> {
             }
           } else {
             usingContactFallback = true;
-            contactFallbackReason = 'Failed to initialize Bigin service (no OAuth tokens or service error)';
-            console.log('❌ [DEBUG] BiginService.createFromUserIntegration returned null - service creation failed');
-            console.log('⚠️ [SYNC] Could not create Bigin service, switching to fallback contacts');
+            contactFallbackReason = 'Failed to initialize Airtable service (no OAuth tokens or service error)';
+            console.log('❌ [DEBUG] AirtableService.createFromUserIntegration returned null - service creation failed');
+            console.log('⚠️ [SYNC] Could not create Airtable service, switching to fallback contacts');
           }
         } catch (error: any) {
           usingContactFallback = true;
           contactFallbackReason = `API error: ${error?.message || 'Unknown error'}`;
-          console.error('🚨 [SYNC] Bigin API failed:', {
+          console.error('🚨 [SYNC] Airtable API failed:', {
             error: error?.message,
             code: error?.code,
             type: error?.name,
@@ -1273,8 +1202,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
         }
       } else {
         usingContactFallback = true;
-        contactFallbackReason = 'Bigin integration not connected';
-        console.log('⚠️ [SYNC] Bigin not connected, using fallback contacts');
+        contactFallbackReason = 'Airtable integration not connected';
+        console.log('⚠️ [SYNC] Airtable not connected, using fallback contacts');
       }
       
       // Use fallback contacts if needed
@@ -1289,18 +1218,18 @@ export async function registerRoutes(app: Express): Promise<Server> {
       console.log('✅ Meeting Intelligence System Status:', {
         calendarMeetings: meetings.length,
         otterTranscripts: transcripts?.length || 0,
-        biginContacts: contacts?.length || 0,
+        airtableContacts: contacts?.length || 0,
         otterConnected: otterIntegration?.status === 'connected',
-        biginConnected: biginIntegration?.status === 'connected',
+        airtableConnected: airtableIntegration?.status === 'connected',
         otterDataSource: usingFallback ? 'FALLBACK DATA' : 'REAL API',
-        biginDataSource: usingContactFallback ? 'FALLBACK DATA' : 'REAL API',
+        airtableDataSource: usingContactFallback ? 'FALLBACK DATA' : 'REAL API',
         otterFallbackReason: usingFallback ? fallbackReason : 'N/A',
-        biginFallbackReason: usingContactFallback ? contactFallbackReason : 'N/A'
+        airtableFallbackReason: usingContactFallback ? contactFallbackReason : 'N/A'
       });
       
       console.log(`${usingFallback ? '🔄' : '🎤'} [MATCHING] Available Otter transcripts for matching:`, transcripts?.length || 0);
       console.log(`${usingFallback ? '📋' : '📧'} [MATCHING] Transcript titles (${usingFallback ? 'FALLBACK' : 'REAL API'}):`, Array.isArray(transcripts) ? transcripts.map((t: any) => t.title) : []);
-      console.log(`${usingContactFallback ? '🔄' : '📋'} [MATCHING] Available Bigin contacts for matching:`, contacts?.length || 0);
+      console.log(`${usingContactFallback ? '🔄' : '📋'} [MATCHING] Available Airtable contacts for matching:`, contacts?.length || 0);
       console.log(`${usingContactFallback ? '📋' : '👥'} [MATCHING] Contact names (${usingContactFallback ? 'FALLBACK' : 'REAL API'}):`, Array.isArray(contacts) ? contacts.map((c: any) => c.name) : []);
       
       // ENHANCED matching logic with better name parsing
@@ -1341,58 +1270,58 @@ export async function registerRoutes(app: Express): Promise<Server> {
           console.log(`  ⚪ No Otter match found (highest confidence: ${highestOtterConfidence}%)`);
         }
         
-        // ENHANCED Bigin matching with confidence scoring
-        console.log(`  🔍 Bigin matching for "${meeting.title}"...`);
-        let bestBiginMatch = null;
-        let highestBiginConfidence = 0;
+        // ENHANCED Airtable matching with confidence scoring
+        console.log(`  🔍 Airtable matching for "${meeting.title}"...`);
+        let bestAirtableMatch = null;
+        let highestAirtableConfidence = 0;
         
         if (Array.isArray(contacts)) {
           for (const contact of contacts) {
             try {
               const confidence = calculateContactMatchConfidence(meeting, contact);
               
-              if (confidence > highestBiginConfidence) {
-                highestBiginConfidence = confidence;
-                bestBiginMatch = contact;
+              if (confidence > highestAirtableConfidence) {
+                highestAirtableConfidence = confidence;
+                bestAirtableMatch = contact;
               }
               
               console.log(`    📊 Contact "${contact.name}" confidence: ${confidence}%`);
             } catch (matchError) {
-              console.error(`    ❌ Error calculating Bigin confidence for "${contact.name}":`, matchError);
+              console.error(`    ❌ Error calculating Airtable confidence for "${contact.name}":`, matchError);
             }
           }
         }
         
         // Add data source flags to the meeting object
         (meeting as any).isOtterFallback = usingFallback;
-        (meeting as any).isBiginFallback = usingContactFallback;
+        (meeting as any).isAirtableFallback = usingContactFallback;
         
         // CRITICAL FIX: Only show matches when using REAL API data, never for fallback data
         if (usingContactFallback) {
           // When using fallback data, NEVER show matches in UI
-          meeting.hasBiginMatch = false;
-          (meeting as any).biginConfidence = 0;
-          (meeting as any).bestBiginMatch = null;
-          console.log(`  🔄 FALLBACK DATA: No matches shown in UI (calculated confidence: ${highestBiginConfidence}%)`);
+          meeting.hasAirtableMatch = false;
+          (meeting as any).airtableConfidence = 0;
+          (meeting as any).bestAirtableMatch = null;
+          console.log(`  🔄 FALLBACK DATA: No matches shown in UI (calculated confidence: ${highestAirtableConfidence}%)`);
         } else {
           // Only when using REAL API data, show actual matches
-          meeting.hasBiginMatch = highestBiginConfidence >= 60;
-          (meeting as any).biginConfidence = highestBiginConfidence;
-          (meeting as any).bestBiginMatch = bestBiginMatch;
+          meeting.hasAirtableMatch = highestAirtableConfidence >= 60;
+          (meeting as any).airtableConfidence = highestAirtableConfidence;
+          (meeting as any).bestAirtableMatch = bestAirtableMatch;
           
-          if (meeting.hasBiginMatch) {
-            console.log(`  ✅ REAL API MATCH: "${bestBiginMatch?.name}" (confidence: ${highestBiginConfidence}%)`);
+          if (meeting.hasAirtableMatch) {
+            console.log(`  ✅ REAL API MATCH: "${bestAirtableMatch?.name}" (confidence: ${highestAirtableConfidence}%)`);
           } else {
-            console.log(`  ⚪ No real API match found (highest confidence: ${highestBiginConfidence}%)`);
+            console.log(`  ⚪ No real API match found (highest confidence: ${highestAirtableConfidence}%)`);
           }
         }
         
         const otterIcon = meeting.hasOtterMatch ? '🔵' : '⚪';
-        const biginIcon = meeting.hasBiginMatch ? '🟢' : '⚪';
-        const biginSource = usingContactFallback ? '[FALLBACK-NO MATCHES]' : '[REAL API]';
+        const airtableIcon = meeting.hasAirtableMatch ? '🟢' : '⚪';
+        const airtableSource = usingContactFallback ? '[FALLBACK-NO MATCHES]' : '[REAL API]';
         const otterSource = usingFallback ? '[FALLBACK]' : '[REAL API]';
         
-        console.log(`📊 Final result - "${meeting.title}": Otter=${otterIcon} ${otterSource} (${(meeting as any).otterConfidence}%), Bigin=${biginIcon} ${biginSource} (${(meeting as any).biginConfidence}%)`);
+        console.log(`📊 Final result - "${meeting.title}": Otter=${otterIcon} ${otterSource} (${(meeting as any).otterConfidence}%), Airtable=${airtableIcon} ${airtableSource} (${(meeting as any).airtableConfidence}%)`);
       }
       
       console.log('📊 Filtered meetings (Aug 1 - Sep 5, 2025):', meetings.length);
@@ -1467,15 +1396,15 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  app.get('/api/bigin/contacts', isAuthenticated, async (req: any, res) => {
+  app.get('/api/airtable/contacts', isAuthenticated, async (req: any, res) => {
     try {
       const userId = req.user.claims.sub;
       console.log('📋 Fetching contacts for user:', userId);
       
       const integrations = await storage.getUserIntegrations(userId);
-      const biginIntegration = integrations.find(i => i.provider === 'bigin');
+      const airtableIntegration = integrations.find(i => i.provider === 'airtable');
       
-      if (!biginIntegration || biginIntegration.status !== 'connected') {
+      if (!airtableIntegration || airtableIntegration.status !== 'connected') {
         return res.json([]);
       }
       
@@ -1492,7 +1421,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       
       res.json(realContacts);
     } catch (error) {
-      console.error('Error fetching Bigin contacts:', error);
+      console.error('Error fetching Airtable contacts:', error);
       res.json([]);
     }
   });
@@ -1510,14 +1439,14 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  app.post('/api/bigin/create-record', isAuthenticated, async (req: any, res) => {
+  app.post('/api/airtable/create-record', isAuthenticated, async (req: any, res) => {
     try {
       const { meeting } = req.body;
       const userId = req.user.claims.sub;
       
-      // Simulate creating a record in Bigin by Zoho
-      const biginRecord = {
-        id: `bigin-${Date.now()}`,
+      // Simulate creating a record in Airtable by Zoho
+      const airtableRecord = {
+        id: `airtable-${Date.now()}`,
         title: meeting.title,
         date: meeting.date,
         type: 'Meeting',
@@ -1525,11 +1454,11 @@ export async function registerRoutes(app: Express): Promise<Server> {
         createdAt: new Date()
       };
       
-      console.log('📝 Created Bigin record:', biginRecord);
-      res.json({ success: true, record: biginRecord, message: 'Bigin record created successfully' });
+      console.log('📝 Created Airtable record:', airtableRecord);
+      res.json({ success: true, record: airtableRecord, message: 'Airtable record created successfully' });
     } catch (error) {
-      console.error('Error creating Bigin record:', error);
-      res.status(500).json({ message: 'Failed to create Bigin record' });
+      console.error('Error creating Airtable record:', error);
+      res.status(500).json({ message: 'Failed to create Airtable record' });
     }
   });
 
@@ -1787,7 +1716,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         result.platforms.push('WordPress (simulated)');
       }
       
-      result.platforms.push('Bigin CRM (simulated)', 'Analytics Dashboard');
+      result.platforms.push('Airtable CRM (simulated)', 'Analytics Dashboard');
       
       console.log('✅ [/api/content/publish] Content published:', {
         projectId,
@@ -1966,12 +1895,12 @@ export async function registerRoutes(app: Express): Promise<Server> {
       // Validate integrations
       const integrations = await storage.getUserIntegrations(userId);
       const otterIntegration = integrations.find(i => i.provider === 'otter');
-      const biginIntegration = integrations.find(i => i.provider === 'bigin');
+      const airtableIntegration = integrations.find(i => i.provider === 'airtable');
       
-      if (otterIntegration?.status !== 'connected' && biginIntegration?.status !== 'connected') {
+      if (otterIntegration?.status !== 'connected' && airtableIntegration?.status !== 'connected') {
         return res.status(400).json({
           success: false,
-          message: 'No active integrations found. Please connect Otter.AI or Bigin first.'
+          message: 'No active integrations found. Please connect Otter.AI or Airtable first.'
         });
       }
       
@@ -1995,7 +1924,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
             meetingId,
             success: false,
             otterSync: { success: false, confidence: 0, message: '' },
-            biginSync: { success: false, confidence: 0, message: '' },
+            airtableSync: { success: false, confidence: 0, message: '' },
             error: null
           };
           
@@ -2063,15 +1992,15 @@ export async function registerRoutes(app: Express): Promise<Server> {
             }
           }
           
-          // REAL Bigin CRM sync with contact matching and record creation
-          if (biginIntegration?.status === 'connected') {
+          // REAL Airtable CRM sync with contact matching and record creation
+          if (airtableIntegration?.status === 'connected') {
             try {
               console.log(`📋 [BIGIN] Attempting real CRM operations for: ${meeting.title}`);
               
-              const biginService = await BiginService.createFromUserIntegration(storage, userId);
-              if (biginService) {
+              const airtableService = await AirtableService.createFromUserIntegration(storage, userId);
+              if (airtableService) {
                 // Search for matching contacts
-                const contacts = await biginService.getContactsForMeetings([meeting]);
+                const contacts = await airtableService.getContactsForMeetings([meeting]);
                 
                 // Find best matching contact
                 let bestContact = null;
@@ -2089,7 +2018,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
                 if (bestContact) {
                   console.log(`📝 [BIGIN] Creating CRM record linked to contact: ${bestContact.name}`);
                   
-                  const crmRecord = await biginService.createMeetingRecord({
+                  const crmRecord = await airtableService.createMeetingRecord({
                     title: meeting.title,
                     date: meeting.date,
                     summary: `Meeting sync from CreateAI - ${meeting.title}`,
@@ -2097,7 +2026,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
                     contactId: bestContact.id
                   });
                   
-                  syncResult.biginSync = {
+                  syncResult.airtableSync = {
                     success: true,
                     confidence: bestContactConfidence,
                     message: `CRM record created and linked to ${bestContact.name} (${bestContactConfidence}% confidence)`
@@ -2108,14 +2037,14 @@ export async function registerRoutes(app: Express): Promise<Server> {
                   // Create record without contact link
                   console.log(`📝 [BIGIN] Creating standalone CRM record (no contact match)`);
                   
-                  const crmRecord = await biginService.createMeetingRecord({
+                  const crmRecord = await airtableService.createMeetingRecord({
                     title: meeting.title,
                     date: meeting.date,
                     summary: `Meeting sync from CreateAI - ${meeting.title}`,
                     attendees: meeting.attendees
                   });
                   
-                  syncResult.biginSync = {
+                  syncResult.airtableSync = {
                     success: true,
                     confidence: 0,
                     message: `CRM record created (no contact match found above 60% threshold)`
@@ -2123,27 +2052,27 @@ export async function registerRoutes(app: Express): Promise<Server> {
                   console.log(`✅ [BIGIN] SUCCESS: Standalone record ${crmRecord.id} created`);
                 }
               } else {
-                syncResult.biginSync = {
+                syncResult.airtableSync = {
                   success: false,
                   confidence: 0,
-                  message: 'Bigin service initialization failed'
+                  message: 'Airtable service initialization failed'
                 };
               }
-            } catch (biginError: any) {
-              console.error(`🚨 [BIGIN] CRM error:`, biginError.message);
-              syncResult.biginSync = {
+            } catch (airtableError: any) {
+              console.error(`🚨 [BIGIN] CRM error:`, airtableError.message);
+              syncResult.airtableSync = {
                 success: false,
                 confidence: 0,
-                message: `Bigin CRM error: ${biginError.message}`
+                message: `Airtable CRM error: ${airtableError.message}`
               };
             }
           }
           
-          syncResult.success = syncResult.otterSync.success || syncResult.biginSync.success;
+          syncResult.success = syncResult.otterSync.success || syncResult.airtableSync.success;
           
           console.log(`📊 [SYNC] Meeting ${meetingId} results:`, {
             otter: `${syncResult.otterSync.success ? '✅' : '❌'} ${syncResult.otterSync.confidence}%`,
-            bigin: `${syncResult.biginSync.success ? '✅' : '❌'} ${syncResult.biginSync.confidence}%`,
+            airtable: `${syncResult.airtableSync.success ? '✅' : '❌'} ${syncResult.airtableSync.confidence}%`,
             overall: syncResult.success ? 'SUCCESS' : 'FAILED'
           });
           results.push(syncResult);
@@ -2154,7 +2083,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
             meetingId,
             success: false,
             otterSync: { success: false, confidence: 0, message: 'Sync failed' },
-            biginSync: { success: false, confidence: 0, message: 'Sync failed' },
+            airtableSync: { success: false, confidence: 0, message: 'Sync failed' },
             error: meetingError.message
           });
         }
@@ -2195,47 +2124,47 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  // Freshdesk API Endpoints
-  app.get('/api/freshdesk/contacts', isAuthenticated, async (req: any, res) => {
+  // Airtable API Endpoints
+  app.get('/api/airtable/contacts', isAuthenticated, async (req: any, res) => {
     try {
       const userId = req.user.claims.sub;
       const integrations = await storage.getUserIntegrations(userId);
-      const freshdeskIntegration = integrations.find(i => i.provider === 'freshdesk');
+      const airtableIntegration = integrations.find(i => i.provider === 'airtable');
       
-      if (!freshdeskIntegration?.credentials) {
-        return res.status(400).json({ error: 'Freshdesk integration not configured' });
+      if (!airtableIntegration?.credentials) {
+        return res.status(400).json({ error: 'Airtable integration not configured' });
       }
       
-      const { FreshdeskService } = await import('./services/freshdesk');
-      const creds = freshdeskIntegration.credentials as any;
-      const freshdeskService = new FreshdeskService(creds.apiKey, creds.domain);
+      const { AirtableService } = await import('./services/airtable');
+      const creds = airtableIntegration.credentials as any;
+      const airtableService = new AirtableService(creds.apiKey, creds.baseId);
       
-      const contacts = await freshdeskService.getContacts();
+      const contacts = await airtableService.getContacts();
       res.json(contacts);
       
     } catch (error: any) {
-      console.error('Error fetching Freshdesk contacts:', error);
+      console.error('Error fetching Airtable contacts:', error);
       res.status(500).json({ error: 'Failed to fetch contacts' });
     }
   });
 
-  app.post('/api/freshdesk/create-record', isAuthenticated, async (req: any, res) => {
+  app.post('/api/airtable/create-record', isAuthenticated, async (req: any, res) => {
     try {
       const userId = req.user.claims.sub;
       const { meeting } = req.body;
       
       const integrations = await storage.getUserIntegrations(userId);
-      const freshdeskIntegration = integrations.find(i => i.provider === 'freshdesk');
+      const airtableIntegration = integrations.find(i => i.provider === 'airtable');
       
-      if (!freshdeskIntegration?.credentials) {
-        return res.status(400).json({ error: 'Freshdesk integration not configured' });
+      if (!airtableIntegration?.credentials) {
+        return res.status(400).json({ error: 'Airtable integration not configured' });
       }
       
-      const { FreshdeskService } = await import('./services/freshdesk');
-      const creds = freshdeskIntegration.credentials as any;
-      const freshdeskService = new FreshdeskService(creds.apiKey, creds.domain);
+      const { AirtableService } = await import('./services/airtable');
+      const creds = airtableIntegration.credentials as any;
+      const airtableService = new AirtableService(creds.apiKey, creds.baseId);
       
-      const record = await freshdeskService.createContact({
+      const record = await airtableService.createContact({
         name: meeting.title,
         email: meeting.attendees[0] || 'meeting@example.com',
         description: `Meeting: ${meeting.title} on ${meeting.date}`
@@ -2244,7 +2173,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       res.json({ success: true, record });
       
     } catch (error: any) {
-      console.error('Error creating Freshdesk record:', error);
+      console.error('Error creating Airtable record:', error);
       res.status(500).json({ error: 'Failed to create record' });
     }
   });
