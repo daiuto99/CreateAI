@@ -952,16 +952,15 @@ export async function registerRoutes(app: Express): Promise<Server> {
         if (event.title) {
           const meetingDate = event.startTime ? new Date(event.startTime.replace(/(\d{4})(\d{2})(\d{2})T(\d{2})(\d{2})(\d{2})/, '$1-$2-$3T$4:$5:$6')) : new Date();
           
-          // Include meetings from a broader date range to capture more potential matches
+          // SYNC function: Only include PAST meetings that have already occurred
           const sixtyDaysAgo = new Date();
           sixtyDaysAgo.setDate(sixtyDaysAgo.getDate() - 60);
-          const thirtyDaysFromNow = new Date();
-          thirtyDaysFromNow.setDate(thirtyDaysFromNow.getDate() + 30);
           const now = new Date();
           
-          if (meetingDate >= sixtyDaysAgo && meetingDate <= thirtyDaysFromNow) {
-            // Determine actual status based on meeting date
-            const meetingStatus = meetingDate <= now ? 'completed' : 'scheduled';
+          // Only include meetings that have already happened (past meetings only)
+          if (meetingDate >= sixtyDaysAgo && meetingDate <= now) {
+            // All meetings in SYNC are completed since we only include past meetings
+            const meetingStatus = 'completed';
             
             console.log(`📧 Meeting "${event.title}" attendees:`, event.attendees);
             
@@ -1288,22 +1287,12 @@ export async function registerRoutes(app: Express): Promise<Server> {
         const meetingTitle = meeting.title.toLowerCase();
         console.log(`\n🔍 Analyzing meeting: "${meeting.title}"`);
         
-        // ENHANCED Otter.AI matching with confidence scoring - BUT ONLY FOR PAST MEETINGS
-        const meetingDate = new Date(meeting.date);
-        const now = new Date();
-        const isFutureMeeting = meetingDate > now;
-        
+        // ENHANCED Otter.AI matching with confidence scoring (all meetings are past/completed)
         console.log(`  🔍 Otter matching for "${meeting.title}"...`);
         let bestOtterMatch = null;
         let highestOtterConfidence = 0;
         
-        if (isFutureMeeting) {
-          // Future meetings cannot have transcripts yet - skip matching entirely
-          console.log(`  ⏭️ Future meeting detected (${meetingDate.toDateString()}) - skipping transcript matching`);
-          meeting.hasOtterMatch = false;
-          (meeting as any).otterConfidence = 0;
-          (meeting as any).bestOtterMatch = null;
-        } else if (Array.isArray(transcripts)) {
+        if (Array.isArray(transcripts)) {
           for (const transcript of transcripts) {
             try {
               const confidence = calculateMatchConfidence(meeting, transcript);
@@ -1320,18 +1309,15 @@ export async function registerRoutes(app: Express): Promise<Server> {
           }
         }
         
-        // Only set match results for past meetings (future meetings already handled above)
-        if (!isFutureMeeting) {
-          // Set match if confidence is above threshold (60%)
-          meeting.hasOtterMatch = highestOtterConfidence >= 60;
-          (meeting as any).otterConfidence = highestOtterConfidence;
-          (meeting as any).bestOtterMatch = bestOtterMatch;
-          
-          if (meeting.hasOtterMatch) {
-            console.log(`  ✅ Otter match found: "${bestOtterMatch?.title}" (confidence: ${highestOtterConfidence}%)`);
-          } else {
-            console.log(`  ⚪ No Otter match found (highest confidence: ${highestOtterConfidence}%)`);
-          }
+        // Set match if confidence is above threshold (60%)
+        meeting.hasOtterMatch = highestOtterConfidence >= 60;
+        (meeting as any).otterConfidence = highestOtterConfidence;
+        (meeting as any).bestOtterMatch = bestOtterMatch;
+        
+        if (meeting.hasOtterMatch) {
+          console.log(`  ✅ Otter match found: "${bestOtterMatch?.title}" (confidence: ${highestOtterConfidence}%)`);
+        } else {
+          console.log(`  ⚪ No Otter match found (highest confidence: ${highestOtterConfidence}%)`);
         }
         
         // ENHANCED Airtable matching with confidence scoring
@@ -1388,7 +1374,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         console.log(`📊 Final result - "${meeting.title}": Otter=${otterIcon} ${otterSource} (${(meeting as any).otterConfidence}%), Airtable=${airtableIcon} ${airtableSource} (${(meeting as any).airtableConfidence}%)`);
       }
       
-      console.log('📊 Filtered meetings (last 60 days + next 30 days):', meetings.length);
+      console.log('📊 Filtered meetings (past 60 days - completed meetings only):', meetings.length);
       res.json(meetings.slice(0, 20)); // Return last 20 meetings
     } catch (error: any) {
       const errorDetails = {
