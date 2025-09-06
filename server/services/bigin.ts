@@ -450,25 +450,58 @@ export class BiginService {
    */
   async testConnection(): Promise<{ success: boolean; error?: string }> {
     try {
-      console.log('🧪 Testing Bigin API connection...');
+      console.log('🧪 [DEBUG] Testing Bigin API connection...');
+      console.log('🧪 [DEBUG] Testing with base URL:', this.baseUrl);
+      console.log('🧪 [DEBUG] Access token length:', this.credentials.access_token?.length || 0);
 
       const response = await this.makeAuthenticatedRequest(`${this.baseUrl}/Contacts`, {
         method: 'GET',
         params: { per_page: 1 }
       });
 
+      console.log('🧪 [DEBUG] Connection test response:', {
+        status: response.status,
+        statusText: response.statusText,
+        ok: response.ok,
+        headers: Object.fromEntries(response.headers.entries())
+      });
+
       if (response.ok) {
-        console.log('✅ Bigin API connection test successful');
+        const data = await response.json();
+        console.log('✅ [DEBUG] Bigin API connection test successful, sample data:', {
+          hasData: !!data.data,
+          dataType: typeof data.data,
+          sampleCount: Array.isArray(data.data) ? data.data.length : 'not array'
+        });
         return { success: true };
       }
 
+      // Try to get response body for more details
+      let responseBody = '';
+      try {
+        responseBody = await response.text();
+      } catch {
+        responseBody = 'Could not read response body';
+      }
+
       const errorMessage = `API returned ${response.status}: ${response.statusText}`;
-      console.log('❌ Bigin API connection test failed:', errorMessage);
-      return { success: false, error: errorMessage };
+      console.log('❌ [DEBUG] Bigin API connection test failed:', {
+        status: response.status,
+        statusText: response.statusText,
+        responseBody: responseBody,
+        url: response.url
+      });
+      return { success: false, error: `${errorMessage}. Response: ${responseBody}` };
 
     } catch (error: any) {
       const errorMessage = error?.message || 'Unknown connection error';
-      console.log('❌ Bigin API connection test failed:', errorMessage);
+      console.error('🚨 [DEBUG] Bigin API connection test exception:', {
+        error: errorMessage,
+        name: error?.name,
+        code: error?.code,
+        stack: error?.stack,
+        isNetworkError: error?.name === 'TypeError' && error?.message?.includes('fetch')
+      });
       return { success: false, error: errorMessage };
     }
   }
@@ -529,18 +562,23 @@ export class BiginService {
    */
   async getContactsForMeetings(meetings: Array<{ title: string; attendees?: string[] }>): Promise<BiginContact[]> {
     try {
-      console.log('🔍 Getting contacts for', meetings.length, 'meetings');
+      console.log('🔍 [DEBUG] Getting contacts for', meetings.length, 'meetings');
+      console.log('🔍 [DEBUG] Meeting titles:', meetings.map(m => m.title));
 
       const searchQueries = new Set<string>();
       
       // Extract search terms from meetings
       for (const meeting of meetings) {
+        console.log(`🔍 [DEBUG] Processing meeting: "${meeting.title}"`);
+        
         // Add attendee email prefixes
         if (meeting.attendees) {
+          console.log(`🔍 [DEBUG] Processing ${meeting.attendees.length} attendees:`, meeting.attendees);
           for (const email of meeting.attendees) {
             const emailPrefix = email.split('@')[0];
             if (emailPrefix.length > 2) {
               searchQueries.add(emailPrefix);
+              console.log(`  ➕ [DEBUG] Added email prefix: "${emailPrefix}"`);
             }
           }
         }
@@ -549,33 +587,55 @@ export class BiginService {
         const titleWords = meeting.title.split(/[\s\-|/]/).filter(word => 
           word.length > 2 && !['the', 'and', 'with', 'meeting', 'call', 'chat'].includes(word.toLowerCase())
         );
-        titleWords.slice(0, 2).forEach(word => searchQueries.add(word));
+        console.log(`🔍 [DEBUG] Title words from "${meeting.title}":`, titleWords);
+        titleWords.slice(0, 2).forEach(word => {
+          searchQueries.add(word);
+          console.log(`  ➕ [DEBUG] Added title word: "${word}"`);
+        });
       }
 
-      console.log('📋 Search queries:', Array.from(searchQueries));
+      console.log('📋 [DEBUG] Final search queries:', Array.from(searchQueries));
 
       const allContacts: BiginContact[] = [];
       const maxSearches = 5; // Limit API calls
+      const searchTerms = Array.from(searchQueries).slice(0, maxSearches);
       
-      for (const query of Array.from(searchQueries).slice(0, maxSearches)) {
+      console.log('🔍 [DEBUG] Will perform', searchTerms.length, 'searches:', searchTerms);
+      
+      for (const query of searchTerms) {
         try {
+          console.log(`🔍 [DEBUG] ========== SEARCHING FOR: "${query}" ==========`);
           const contacts = await this.searchContacts(query);
+          console.log(`📊 [DEBUG] Search "${query}" returned ${contacts.length} contacts:`, contacts.map(c => c.name));
           allContacts.push(...contacts);
         } catch (searchError: any) {
-          console.warn(`⚠️ Search failed for "${query}":`, searchError.message);
+          console.error(`🚨 [DEBUG] Search failed for "${query}":`, {
+            error: searchError.message,
+            name: searchError.name,
+            code: searchError.code,
+            stack: searchError.stack
+          });
         }
       }
+
+      console.log('📊 [DEBUG] Total contacts from all searches:', allContacts.length);
 
       // Remove duplicates by ID
       const uniqueContacts = allContacts.filter((contact, index, self) => 
         index === self.findIndex(c => c.id === contact.id)
       );
 
-      console.log('✅ Found', uniqueContacts.length, 'unique Bigin contacts');
+      console.log('✅ [DEBUG] Found', uniqueContacts.length, 'unique Bigin contacts');
+      console.log('📋 [DEBUG] Unique contact names:', uniqueContacts.map(c => c.name));
       return uniqueContacts;
 
     } catch (error: any) {
-      console.error('🚨 Error getting contacts for meetings:', error?.message);
+      console.error('🚨 [DEBUG] Error getting contacts for meetings:', {
+        error: error?.message,
+        name: error?.name,
+        code: error?.code,
+        stack: error?.stack
+      });
       return [];
     }
   }

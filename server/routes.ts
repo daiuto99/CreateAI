@@ -981,47 +981,36 @@ export async function registerRoutes(app: Express): Promise<Server> {
             const allContacts: any[] = [];
             const maxSearches = 8; // Increased from 5
             
-            for (const term of Array.from(searchTerms).slice(0, maxSearches)) {
-              try {
-                console.log(`🔍 [SYNC] ========== SEARCHING FOR TERM: "${term}" ==========`);
-                
-                // Special attention for "Mark" searches
-                if (term.toLowerCase().includes('mark')) {
-                  console.log(`🎯 [DEBUG] MARK SEARCH DETECTED! Searching for: "${term}"`);
-                }
-                
-                const termContacts = await biginService.findContactByVariations(term);
-                allContacts.push(...termContacts);
-                
-                console.log(`📊 [DEBUG] Search results for "${term}":`, {
-                  contactCount: termContacts.length,
-                  contactNames: termContacts.map(c => c.name),
-                  contactIds: termContacts.map(c => c.id)
-                });
-                
-                // Check specifically for Mark Murphy
-                const markMurphyResult = termContacts.find(c => 
-                  c.name.toLowerCase().includes('mark') && c.name.toLowerCase().includes('murphy')
-                );
-                
-                if (markMurphyResult) {
-                  console.log(`🎯 [DEBUG] MARK MURPHY FOUND in results for "${term}":`, markMurphyResult);
-                } else if (term.toLowerCase().includes('mark')) {
-                  console.log(`❌ [DEBUG] Mark Murphy NOT found for search term "${term}"`);
-                  console.log(`📋 [DEBUG] All contacts returned:`, termContacts.map(c => ({ name: c.name, id: c.id })));
-                }
-                
-                if (termContacts.length > 0) {
-                  console.log(`✅ [SYNC] Found ${termContacts.length} contacts for "${term}"`);
-                } else {
-                  console.log(`⚪ [SYNC] No contacts found for "${term}"`);
-                }
-              } catch (searchError: any) {
-                console.error(`🚨 [SYNC] Search failed for "${term}":`, {
-                  error: searchError.message,
-                  stack: searchError.stack
-                });
+            // Use the comprehensive getContactsForMeetings method instead of individual searches
+            try {
+              console.log('🔍 [SYNC] Using getContactsForMeetings method...');
+              
+              const allFoundContacts = await biginService.getContactsForMeetings(meetings);
+              allContacts.push(...allFoundContacts);
+              
+              console.log(`📊 [DEBUG] getContactsForMeetings returned ${allFoundContacts.length} contacts`);
+              
+              // Check specifically for Mark Murphy
+              const markMurphyResult = allFoundContacts.find(c => 
+                c.name.toLowerCase().includes('mark') && c.name.toLowerCase().includes('murphy')
+              );
+              
+              if (markMurphyResult) {
+                console.log(`🎯 [DEBUG] MARK MURPHY FOUND:`, markMurphyResult);
+              } else {
+                console.log(`❌ [DEBUG] Mark Murphy NOT found in results`);
+                console.log(`📋 [DEBUG] All contacts returned:`, allFoundContacts.map(c => ({ name: c.name, id: c.id })));
               }
+              
+            } catch (getContactsError: any) {
+              console.error(`🚨 [SYNC] getContactsForMeetings failed:`, {
+                error: getContactsError.message,
+                name: getContactsError.name,
+                code: getContactsError.code,
+                stack: getContactsError.stack,
+                isApiError: getContactsError.name === 'TypeError' && getContactsError.message?.includes('fetch'),
+                isAuthError: getContactsError.message?.includes('401') || getContactsError.message?.includes('auth')
+              });
             }
             
             // Remove duplicates by ID with timeout protection
