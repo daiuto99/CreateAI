@@ -94,7 +94,13 @@ export class BiginService {
       
       const finalCriteria = `(${searchCriteria})`;
       
-      console.log('🔍 Search criteria:', finalCriteria);
+      console.log('🔍 [DEBUG] Exact search criteria being sent to Bigin API:', finalCriteria);
+      console.log('🔍 [DEBUG] Full API request details:', {
+        url: searchUrl,
+        method: 'GET',
+        criteria: finalCriteria,
+        per_page: 50
+      });
 
       const response = await this.makeAuthenticatedRequest(searchUrl, {
         method: 'GET',
@@ -450,15 +456,28 @@ export class BiginService {
     
     for (const variation of searchVariations) {
       try {
-        console.log(`  🔍 Trying variation: "${variation}"`);
+        console.log(`  🔍 [DEBUG] Trying variation: "${variation}"`);
         const results = await this.searchContacts(variation);
         allResults.push(...results);
         
+        console.log(`  📊 [DEBUG] Variation "${variation}" returned:`, {
+          count: results.length,
+          contacts: results.map(c => ({ name: c.name, id: c.id }))
+        });
+        
         if (results.length > 0) {
           console.log(`  ✅ Found ${results.length} contacts with variation: "${variation}"`);
+          
+          // Check if any result contains "Murphy"
+          const murphyContacts = results.filter(c => c.name.toLowerCase().includes('murphy'));
+          if (murphyContacts.length > 0) {
+            console.log(`  🎯 [DEBUG] MURPHY CONTACTS found with variation "${variation}":`, murphyContacts);
+          }
+        } else {
+          console.log(`  ⚪ [DEBUG] No contacts found for variation: "${variation}"`);
         }
-      } catch (error) {
-        console.log(`  ⚠️ Search failed for variation: "${variation}"`);
+      } catch (error: any) {
+        console.error(`  🚨 [DEBUG] Search failed for variation "${variation}":`, error.message);
       }
     }
     

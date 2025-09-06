@@ -917,36 +917,50 @@ export async function registerRoutes(app: Express): Promise<Server> {
           if (biginService) {
             console.log('📅 [SYNC] API Call: Enhanced contact search for meetings...');
             
-            // ENHANCED: Extract better search terms
+            // ENHANCED: Extract better search terms with detailed logging
             const searchTerms = new Set<string>();
             
+            console.log('🔍 [DEBUG] Starting term extraction from', meetings.length, 'meetings...');
+            
             for (const meeting of meetings) {
+              console.log(`🔍 [DEBUG] Processing meeting: "${meeting.title}"`);
+              
               // Extract names from meeting titles with better parsing
               const titleParts = meeting.title.split(/[\s\-|/,]+/).filter(word => 
                 word.length > 2 && 
                 !['the', 'and', 'with', 'meeting', 'call', 'chat', 'session', 'box'].includes(word.toLowerCase())
               );
               
+              console.log(`🔍 [DEBUG] Title parts extracted from "${meeting.title}":`, titleParts);
+              
               titleParts.forEach(part => {
                 searchTerms.add(part);
+                console.log(`  ➕ [DEBUG] Added search term: "${part}"`);
+                
                 // Also try first word combinations
                 if (part.length > 3) {
-                  searchTerms.add(part.substring(0, 4)); // First 4 chars
+                  const shortTerm = part.substring(0, 4);
+                  searchTerms.add(shortTerm);
+                  console.log(`  ➕ [DEBUG] Added short term: "${shortTerm}" (from "${part}")`);
                 }
               });
               
               // Extract from attendee emails
               if (meeting.attendees) {
+                console.log(`🔍 [DEBUG] Processing ${meeting.attendees.length} attendees:`, meeting.attendees);
                 meeting.attendees.forEach((email: string) => {
                   const emailPrefix = email.split('@')[0];
                   if (emailPrefix.length > 2) {
                     searchTerms.add(emailPrefix);
+                    console.log(`  ➕ [DEBUG] Added email prefix: "${emailPrefix}" (from "${email}")`);
                   }
                 });
+              } else {
+                console.log(`🔍 [DEBUG] No attendees found for meeting: "${meeting.title}"`);
               }
             }
             
-            console.log('🔍 [SYNC] Enhanced search terms:', Array.from(searchTerms));
+            console.log('🔍 [SYNC] Final search terms extracted:', Array.from(searchTerms));
             
             // Search with enhanced logic
             const allContacts: any[] = [];
@@ -954,15 +968,44 @@ export async function registerRoutes(app: Express): Promise<Server> {
             
             for (const term of Array.from(searchTerms).slice(0, maxSearches)) {
               try {
-                console.log(`🔍 [SYNC] Searching for: "${term}"`);
+                console.log(`🔍 [SYNC] ========== SEARCHING FOR TERM: "${term}" ==========`);
+                
+                // Special attention for "Mark" searches
+                if (term.toLowerCase().includes('mark')) {
+                  console.log(`🎯 [DEBUG] MARK SEARCH DETECTED! Searching for: "${term}"`);
+                }
+                
                 const termContacts = await biginService.findContactByVariations(term);
                 allContacts.push(...termContacts);
                 
+                console.log(`📊 [DEBUG] Search results for "${term}":`, {
+                  contactCount: termContacts.length,
+                  contactNames: termContacts.map(c => c.name),
+                  contactIds: termContacts.map(c => c.id)
+                });
+                
+                // Check specifically for Mark Murphy
+                const markMurphyResult = termContacts.find(c => 
+                  c.name.toLowerCase().includes('mark') && c.name.toLowerCase().includes('murphy')
+                );
+                
+                if (markMurphyResult) {
+                  console.log(`🎯 [DEBUG] MARK MURPHY FOUND in results for "${term}":`, markMurphyResult);
+                } else if (term.toLowerCase().includes('mark')) {
+                  console.log(`❌ [DEBUG] Mark Murphy NOT found for search term "${term}"`);
+                  console.log(`📋 [DEBUG] All contacts returned:`, termContacts.map(c => ({ name: c.name, id: c.id })));
+                }
+                
                 if (termContacts.length > 0) {
                   console.log(`✅ [SYNC] Found ${termContacts.length} contacts for "${term}"`);
+                } else {
+                  console.log(`⚪ [SYNC] No contacts found for "${term}"`);
                 }
               } catch (searchError: any) {
-                console.warn(`⚠️ [SYNC] Search failed for "${term}":`, searchError.message);
+                console.error(`🚨 [SYNC] Search failed for "${term}":`, {
+                  error: searchError.message,
+                  stack: searchError.stack
+                });
               }
             }
             
