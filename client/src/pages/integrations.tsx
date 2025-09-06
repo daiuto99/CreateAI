@@ -11,7 +11,7 @@ import { useToast } from '@/hooks/use-toast';
 
 // Import service logos
 import openaiLogo from '@assets/openai_1756919666153.png';
-import biginLogo from '@assets/bigin_1756937799014.png';
+import freshdeskLogo from '@assets/generated_images/Freshdesk_professional_logo_icon_91284b50.png';
 import wordpressLogo from '@assets/wordPress_1756919666154.png';
 import transistorLogo from '@assets/transister_1756919666154.jpg';
 import elevenlabsLogo from '@assets/elevenlabs_1756919666154.png';
@@ -56,14 +56,14 @@ const serviceConfigs: Record<string, ServiceConfig> = {
       { key: 'apiKey', label: 'API Key', type: 'password', placeholder: 'sk-...', required: true }
     ]
   },
-  bigin: {
-    name: 'Bigin by Zoho',
-    description: 'Sync meeting intelligence and voice updates into your CRM',
-    logo: biginLogo,
-    helpText: 'Go to Bigin Settings → Developer Space → Server-based Applications → Create app. Copy the Client ID and Client Secret from your created application.',
+  freshdesk: {
+    name: 'Freshdesk',
+    description: 'Sync meeting intelligence and voice updates into your customer support system',
+    logo: freshdeskLogo,
+    helpText: 'In Freshdesk, go to Profile Settings → API Key section → Copy your API key. Also provide your Freshdesk domain (e.g., "yourcompany" from yourcompany.freshdesk.com).',
     fields: [
-      { key: 'clientId', label: 'Client ID', type: 'text', placeholder: '1000.74UPTQQD6M8RZUGC3LZ1467PODC...', required: true },
-      { key: 'clientSecret', label: 'Client Secret', type: 'password', placeholder: '6153dcaa9a3c249eab5ae23c2d20a396bc1...', required: true }
+      { key: 'apiKey', label: 'API Key', type: 'password', placeholder: 'Your Freshdesk API key', required: true },
+      { key: 'domain', label: 'Domain', type: 'text', placeholder: 'yourcompany (from yourcompany.freshdesk.com)', required: true }
     ]
   },
   wordpress: {
@@ -131,12 +131,6 @@ export default function Integrations() {
   const [selectedService, setSelectedService] = useState<string | null>(null);
   const [formData, setFormData] = useState<Record<string, string>>({});
   const [isModalOpen, setIsModalOpen] = useState(false);
-  const [showManualTokens, setShowManualTokens] = useState<Record<string, boolean>>({});
-  const [manualTokenData, setManualTokenData] = useState({
-    accessToken: '',
-    refreshToken: '',
-    apiDomain: 'www.zohoapis.com'
-  });
 
   // Handle OAuth callback success/error messages
   useEffect(() => {
@@ -145,10 +139,10 @@ export default function Integrations() {
     const error = urlParams.get('error');
     const details = urlParams.get('details');
 
-    if (success === 'bigin_connected') {
+    if (success === 'freshdesk_connected') {
       toast({
-        title: 'Bigin Connected!',
-        description: 'Your Bigin integration has been successfully authorized and is now connected.'
+        title: 'Freshdesk Connected!',
+        description: 'Your Freshdesk integration has been successfully connected.'
       });
       // Clear URL parameters
       window.history.replaceState({}, document.title, window.location.pathname);
@@ -167,7 +161,7 @@ export default function Integrations() {
           errorMessage = 'Security validation failed - please try again';
           break;
         case 'missing_credentials':
-          errorMessage = 'Client credentials not found - please configure Bigin first';
+          errorMessage = 'API credentials not found - please configure Freshdesk first';
           break;
         case 'token_exchange_failed':
           errorMessage = `Token exchange failed: ${details || 'Unknown error'}`;
@@ -255,35 +249,6 @@ export default function Integrations() {
     },
   });
 
-  const manualTokenMutation = useMutation({
-    mutationFn: async (data: { provider: string; accessToken: string; refreshToken: string; apiDomain: string }) => {
-      const response = await fetch('/api/integrations/manual-tokens', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(data),
-      });
-      
-      if (!response.ok) {
-        const error = await response.json();
-        throw new Error(error.message || 'Failed to save tokens');
-      }
-      
-      return response.json();
-    },
-    onSuccess: (result) => {
-      if (result.success) {
-        toast({ title: 'Tokens saved and validated!', description: result.message });
-        queryClient.invalidateQueries({ queryKey: ['/api/integrations'] });
-        setShowManualTokens(prev => ({ ...prev, [result.provider]: false }));
-        setManualTokenData({ accessToken: '', refreshToken: '', apiDomain: 'www.zohoapis.com' });
-      } else {
-        toast({ title: 'Token validation failed', description: result.error, variant: 'destructive' });
-      }
-    },
-    onError: (error) => {
-      toast({ title: 'Failed to save tokens', description: error.message, variant: 'destructive' });
-    },
-  });
 
   const getIntegrationByProvider = (provider: string) => {
     return integrations.find(integration => integration.provider === provider);
@@ -325,28 +290,6 @@ export default function Integrations() {
   };
 
   // OAuth flow for Bigin
-  const handleBiginOAuth = async (provider: string) => {
-    try {
-      const response = await fetch('/api/auth/bigin/start', {
-        method: 'GET',
-        headers: { 'Content-Type': 'application/json' }
-      });
-      
-      if (!response.ok) {
-        const errorData = await response.json();
-        throw new Error(errorData.error || 'Failed to start OAuth flow');
-      }
-      
-      const { authUrl } = await response.json();
-      window.location.href = authUrl;
-    } catch (error: any) {
-      toast({ 
-        title: 'OAuth flow failed', 
-        description: error.message,
-        variant: 'destructive' 
-      });
-    }
-  };
 
   const handleConnect = (provider: string) => {
     setSelectedService(provider);
@@ -364,22 +307,6 @@ export default function Integrations() {
     });
   };
 
-  const handleManualTokenSubmit = (provider: string) => {
-    if (!manualTokenData.accessToken || !manualTokenData.refreshToken) {
-      toast({ title: 'Missing tokens', description: 'Please enter both access and refresh tokens.', variant: 'destructive' });
-      return;
-    }
-
-    manualTokenMutation.mutate({
-      provider,
-      ...manualTokenData
-    });
-  };
-
-  const toggleManualTokens = (provider: string) => {
-    setShowManualTokens(prev => ({ ...prev, [provider]: !prev[provider] }));
-    setManualTokenData({ accessToken: '', refreshToken: '', apiDomain: 'www.zohoapis.com' });
-  };
 
   if (isLoading) {
     return (
@@ -488,169 +415,33 @@ export default function Integrations() {
                       </Button>
                     </div>
                   </div>
-                ) : integration?.status === 'needs_oauth' ? (
+                ) : integration?.status === 'needs_oauth' || !integration ? (
                   <div className="space-y-3">
                     <p className="text-sm text-muted-foreground">
-                      Authorization required to access {config.name} API.
+                      Configuration required to access {config.name} API.
                     </p>
-                    {provider === 'bigin' ? (
-                      <>
-                        <div className="space-y-2">
-                          <Button 
-                            onClick={() => handleBiginOAuth(provider)}
-                            className="w-full"
-                            data-testid={`button-oauth-${provider}`}
-                          >
-                            Authorize with Bigin
-                          </Button>
-                          <Button 
-                            variant="outline"
-                            onClick={() => toggleManualTokens(provider)}
-                            className="w-full"
-                            data-testid={`button-manual-tokens-${provider}`}
-                          >
-                            Enter Tokens Manually
-                          </Button>
-                        </div>
-                        {showManualTokens[provider] && (
-                          <div className="mt-4 p-4 border rounded-lg bg-gray-50">
-                            <h4 className="font-medium text-sm mb-3">Manual Token Entry</h4>
-                            <p className="text-xs text-gray-600 mb-3">
-                              Get these tokens from Zoho's developer console or by completing OAuth manually in Postman.
-                            </p>
-                            <div className="space-y-3">
-                              <div>
-                                <Label htmlFor="access-token" className="text-xs">Access Token</Label>
-                                <Input
-                                  id="access-token"
-                                  type="password"
-                                  value={manualTokenData.accessToken}
-                                  onChange={(e) => setManualTokenData(prev => ({ ...prev, accessToken: e.target.value }))}
-                                  placeholder="1000.xxx.xxx"
-                                  className="mt-1"
-                                />
-                              </div>
-                              <div>
-                                <Label htmlFor="refresh-token" className="text-xs">Refresh Token</Label>
-                                <Input
-                                  id="refresh-token"
-                                  type="password"
-                                  value={manualTokenData.refreshToken}
-                                  onChange={(e) => setManualTokenData(prev => ({ ...prev, refreshToken: e.target.value }))}
-                                  placeholder="1000.xxx.xxx"
-                                  className="mt-1"
-                                />
-                              </div>
-                              <div>
-                                <Label htmlFor="api-domain" className="text-xs">API Domain</Label>
-                                <Input
-                                  id="api-domain"
-                                  type="text"
-                                  value={manualTokenData.apiDomain}
-                                  onChange={(e) => setManualTokenData(prev => ({ ...prev, apiDomain: e.target.value }))}
-                                  placeholder="www.zohoapis.com"
-                                  className="mt-1"
-                                />
-                              </div>
-                              <Button
-                                onClick={() => handleManualTokenSubmit(provider)}
-                                disabled={manualTokenMutation.isPending}
-                                className="w-full"
-                                size="sm"
-                                data-testid="button-submit-manual-tokens"
-                              >
-                                {manualTokenMutation.isPending ? 'Testing...' : 'Test Connection'}
-                              </Button>
-                            </div>
-                          </div>
-                        )}
-                      </>
-                    ) : (
-                      <Button 
-                        onClick={() => handleConnect(provider)}
-                        className="w-full"
-                        data-testid={`button-oauth-${provider}`}
-                      >
-                        Connect {config.name}
-                      </Button>
-                    )}
+                    <Button 
+                      onClick={() => handleConnect(provider)}
+                      className="w-full"
+                      data-testid={`button-connect-${provider}`}
+                    >
+                      Connect {config.name}
+                    </Button>
                   </div>
-                ) : integration?.status === 'error' && provider === 'bigin' && (integration.credentials as any)?.clientId ? (
+                ) : integration?.status === 'error' ? (
                   <div className="space-y-3">
                     <div className="p-3 bg-red-50 border border-red-200 rounded-md">
                       <p className="text-sm text-red-800">
-                        Connection failed. Please authorize access or enter tokens manually.
+                        Connection failed. Please check your credentials and try connecting again.
                       </p>
                     </div>
-                    <div className="space-y-2">
-                      <Button 
-                        onClick={() => handleBiginOAuth(provider)}
-                        className="w-full"
-                        data-testid={`button-reconnect-${provider}`}
-                      >
-                        Reconnect Bigin
-                      </Button>
-                      <Button 
-                        variant="outline"
-                        onClick={() => toggleManualTokens(provider)}
-                        className="w-full"
-                        data-testid={`button-manual-tokens-error-${provider}`}
-                      >
-                        Enter Tokens Manually
-                      </Button>
-                    </div>
-                    {showManualTokens[provider] && (
-                      <div className="mt-4 p-4 border rounded-lg bg-gray-50">
-                        <h4 className="font-medium text-sm mb-3">Manual Token Entry</h4>
-                        <p className="text-xs text-gray-600 mb-3">
-                          Get these tokens from Zoho's developer console or by completing OAuth manually in Postman.
-                        </p>
-                        <div className="space-y-3">
-                          <div>
-                            <Label htmlFor="access-token-error" className="text-xs">Access Token</Label>
-                            <Input
-                              id="access-token-error"
-                              type="password"
-                              value={manualTokenData.accessToken}
-                              onChange={(e) => setManualTokenData(prev => ({ ...prev, accessToken: e.target.value }))}
-                              placeholder="1000.xxx.xxx"
-                              className="mt-1"
-                            />
-                          </div>
-                          <div>
-                            <Label htmlFor="refresh-token-error" className="text-xs">Refresh Token</Label>
-                            <Input
-                              id="refresh-token-error"
-                              type="password"
-                              value={manualTokenData.refreshToken}
-                              onChange={(e) => setManualTokenData(prev => ({ ...prev, refreshToken: e.target.value }))}
-                              placeholder="1000.xxx.xxx"
-                              className="mt-1"
-                            />
-                          </div>
-                          <div>
-                            <Label htmlFor="api-domain-error" className="text-xs">API Domain</Label>
-                            <Input
-                              id="api-domain-error"
-                              type="text"
-                              value={manualTokenData.apiDomain}
-                              onChange={(e) => setManualTokenData(prev => ({ ...prev, apiDomain: e.target.value }))}
-                              placeholder="www.zohoapis.com"
-                              className="mt-1"
-                            />
-                          </div>
-                          <Button
-                            onClick={() => handleManualTokenSubmit(provider)}
-                            disabled={manualTokenMutation.isPending}
-                            className="w-full"
-                            size="sm"
-                            data-testid="button-submit-manual-tokens-error"
-                          >
-                            {manualTokenMutation.isPending ? 'Testing...' : 'Test Connection'}
-                          </Button>
-                        </div>
-                      </div>
-                    )}
+                    <Button 
+                      onClick={() => handleConnect(provider)}
+                      className="w-full"
+                      data-testid={`button-reconnect-${provider}`}
+                    >
+                      Reconnect {config.name}
+                    </Button>
                   </div>
                 ) : (
                   <Button 
