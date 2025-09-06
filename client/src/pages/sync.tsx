@@ -50,13 +50,15 @@ export default function Sync() {
   // Mutation for dismissing meetings
   const dismissMeeting = useMutation({
     mutationFn: async (meetingId: string) => {
-      return apiRequest('/api/meetings/dismiss', {
+      const response = await fetch('/api/meetings/dismiss', {
         method: 'POST',
-        data: { meetingId }
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ meetingId })
       });
+      return response.json();
     },
     onSuccess: (data, meetingId) => {
-      setDismissedMeetings(prev => new Set([...prev, meetingId]));
+      setDismissedMeetings(prev => new Set(Array.from(prev).concat(meetingId)));
       toast({
         title: "Meeting Dismissed",
         description: "Meeting has been dismissed and won't appear in sync list.",
@@ -74,10 +76,12 @@ export default function Sync() {
   // Mutation for creating Freshdesk records
   const createFreshdeskRecord = useMutation({
     mutationFn: async (meeting: any) => {
-      return apiRequest('/api/freshdesk/create-record', {
+      const response = await fetch('/api/freshdesk/create-record', {
         method: 'POST',
-        data: { meeting }
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ meeting })
       });
+      return response.json();
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['/api/meetings'] });
