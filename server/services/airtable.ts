@@ -76,6 +76,10 @@ export class AirtableService {
     try {
       console.log('🧪 [AirtableService] Testing connection to base:', this.baseId);
       console.log('🔗 [AirtableService] Testing URL: https://api.airtable.com/v0/meta/bases/' + this.baseId + '/tables');
+      console.log('🔑 [AirtableService] API Key exists:', !!this.apiKey);
+      console.log('🔑 [AirtableService] API Key length:', this.apiKey?.length || 0);
+      console.log('🔑 [AirtableService] API Key first 10 chars:', this.apiKey?.substring(0, 10) || 'NONE');
+      console.log('🔑 [AirtableService] Full Authorization header:', `Bearer ${this.apiKey}`);
       
       // Test connection by fetching base metadata (this doesn't require a table name)
       const response = await fetch(`https://api.airtable.com/v0/meta/bases/${this.baseId}/tables`, {
