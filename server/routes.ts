@@ -658,7 +658,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
                   ...integration, 
                   credentials: updatedCredentials,
                   status: 'connected' as any,
-                  last_validated: currentTime.toISOString()
+                  last_validated: currentTime
                 });
               } else if (otterTestResponse.status === 401 || otterTestResponse.status === 403) {
                 // Clear invalid key and mark for renewal
@@ -680,7 +680,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
                 await storage.upsertUserIntegration({ 
                   ...integration, 
                   status: 'connected' as any,
-                  last_validated: currentTime.toISOString()
+                  last_validated: currentTime
                 });
               } else {
                 const errorText = await otterTestResponse.text();
