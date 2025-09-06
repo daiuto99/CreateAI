@@ -38,13 +38,25 @@ export default function Sync() {
     queryKey: ['/api/otter/transcripts'],
     enabled: isAuthenticated,
     retry: false,
+    staleTime: 0, // Force fresh data to trigger loading states
+    cacheTime: 0, // Don't cache for testing
   });
 
-  // Fetch Airtable contacts with loading state
+  // Fetch Airtable contacts with loading state  
   const { data: contacts = [], isLoading: contactsLoading } = useQuery<any[]>({
     queryKey: ['/api/airtable/contacts'],
     enabled: isAuthenticated,
     retry: false,
+    staleTime: 0, // Force fresh data to trigger loading states
+    cacheTime: 0, // Don't cache for testing
+  });
+
+  // Debug loading states
+  console.log('🔍 DEBUG Loading States:', {
+    transcriptsLoading,
+    contactsLoading,
+    meetingsLoading,
+    isAnalyzingMatches: transcriptsLoading || contactsLoading || meetingsLoading
   });
 
   // Sync matching analysis loading state
