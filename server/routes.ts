@@ -912,7 +912,22 @@ export async function registerRoutes(app: Express): Promise<Server> {
         console.log('🔗 [SYNC] Bigin integration connected, attempting real API...');
         
         try {
+          console.log('🔗 [DEBUG] Attempting to create Bigin service for user:', userId);
+          console.log('🔗 [DEBUG] Bigin integration status:', biginIntegration?.status);
+          console.log('🔗 [DEBUG] Bigin integration details:', {
+            id: biginIntegration?.id,
+            provider: biginIntegration?.provider,
+            status: biginIntegration?.status,
+            hasCredentials: !!biginIntegration?.credentials,
+            credentialKeys: biginIntegration?.credentials ? Object.keys(biginIntegration.credentials) : []
+          });
+          
           const biginService = await BiginService.createFromUserIntegration(storage, userId);
+          
+          console.log('🔗 [DEBUG] BiginService.createFromUserIntegration result:', {
+            success: !!biginService,
+            serviceExists: biginService !== null
+          });
           
           if (biginService) {
             console.log('📅 [SYNC] API Call: Enhanced contact search for meetings...');
@@ -1048,6 +1063,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
           } else {
             usingContactFallback = true;
             contactFallbackReason = 'Failed to initialize Bigin service (no OAuth tokens or service error)';
+            console.log('❌ [DEBUG] BiginService.createFromUserIntegration returned null - service creation failed');
             console.log('⚠️ [SYNC] Could not create Bigin service, switching to fallback contacts');
           }
         } catch (error: any) {

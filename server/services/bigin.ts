@@ -42,35 +42,69 @@ export class BiginService {
    */
   static async createFromUserIntegration(storage: IStorage, userId: string): Promise<BiginService | null> {
     try {
-      console.log('🔍 Creating Bigin service for user:', userId);
+      console.log('🔍 [DEBUG] Creating Bigin service for user:', userId);
       
       const integrations = await storage.getUserIntegrations(userId);
-      const biginIntegration = integrations.find(i => i.provider === 'bigin');
+      console.log('🔍 [DEBUG] Found', integrations.length, 'total integrations for user');
+      console.log('🔍 [DEBUG] Available integrations:', integrations.map(i => ({ provider: i.provider, status: i.status })));
       
-      if (!biginIntegration || biginIntegration.status !== 'connected') {
-        console.log('⚠️ No connected Bigin integration found');
+      const biginIntegration = integrations.find(i => i.provider === 'bigin');
+      console.log('🔍 [DEBUG] Bigin integration found:', !!biginIntegration);
+      
+      if (!biginIntegration) {
+        console.log('❌ [DEBUG] No Bigin integration found at all');
+        return null;
+      }
+      
+      if (biginIntegration.status !== 'connected') {
+        console.log('❌ [DEBUG] Bigin integration exists but not connected. Status:', biginIntegration.status);
         return null;
       }
 
+      console.log('✅ [DEBUG] Bigin integration is connected, checking credentials...');
       const credentials = biginIntegration.credentials as BiginOAuthCredentials;
+      
+      console.log('🔍 [DEBUG] Credentials check:', {
+        hasCredentials: !!credentials,
+        hasAccessToken: !!credentials?.access_token,
+        hasRefreshToken: !!credentials?.refresh_token,
+        hasClientId: !!credentials?.client_id,
+        hasClientSecret: !!credentials?.client_secret,
+        accessTokenLength: credentials?.access_token?.length || 0,
+        refreshTokenLength: credentials?.refresh_token?.length || 0
+      });
+      
       if (!credentials?.access_token || !credentials?.refresh_token) {
-        console.log('⚠️ No Bigin OAuth credentials found');
+        console.log('❌ [DEBUG] Missing required OAuth credentials');
         return null;
       }
 
+      console.log('✅ [DEBUG] Credentials validated, creating service instance...');
       const service = new BiginService(credentials, storage, userId);
       
       // Test connection and refresh token if needed
+      console.log('🧪 [DEBUG] Testing Bigin API connection...');
       const connectionTest = await service.testConnection();
+      
+      console.log('🧪 [DEBUG] Connection test result:', {
+        success: connectionTest.success,
+        error: connectionTest.error
+      });
+      
       if (!connectionTest.success) {
-        console.log('⚠️ Bigin connection test failed:', connectionTest.error);
+        console.log('❌ [DEBUG] Bigin connection test failed:', connectionTest.error);
         return null;
       }
 
-      console.log('✅ Bigin service created successfully');
+      console.log('✅ [DEBUG] Bigin service created and tested successfully');
       return service;
-    } catch (error) {
-      console.error('🚨 Error creating Bigin service:', error);
+    } catch (error: any) {
+      console.error('🚨 [DEBUG] Error creating Bigin service:', {
+        error: error.message,
+        stack: error.stack,
+        name: error.name,
+        code: error.code
+      });
       return null;
     }
   }
