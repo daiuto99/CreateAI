@@ -1012,6 +1012,11 @@ export async function registerRoutes(app: Express): Promise<Server> {
           const otterService = await OtterService.createFromUserIntegration(storage, userId);
           
           if (otterService) {
+            // DEBUG: First fetch ALL speeches to see what's available
+            console.log('🔍 [DEBUG] Fetching ALL available transcripts for debugging...');
+            const allSpeeches = await otterService.getAllSpeeches();
+            console.log(`🔍 [DEBUG] Account contains ${allSpeeches.length} total transcripts`);
+            
             // Fetch transcripts with timeout protection and expanded date range
             const sixtyDaysAgo = new Date();
             sixtyDaysAgo.setDate(sixtyDaysAgo.getDate() - 60);

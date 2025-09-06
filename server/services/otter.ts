@@ -68,6 +68,89 @@ export class OtterService {
   }
 
   /**
+   * DEBUG: Fetch ALL speeches without date filtering to see what's available
+   */
+  async getAllSpeeches(): Promise<ExpectedTranscript[]> {
+    try {
+      console.log('🔍 [DEBUG] Fetching ALL Otter speeches (no date filter)');
+
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => {
+        controller.abort();
+        console.error('⏰ Otter API timeout after 15 seconds');
+      }, 15000);
+
+      // Add cache-busting timestamp to force fresh data
+      const timestamp = Date.now();
+      const url = `${this.baseUrl}/speech/export?_t=${timestamp}&fresh=true&debug=all`;
+      
+      console.log('🔗 [DEBUG] Otter.ai ALL speeches request:', {
+        url: url,
+        method: 'GET',
+        note: 'Fetching ALL speeches for debugging'
+      });
+      
+      const response = await fetch(url, {
+        method: 'GET',
+        headers: {
+          'Authorization': `Bearer ${this.apiKey}`,
+          'Content-Type': 'application/json',
+          'Cache-Control': 'no-cache, no-store, must-revalidate',
+          'Pragma': 'no-cache',
+          'If-None-Match': '*'
+        },
+        signal: controller.signal
+      });
+
+      clearTimeout(timeoutId);
+
+      if (!response.ok) {
+        console.log('❌ [DEBUG] Failed to fetch all speeches');
+        return [];
+      }
+
+      const responseBody = await response.text();
+      const data = JSON.parse(responseBody);
+      
+      // Handle different possible response formats
+      let speeches = [];
+      if (Array.isArray(data?.data)) {
+        speeches = data.data;
+      } else if (Array.isArray(data?.speeches)) {
+        speeches = data.speeches;
+      } else if (Array.isArray(data?.recordings)) {
+        speeches = data.recordings;
+      } else if (Array.isArray(data)) {
+        speeches = data;
+      }
+
+      console.log('🔍 [DEBUG] ALL Available Speeches in Account:');
+      speeches.forEach((speech: any, index: number) => {
+        console.log(`  ${index + 1}. "${speech.title || 'Untitled'}" - Created: ${speech.created_at || 'Unknown'}`);
+      });
+
+      // Transform to expected format
+      const transcripts: ExpectedTranscript[] = speeches.map((speech: any) => {
+        return {
+          id: speech.speech_id || speech.id || 'unknown',
+          title: speech.title || 'Untitled Meeting',
+          date: new Date(speech.created_at || Date.now()),
+          duration: speech.duration || 'Unknown',
+          summary: speech.summary || speech.abstract_summary,
+          participants: speech.calendar_guests ? [speech.calendar_guests.name].filter(Boolean) : []
+        };
+      });
+
+      console.log(`✅ [DEBUG] Total available transcripts: ${transcripts.length}`);
+      return transcripts;
+
+    } catch (error: any) {
+      console.error('🚨 [DEBUG] Error fetching all speeches:', error.message);
+      return [];
+    }
+  }
+
+  /**
    * Fetch speeches/meetings from specified date range
    */
   async getSpeeches(startDate: Date, endDate: Date): Promise<ExpectedTranscript[]> {
