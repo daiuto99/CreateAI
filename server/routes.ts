@@ -817,6 +817,95 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  // Manual token entry endpoint for Bigin
+  app.post('/api/integrations/manual-tokens', isAuthenticated, async (req: any, res) => {
+    try {
+      const userId = req.user.claims.sub;
+      const { provider, accessToken, refreshToken, apiDomain } = req.body;
+
+      if (!provider || !accessToken || !refreshToken) {
+        return res.status(400).json({ message: "Provider, access token, and refresh token are required" });
+      }
+
+      console.log('🔐 Manual token entry for user:', userId, 'provider:', provider);
+
+      // Test the tokens by calling Bigin API
+      const testUrl = `https://${apiDomain}/crm/v2/Contacts`;
+      
+      try {
+        const testResponse = await fetch(testUrl, {
+          headers: {
+            'Authorization': `Zoho-oauthtoken ${accessToken}`,
+            'Content-Type': 'application/json'
+          }
+        });
+
+        console.log('🧪 [DEBUG] Bigin API test response:', {
+          url: testUrl,
+          status: testResponse.status,
+          ok: testResponse.ok
+        });
+
+        if (testResponse.ok) {
+          // Tokens are valid, save them to database
+          const credentials = {
+            access_token: accessToken,
+            refresh_token: refreshToken,
+            api_domain: apiDomain,
+            token_type: 'Bearer',
+            expires_at: Math.floor(Date.now() / 1000) + 3600, // 1 hour from now
+            manual_entry: true
+          };
+
+          // Find existing integration or create new one
+          const integrations = await storage.getUserIntegrations(userId);
+          const existingIntegration = integrations.find(i => i.provider === provider);
+
+          const integration = await storage.upsertUserIntegration({
+            id: existingIntegration?.id,
+            userId,
+            provider: provider as any,
+            status: 'connected' as any,
+            credentials,
+            last_validated: new Date().toISOString()
+          });
+
+          res.json({
+            success: true,
+            message: 'Tokens validated and saved successfully! Integration is now connected.',
+            provider,
+            integration
+          });
+        } else if (testResponse.status === 401) {
+          res.json({
+            success: false,
+            error: 'Invalid access token. Please check your token and try again.',
+            provider
+          });
+        } else {
+          const errorText = await testResponse.text();
+          console.error('🚨 [DEBUG] Bigin API error:', errorText);
+          
+          res.json({
+            success: false,
+            error: `API test failed with status ${testResponse.status}. Please verify your tokens and API domain.`,
+            provider
+          });
+        }
+      } catch (testError: any) {
+        console.error('🚨 [DEBUG] Error testing Bigin tokens:', testError);
+        res.json({
+          success: false,
+          error: 'Failed to connect to Bigin API. Please check your API domain and try again.',
+          provider
+        });
+      }
+    } catch (error) {
+      console.error("Error processing manual tokens:", error);
+      res.status(500).json({ message: "Failed to process manual tokens" });
+    }
+  });
+
   // OAuth Flow Endpoints
   app.get('/api/auth/bigin/start', isAuthenticated, async (req: any, res) => {
     try {
