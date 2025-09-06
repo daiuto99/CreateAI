@@ -26,22 +26,22 @@ export default function Sync() {
     retry: false,
   });
 
-  // Fetch actual meeting data
-  const { data: meetings = [] } = useQuery<any[]>({
+  // Fetch actual meeting data with loading state
+  const { data: meetings = [], isLoading: meetingsLoading } = useQuery<any[]>({
     queryKey: ['/api/meetings'],
     enabled: isAuthenticated,
     retry: false,
   });
 
-  // Fetch Otter.ai transcripts
-  const { data: transcripts = [] } = useQuery<any[]>({
+  // Fetch Otter.ai transcripts with loading state
+  const { data: transcripts = [], isLoading: transcriptsLoading } = useQuery<any[]>({
     queryKey: ['/api/otter/transcripts'],
     enabled: isAuthenticated,
     retry: false,
   });
 
-  // Fetch Airtable contacts
-  const { data: contacts = [] } = useQuery<any[]>({
+  // Fetch Airtable contacts with loading state
+  const { data: contacts = [], isLoading: contactsLoading } = useQuery<any[]>({
     queryKey: ['/api/airtable/contacts'],
     enabled: isAuthenticated,
     retry: false,
@@ -159,7 +159,17 @@ export default function Sync() {
               </CardDescription>
             </CardHeader>
             <CardContent>
-              {meetings.length === 0 ? (
+              {meetingsLoading ? (
+                <div className="text-center py-12">
+                  <div className="inline-flex items-center space-x-2 text-muted-foreground mb-4">
+                    <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-blue-500"></div>
+                    <span>Loading meetings from calendar...</span>
+                  </div>
+                  <p className="text-sm text-muted-foreground">
+                    Fetching calendar data may take up to 45 seconds for large calendars
+                  </p>
+                </div>
+              ) : meetings.length === 0 ? (
                 <div className="text-center py-12">
                   <i className="fas fa-calendar-check text-4xl text-muted-foreground mb-4"></i>
                   <h3 className="text-lg font-semibold text-foreground mb-2">No meetings found</h3>

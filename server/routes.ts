@@ -814,38 +814,62 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.json([]);
       }
       
-      // Fetch calendar data with timeout and comprehensive error handling
+      // Fetch calendar data with improved timeout and retry logic
       console.log('📅 Fetching calendar from:', credentials.feedUrl);
       
-      const controller = new AbortController();
-      const timeoutId = setTimeout(() => {
-        controller.abort();
-        console.error('⏰ Calendar fetch timeout after 15 seconds');
-      }, 15000); // 15 second timeout
-      
+      // Retry logic with exponential backoff
+      const maxRetries = 3;
+      const baseTimeout = 30000; // 30 seconds base timeout
       let response;
-      try {
-        response = await fetch(credentials.feedUrl, {
-          signal: controller.signal,
-          headers: {
-            'User-Agent': 'CreateAI-Sync/1.0'
+      
+      for (let attempt = 1; attempt <= maxRetries; attempt++) {
+        const currentTimeout = baseTimeout + (attempt - 1) * 15000; // 30s, 45s, 60s
+        console.log(`📅 [ATTEMPT ${attempt}/${maxRetries}] Calendar fetch timeout: ${currentTimeout/1000}s`);
+        
+        const controller = new AbortController();
+        const timeoutId = setTimeout(() => {
+          controller.abort();
+          console.error(`⏰ Calendar fetch timeout after ${currentTimeout/1000} seconds (attempt ${attempt})`);
+        }, currentTimeout);
+        
+        try {
+          const startTime = Date.now();
+          response = await fetch(credentials.feedUrl, {
+            signal: controller.signal,
+            headers: {
+              'User-Agent': 'CreateAI-Calendar/1.0',
+              'Accept': 'text/calendar',
+              'Cache-Control': 'no-cache'
+            }
+          });
+          
+          clearTimeout(timeoutId);
+          const fetchTime = Date.now() - startTime;
+          console.log(`📅 [SUCCESS] Calendar fetch completed in ${fetchTime}ms (attempt ${attempt})`);
+          
+          if (!response.ok) {
+            throw new Error(`Calendar fetch failed: ${response.status} ${response.statusText}`);
           }
-        });
-        clearTimeout(timeoutId);
-      } catch (fetchError: any) {
-        clearTimeout(timeoutId);
-        
-        if (fetchError.name === 'AbortError') {
-          console.error('🚨 Calendar fetch aborted due to timeout');
-          return res.json([]);
+          
+          break; // Success - exit retry loop
+          
+        } catch (fetchError: any) {
+          clearTimeout(timeoutId);
+          
+          if (attempt === maxRetries) {
+            console.error(`🚨 [FINAL FAILURE] Calendar fetch failed after ${maxRetries} attempts:`, fetchError.message);
+            if (fetchError.name === 'AbortError') {
+              console.error('🚨 Calendar fetch aborted due to timeout');
+              return res.json([]);
+            }
+            throw fetchError;
+          }
+          
+          const retryDelay = Math.min(1000 * Math.pow(2, attempt - 1), 5000); // Exponential backoff: 1s, 2s, 4s (max 5s)
+          console.log(`⚠️ [RETRY ${attempt}] Calendar fetch failed: ${fetchError.message}. Retrying in ${retryDelay}ms...`);
+          
+          await new Promise(resolve => setTimeout(resolve, retryDelay));
         }
-        
-        console.error('🚨 Calendar fetch failed:', {
-          error: fetchError.message,
-          code: fetchError.code,
-          url: credentials.feedUrl
-        });
-        return res.json([]);
       }
       
       if (!response.ok) {
