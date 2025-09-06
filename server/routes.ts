@@ -849,7 +849,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
             ]);
             
             console.log('📊 [SYNC] API Response:', {
-              transcriptCount: apiTranscripts?.length || 0,
+              transcriptCount: Array.isArray(apiTranscripts) ? apiTranscripts.length : 0,
               hasData: Array.isArray(apiTranscripts) && apiTranscripts.length > 0
             });
             
