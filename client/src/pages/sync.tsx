@@ -186,23 +186,25 @@ export default function Sync() {
                         <div className="flex items-center space-x-2 mb-2">
                           <h4 className="font-medium">{meeting.title}</h4>
                           <div className="flex items-center space-x-1">
-                            {/* Otter.AI Match Icon - BLUE */}
-                            {meeting.hasOtterMatch ? (
+                            {/* Otter.AI Match Icon - BLUE only for real API data */}
+                            {meeting.hasOtterMatch && !meeting.isOtterFallback ? (
                               <div className="w-5 h-5 bg-blue-500 rounded-full flex items-center justify-center" title="Otter.AI transcript available">
                                 <i className="fas fa-microphone text-white text-xs"></i>
                               </div>
                             ) : (
-                              <div className="w-5 h-5 bg-gray-300 rounded-full flex items-center justify-center" title="No Otter.AI transcript">
+                              <div className="w-5 h-5 bg-gray-300 rounded-full flex items-center justify-center" 
+                                   title={meeting.isOtterFallback ? "Using sample data - connect Otter.AI for real transcripts" : "No Otter.AI transcript"}>
                                 <i className="fas fa-microphone text-gray-500 text-xs"></i>
                               </div>
                             )}
-                            {/* Bigin Match Icon - GREEN */}
-                            {meeting.hasBiginMatch ? (
+                            {/* Bigin Match Icon - GREEN only for real API data */}
+                            {meeting.hasBiginMatch && !meeting.isBiginFallback ? (
                               <div className="w-5 h-5 bg-green-500 rounded-full flex items-center justify-center" title="Bigin CRM record exists">
                                 <i className="fas fa-database text-white text-xs"></i>
                               </div>
                             ) : (
-                              <div className="w-5 h-5 bg-gray-300 rounded-full flex items-center justify-center" title="No Bigin CRM record">
+                              <div className="w-5 h-5 bg-gray-300 rounded-full flex items-center justify-center" 
+                                   title={meeting.isBiginFallback ? "Using sample data - connect Bigin CRM for real contacts" : "No Bigin CRM record"}>
                                 <i className="fas fa-database text-gray-500 text-xs"></i>
                               </div>
                             )}

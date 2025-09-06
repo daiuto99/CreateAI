@@ -1235,6 +1235,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
           }
         }
         
+        // Add data source flags to the meeting object
+        (meeting as any).isOtterFallback = usingFallback;
+        (meeting as any).isBiginFallback = usingContactFallback;
+        
         // CRITICAL FIX: Only show matches when using REAL API data, never for fallback data
         if (usingContactFallback) {
           // When using fallback data, NEVER show matches in UI
