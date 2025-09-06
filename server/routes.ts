@@ -2195,6 +2195,60 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  // Freshdesk API Endpoints
+  app.get('/api/freshdesk/contacts', isAuthenticated, async (req: any, res) => {
+    try {
+      const userId = req.user.claims.sub;
+      const integrations = await storage.getUserIntegrations(userId);
+      const freshdeskIntegration = integrations.find(i => i.provider === 'freshdesk');
+      
+      if (!freshdeskIntegration?.credentials) {
+        return res.status(400).json({ error: 'Freshdesk integration not configured' });
+      }
+      
+      const { FreshdeskService } = await import('./services/freshdesk');
+      const creds = freshdeskIntegration.credentials as any;
+      const freshdeskService = new FreshdeskService(creds.apiKey, creds.domain);
+      
+      const contacts = await freshdeskService.getContacts();
+      res.json(contacts);
+      
+    } catch (error: any) {
+      console.error('Error fetching Freshdesk contacts:', error);
+      res.status(500).json({ error: 'Failed to fetch contacts' });
+    }
+  });
+
+  app.post('/api/freshdesk/create-record', isAuthenticated, async (req: any, res) => {
+    try {
+      const userId = req.user.claims.sub;
+      const { meeting } = req.body;
+      
+      const integrations = await storage.getUserIntegrations(userId);
+      const freshdeskIntegration = integrations.find(i => i.provider === 'freshdesk');
+      
+      if (!freshdeskIntegration?.credentials) {
+        return res.status(400).json({ error: 'Freshdesk integration not configured' });
+      }
+      
+      const { FreshdeskService } = await import('./services/freshdesk');
+      const creds = freshdeskIntegration.credentials as any;
+      const freshdeskService = new FreshdeskService(creds.apiKey, creds.domain);
+      
+      const record = await freshdeskService.createContact({
+        name: meeting.title,
+        email: meeting.attendees[0] || 'meeting@example.com',
+        description: `Meeting: ${meeting.title} on ${meeting.date}`
+      });
+      
+      res.json({ success: true, record });
+      
+    } catch (error: any) {
+      console.error('Error creating Freshdesk record:', error);
+      res.status(500).json({ error: 'Failed to create record' });
+    }
+  });
+
   const httpServer = createServer(app);
   return httpServer;
 }
