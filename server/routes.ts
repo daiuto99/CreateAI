@@ -10,6 +10,7 @@ const isAuthenticated = (req: any, res: any, next: any) => {
   return res.status(401).json({ message: "Authentication required" });
 };
 import { openaiService } from "./services/openai";
+import { OtterService } from "./services/otter";
 import { 
   insertContentProjectSchema,
   insertContentItemSchema,
@@ -808,24 +809,55 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const otterIntegration = integrations.find(i => i.provider === 'otter');
       const biginIntegration = integrations.find(i => i.provider === 'bigin');
       
-      // Direct data - exact titles matching your calendar meetings
-      const transcripts = otterIntegration?.status === 'connected' ? [
-        { id: 'transcript-1', title: 'Nicole RTLC Coaching Session', date: new Date('2025-09-04T14:00:00Z') },
-        { id: 'transcript-2', title: 'Ashley | RTLC Coaching Session', date: new Date('2025-09-04T10:00:00Z') },
-        { id: 'transcript-3', title: 'Dante RTLC Coaching Session', date: new Date('2025-09-04T16:00:00Z') },
-        { id: 'transcript-4', title: 'Brian Albans | RTLC Coaching Session', date: new Date('2025-09-04T11:00:00Z') },
-        { id: 'transcript-5', title: 'Leo/ Mark - Launch Box Chat', date: new Date('2025-08-29T15:00:00Z') }
-      ] : [];
+      // REAL Otter.AI API integration - fetch actual transcripts
+      let transcripts: any[] = [];
+      if (otterIntegration?.status === 'connected') {
+        console.log('🎤 Fetching real Otter.AI transcripts...');
+        
+        try {
+          const otterService = await OtterService.createFromUserIntegration(storage, userId);
+          
+          if (otterService) {
+            // Fetch transcripts from the last 30 days
+            const endDate = new Date();
+            const startDate = new Date();
+            startDate.setDate(endDate.getDate() - 30);
+            
+            console.log('📅 Fetching Otter transcripts from', startDate.toISOString().split('T')[0], 'to', endDate.toISOString().split('T')[0]);
+            
+            transcripts = await otterService.getSpeeches(startDate, endDate);
+            
+            console.log('✅ Successfully fetched', transcripts.length, 'real Otter transcripts');
+            console.log('📋 Transcript titles:', transcripts.map((t: any) => t.title));
+          } else {
+            console.log('⚠️ Failed to create Otter service - using empty transcripts');
+          }
+        } catch (otterError: any) {
+          console.error('🚨 Error fetching real Otter transcripts:', {
+            message: otterError?.message,
+            code: otterError?.code,
+            userId: userId,
+            timestamp: new Date().toISOString()
+          });
+          
+          console.log('🔄 Falling back to empty transcripts due to Otter API error');
+          transcripts = [];
+        }
+      } else {
+        console.log('⚠️ Otter integration not connected - using empty transcripts');
+      }
       
       const contacts = biginIntegration?.status === 'connected' ? [
         { id: '1', name: 'Mark', email: 'mark@company.com' }
       ] : [];
       
-      console.log('✅ Using REAL meeting data with enhanced error handling:', {
-        otterTranscripts: transcripts?.length || 0,
+      console.log('✅ Meeting Intelligence System Status:', {
+        calendarMeetings: meetings.length,
+        realOtterTranscripts: transcripts?.length || 0,
         biginContacts: contacts?.length || 0,
         otterConnected: otterIntegration?.status === 'connected',
-        biginConnected: biginIntegration?.status === 'connected'
+        biginConnected: biginIntegration?.status === 'connected',
+        usingRealOtterAPI: true
       });
       
       console.log('🎤 Available Otter transcripts for matching:', transcripts?.length || 0);
