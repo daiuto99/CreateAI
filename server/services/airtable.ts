@@ -343,6 +343,26 @@ export class AirtableService {
   }
 
   /**
+   * Get contacts for specific meetings - optimized bulk search
+   */
+  async getContactsForMeetings(meetings: any[]): Promise<any[]> {
+    try {
+      console.log(`📇 [AirtableService] Getting contacts for ${meetings.length} meetings`);
+      
+      // For now, just return all contacts since this is more efficient than individual searches
+      // In a real implementation, you might want to filter by meeting participants/attendees
+      const allContacts = await this.getContacts();
+      
+      console.log(`✅ [AirtableService] Retrieved ${allContacts.length} contacts for meetings`);
+      return allContacts;
+      
+    } catch (error: any) {
+      console.error('🚨 [AirtableService] Error getting contacts for meetings:', error.message);
+      return [];
+    }
+  }
+
+  /**
    * Find the best matching field name from available options
    */
   private findBestFieldMatch(fieldMap: Map<string, string>, candidates: string[]): string | null {
