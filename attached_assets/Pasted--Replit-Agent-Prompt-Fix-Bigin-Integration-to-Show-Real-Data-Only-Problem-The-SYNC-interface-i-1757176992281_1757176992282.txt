@@ -1,0 +1,67 @@
+# Replit Agent Prompt: Fix Bigin Integration to Show Real Data Only
+
+## Problem
+The SYNC interface is showing green circles for contacts that don't exist in the actual Bigin CRM. The system is using fallback/simulated data instead of real API results.
+
+## Required Fix
+Ensure the Bigin integration uses ONLY real API data and never shows fallback contact matches in the UI.
+
+## Specific Changes Needed
+
+### 1. Remove Fallback Contact Matching
+In the `/api/meetings` route, modify the Bigin contact matching logic to:
+- Never use fallback contact data for matching decisions
+- Only show green circles when real contacts are found via API
+- Show clear logging when real vs fallback data is being used
+
+### 2. Correct Contact Matching Logic
+Update the meeting-to-contact matching to:
+```typescript
+// For each meeting, only show hasBiginMatch = true if:
+// 1. Real Bigin API was successfully called AND
+// 2. Real contacts were found that match the meeting
+
+// NEVER show green circles when using fallback data
+if (usingContactFallback) {
+  // When using fallback, set hasBiginMatch = false for ALL meetings
+  meeting.hasBiginMatch = false;
+  meeting.biginConfidence = 0;
+} else {
+  // Only when using real API data, perform actual matching
+  const realMatch = realContacts.find(contact => {
+    // Real matching logic here
+  });
+  meeting.hasBiginMatch = !!realMatch;
+  meeting.biginConfidence = realMatch ? calculatedConfidence : 0;
+}
+```
+
+### 3. Enhanced Logging
+Add clear console logging to show:
+- "Using REAL Bigin contact data: X contacts found"
+- "Using FALLBACK Bigin data: matches disabled in UI"
+- Specific contact names found via real API
+- Which meetings get real matches vs no matches
+
+### 4. Expected Behavior After Fix
+Based on the actual Bigin CRM shown (only Jimi Hendrix and Mark Murphy):
+- "Leo/Mark - Launch Box Chat" should show GREEN circle (Mark Murphy exists)
+- All other meetings should show NO green circles (contacts don't exist)
+- Console should clearly log real contact search results
+
+## Implementation Requirements
+
+- Remove fallback contact matching from UI display
+- Only show green circles for real API contact matches
+- Maintain fallback for API failures but don't show matches
+- Add specific logging for real vs fallback contact data
+- Ensure accurate representation of actual CRM data
+
+## Testing Validation
+After fix:
+- Only meetings with real CRM contact matches show green circles
+- Console logs clearly indicate real vs fallback data usage
+- UI accurately reflects actual Bigin CRM contents
+- No false positive contact matches displayed
+
+This fix ensures the SYNC interface accurately represents real CRM data instead of showing misleading fallback matches.

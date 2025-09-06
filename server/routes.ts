@@ -1044,15 +1044,24 @@ export async function registerRoutes(app: Express): Promise<Server> {
           }
         }
         
-        // Set match if confidence is above threshold (60%)
-        meeting.hasBiginMatch = highestBiginConfidence >= 60;
-        (meeting as any).biginConfidence = highestBiginConfidence;
-        (meeting as any).bestBiginMatch = bestBiginMatch;
-        
-        if (meeting.hasBiginMatch) {
-          console.log(`  ✅ Bigin match found: "${bestBiginMatch?.name}" (confidence: ${highestBiginConfidence}%)`);
+        // CRITICAL FIX: Only show matches when using REAL API data, never for fallback data
+        if (usingContactFallback) {
+          // When using fallback data, NEVER show matches in UI
+          meeting.hasBiginMatch = false;
+          (meeting as any).biginConfidence = 0;
+          (meeting as any).bestBiginMatch = null;
+          console.log(`  🔄 FALLBACK DATA: No matches shown in UI (calculated confidence: ${highestBiginConfidence}%)`);
         } else {
-          console.log(`  ⚪ No Bigin match found (highest confidence: ${highestBiginConfidence}%)`);
+          // Only when using REAL API data, show actual matches
+          meeting.hasBiginMatch = highestBiginConfidence >= 60;
+          (meeting as any).biginConfidence = highestBiginConfidence;
+          (meeting as any).bestBiginMatch = bestBiginMatch;
+          
+          if (meeting.hasBiginMatch) {
+            console.log(`  ✅ REAL API MATCH: "${bestBiginMatch?.name}" (confidence: ${highestBiginConfidence}%)`);
+          } else {
+            console.log(`  ⚪ No real API match found (highest confidence: ${highestBiginConfidence}%)`);
+          }
         }
         
         console.log(`📊 Final result - "${meeting.title}": Otter=${meeting.hasOtterMatch ? '🔵' : '⚪'} (${(meeting as any).otterConfidence}%), Bigin=${meeting.hasBiginMatch ? '🟢' : '⚪'} (${(meeting as any).biginConfidence}%)`);
