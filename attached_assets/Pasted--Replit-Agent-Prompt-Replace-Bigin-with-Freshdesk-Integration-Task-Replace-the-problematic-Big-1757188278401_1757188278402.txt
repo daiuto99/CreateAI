@@ -1,0 +1,428 @@
+# Replit Agent Prompt: Replace Bigin with Freshdesk Integration
+
+## Task
+Replace the problematic Bigin CRM integration with Freshdesk, which has simple API key authentication and robust free tier API access.
+
+## Implementation Requirements
+
+### 1. Create Freshdesk Service
+Create a new file `server/services/freshdesk.ts` to replace the Bigin service:
+
+```typescript
+interface FreshdeskContact {
+  id: string;
+  name: string;
+  email?: string;
+  company?: string;
+  phone?: string;
+}
+
+export class FreshdeskService {
+  private apiKey: string;
+  private domain: string;
+  private baseUrl: string;
+
+  constructor(apiKey: string, domain: string) {
+    this.apiKey = apiKey;
+    this.domain = domain;
+    this.baseUrl = `https://${domain}.freshdesk.com/api/v2`;
+  }
+
+  static async createFromUserIntegration(storage: IStorage, userId: string): Promise<FreshdeskService | null> {
+    const integrations = await storage.getUserIntegrations(userId);
+    const freshdeskIntegration = integrations.find(i => i.provider === 'freshdesk');
+    
+    if (!freshdeskIntegration?.credentials) return null;
+    
+    const credentials = freshdeskIntegration.credentials as any;
+    if (!credentials.apiKey || !credentials.domain) return null;
+    
+    return new FreshdeskService(credentials.apiKey, credentials.domain);
+  }
+
+  async searchContacts(query: string): Promise<FreshdeskContact[]> {
+    try {
+      console.log('Searching Freshdesk contacts for:', query);
+      
+      // Search by email first
+      let contacts = [];
+      
+      // Freshdesk API uses basic auth with API key
+      const auth = Buffer.from(`${this.apiKey}:X`).toString('base64');
+      
+      // Search contacts by name or email
+      const searchUrl = `${this.baseUrl}/contacts?email=${encodeURIComponent(query)}`;
+      
+      let response = await fetch(searchUrl, {
+        headers: {
+          'Authorization': `Basic ${auth}`,
+          'Content-Type': 'application/json'
+        }
+      });
+
+      if (response.ok) {
+        const emailResults = await response.json();
+        contacts.push(...emailResults);
+      }
+
+      // If no results by email, try searching by name (requires different endpoint)
+      if (contacts.length === 0) {
+        const nameSearchUrl = `${this.baseUrl}/search/contacts?query=name:${encodeURIComponent(query)}`;
+        
+        response = await fetch(nameSearchUrl, {
+          headers: {
+            'Authorization': `Basic ${auth}`,
+            'Content-Type': 'application/json'
+          }
+        });
+
+        if (response.ok) {
+          const searchResults = await response.json();
+          contacts = searchResults.results || [];
+        }
+      }
+
+      console.log('Found', contacts.length, 'Freshdesk contacts for query:', query);
+      return contacts.map(this.transformContact);
+
+    } catch (error) {
+      console.error('Freshdesk search error:', error);
+      return [];
+    }
+  }
+
+  async createTicketFromMeeting(meetingData: {
+    title: string;
+    date: Date;
+    summary?: string;
+    contactId?: string;
+    attendees?: string[];
+  }): Promise<{ id: string; success: boolean }> {
+    try {
+      console.log('Creating Freshdesk ticket for meeting:', meetingData.title);
+
+      const auth = Buffer.from(`${this.apiKey}:X`).toString('base64');
+      
+      const ticketData = {
+        subject: `Meeting: ${meetingData.title}`,
+        description: this.buildMeetingDescription(meetingData),
+        priority: 1,
+        status: 5, // Closed since meeting is completed
+        source: 2, // Email source
+        type: 'Incident',
+        requester_id: meetingData.contactId || undefined
+      };
+
+      const response = await fetch(`${this.baseUrl}/tickets`, {
+        method: 'POST',
+        headers: {
+          'Authorization': `Basic ${auth}`,
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify(ticketData)
+      });
+
+      if (!response.ok) {
+        throw new Error(`Freshdesk ticket creation failed: ${response.status}`);
+      }
+
+      const result = await response.json();
+      console.log('Created Freshdesk ticket:', result.id);
+      return { id: result.id.toString(), success: true };
+
+    } catch (error) {
+      console.error('Freshdesk ticket creation error:', error);
+      throw error;
+    }
+  }
+
+  private transformContact(contact: any): FreshdeskContact {
+    return {
+      id: contact.id?.toString() || '',
+      name: contact.name || `${contact.first_name || ''} ${contact.last_name || ''}`.trim(),
+      email: contact.email || '',
+      company: contact.company_name || '',
+      phone: contact.phone || contact.mobile || ''
+    };
+  }
+
+  private buildMeetingDescription(meetingData: {
+    title: string;
+    date: Date;
+    summary?: string;
+    attendees?: string[];
+  }): string {
+    let description = `Meeting: ${meetingData.title}\n`;
+    description += `Date: ${meetingData.date.toLocaleDateString()}\n`;
+    
+    if (meetingData.attendees && meetingData.attendees.length > 0) {
+      description += `Attendees: ${meetingData.attendees.join(', ')}\n`;
+    }
+    
+    if (meetingData.summary) {
+      description += `\nSummary:\n${meetingData.summary}`;
+    }
+    
+    description += '\n\nCreated by CreateAI Meeting Intelligence';
+    return description;
+  }
+
+  async testConnection(): Promise<{ success: boolean; error?: string }> {
+    try {
+      const auth = Buffer.from(`${this.apiKey}:X`).toString('base64');
+      
+      const response = await fetch(`${this.baseUrl}/contacts?per_page=1`, {
+        headers: {
+          'Authorization': `Basic ${auth}`,
+          'Content-Type': 'application/json'
+        }
+      });
+
+      if (response.ok) {
+        return { success: true };
+      }
+
+      const errorMessage = `API returned ${response.status}: ${response.statusText}`;
+      return { success: false, error: errorMessage };
+
+    } catch (error: any) {
+      const errorMessage = error?.message || 'Connection test failed';
+      return { success: false, error: errorMessage };
+    }
+  }
+}
+```
+
+### 2. Update Integration Routes
+Modify the integration handling in `server/routes.ts`:
+
+**Replace Bigin integration test with Freshdesk:**
+```typescript
+case 'freshdesk':
+  const freshdeskCreds = integration.credentials as any;
+  if (freshdeskCreds.apiKey && freshdeskCreds.domain) {
+    try {
+      const freshdeskService = new FreshdeskService(freshdeskCreds.apiKey, freshdeskCreds.domain);
+      const connectionTest = await freshdeskService.testConnection();
+      
+      if (connectionTest.success) {
+        testResult = { success: true, message: 'Freshdesk API connection successful!', error: '' };
+        await storage.upsertUserIntegration({ ...integration, status: 'connected' });
+      } else {
+        testResult = { success: false, message: '', error: connectionTest.error || 'Connection failed' };
+        await storage.upsertUserIntegration({ ...integration, status: 'error' });
+      }
+    } catch (error: any) {
+      testResult = { success: false, message: '', error: `Connection error: ${error.message}` };
+      await storage.upsertUserIntegration({ ...integration, status: 'error' });
+    }
+  } else {
+    testResult = { success: false, message: '', error: 'Missing API key or domain' };
+  }
+  break;
+```
+
+### 3. Update SYNC Logic
+In the `/api/meetings` route, replace Bigin service calls with Freshdesk:
+
+**Replace imports:**
+```typescript
+import { FreshdeskService } from "./services/freshdesk";
+```
+
+**Replace Bigin integration checking:**
+```typescript
+// Change from biginIntegration to freshdeskIntegration
+const freshdeskIntegration = integrations.find(i => i.provider === 'freshdesk');
+
+console.log('📋 [SYNC] Attempting Freshdesk connection...');
+if (freshdeskIntegration?.status === 'connected') {
+  console.log('🔗 [SYNC] Freshdesk integration connected, attempting real API...');
+  
+  try {
+    const freshdeskService = await FreshdeskService.createFromUserIntegration(storage, userId);
+    
+    if (freshdeskService) {
+      console.log('📅 [SYNC] API Call: Searching Freshdesk contacts...');
+      
+      // Extract search terms from meetings
+      const searchTerms = new Set<string>();
+      
+      for (const meeting of meetings) {
+        const titleParts = meeting.title.split(/[\s\-|/,]+/).filter(word => 
+          word.length > 2 && 
+          !['the', 'and', 'with', 'meeting', 'call', 'chat', 'session', 'box'].includes(word.toLowerCase())
+        );
+        titleParts.forEach(part => searchTerms.add(part));
+        
+        // Also add attendee email prefixes
+        if (meeting.attendees) {
+          meeting.attendees.forEach(email => {
+            const emailPrefix = email.split('@')[0];
+            if (emailPrefix.length > 2) {
+              searchTerms.add(emailPrefix);
+            }
+          });
+        }
+      }
+      
+      console.log('🔍 [SYNC] Search terms:', Array.from(searchTerms));
+      
+      const allContacts = [];
+      const maxSearches = 5;
+      
+      for (const term of Array.from(searchTerms).slice(0, maxSearches)) {
+        try {
+          console.log(`🔍 [SYNC] Searching for: "${term}"`);
+          const termContacts = await freshdeskService.searchContacts(term);
+          allContacts.push(...termContacts);
+          
+          if (termContacts.length > 0) {
+            console.log(`✅ [SYNC] Found ${termContacts.length} contacts for "${term}"`);
+          }
+        } catch (searchError: any) {
+          console.warn(`⚠️ [SYNC] Search failed for "${term}":`, searchError.message);
+        }
+      }
+      
+      // Remove duplicates by ID
+      contacts = allContacts.filter((contact, index, self) => 
+        index === self.findIndex(c => c.id === contact.id)
+      );
+      
+      if (contacts.length > 0) {
+        console.log('✅ [SYNC] SUCCESS: Using real Freshdesk data -', contacts.length, 'contacts');
+        console.log('📋 [SYNC] Found contact names:', contacts.map(c => c.name));
+      } else {
+        usingContactFallback = true;
+        contactFallbackReason = 'Freshdesk API returned no contacts';
+        console.log('⚠️ [SYNC] No contacts found, switching to fallback');
+      }
+    } else {
+      usingContactFallback = true;
+      contactFallbackReason = 'Failed to initialize Freshdesk service';
+    }
+  } catch (error: any) {
+    usingContactFallback = true;
+    contactFallbackReason = `Freshdesk API error: ${error.message}`;
+    console.error('🚨 [SYNC] Freshdesk API failed:', error);
+  }
+} else {
+  usingContactFallback = true;
+  contactFallbackReason = 'Freshdesk integration not connected';
+}
+```
+
+### 4. Update Status Reporting
+Update all status logging to reference Freshdesk instead of Bigin:
+- Change `biginConnected` to `freshdeskConnected`
+- Update contact fallback reasons
+- Change integration status checks from 'bigin' to 'freshdesk'
+
+### 5. Update API Endpoints
+Replace `/api/bigin/contacts` endpoint with `/api/freshdesk/contacts`:
+
+```typescript
+app.get('/api/freshdesk/contacts', isAuthenticated, async (req: any, res) => {
+  try {
+    const userId = req.user.claims.sub;
+    console.log('📋 Fetching Freshdesk contacts for user:', userId);
+    
+    const integrations = await storage.getUserIntegrations(userId);
+    const freshdeskIntegration = integrations.find(i => i.provider === 'freshdesk');
+    
+    if (!freshdeskIntegration || freshdeskIntegration.status !== 'connected') {
+      return res.json([]);
+    }
+    
+    const freshdeskService = await FreshdeskService.createFromUserIntegration(storage, userId);
+    if (freshdeskService) {
+      // Get a sample of contacts
+      const contacts = await freshdeskService.searchContacts('');
+      res.json(contacts.slice(0, 10)); // Return up to 10 contacts
+    } else {
+      res.json([]);
+    }
+  } catch (error) {
+    console.error('Error fetching Freshdesk contacts:', error);
+    res.json([]);
+  }
+});
+```
+
+### 6. Update Sync Execution
+In the `/api/sync/execute` route, replace Bigin calls with Freshdesk:
+
+```typescript
+// Replace Bigin CRM sync with Freshdesk
+if (freshdeskIntegration?.status === 'connected') {
+  try {
+    console.log(`📋 [FRESHDESK] Attempting real CRM operations for: ${meeting.title}`);
+    
+    const freshdeskService = await FreshdeskService.createFromUserIntegration(storage, userId);
+    if (freshdeskService) {
+      // Search for matching contacts
+      const contacts = await freshdeskService.searchContacts(meeting.title);
+      
+      // Find best matching contact
+      let bestContact = null;
+      let bestContactConfidence = 0;
+      
+      for (const contact of contacts) {
+        const confidence = calculateContactMatchConfidence(meeting, contact);
+        if (confidence > bestContactConfidence && confidence >= 60) {
+          bestContact = contact;
+          bestContactConfidence = confidence;
+        }
+      }
+      
+      // Create ticket/record
+      const ticketRecord = await freshdeskService.createTicketFromMeeting({
+        title: meeting.title,
+        date: meeting.date,
+        summary: `Meeting sync from CreateAI - ${meeting.title}`,
+        attendees: meeting.attendees,
+        contactId: bestContact?.id
+      });
+      
+      syncResult.freshdeskSync = {
+        success: true,
+        confidence: bestContactConfidence,
+        message: `Freshdesk ticket created${bestContact ? ` and linked to ${bestContact.name}` : ''} (${bestContactConfidence}% confidence)`
+      };
+      console.log(`✅ [FRESHDESK] SUCCESS: Ticket ${ticketRecord.id} created`);
+    }
+  } catch (freshdeskError: any) {
+    console.error(`🚨 [FRESHDESK] CRM error:`, freshdeskError.message);
+    syncResult.freshdeskSync = {
+      success: false,
+      confidence: 0,
+      message: `Freshdesk error: ${freshdeskError.message}`
+    };
+  }
+}
+```
+
+## Setup Instructions for Users
+After implementation, users will setup Freshdesk integration by:
+
+1. **Get Freshdesk API Key:**
+   - Go to Freshdesk account → Profile Settings → API Key
+   - Copy the API key
+
+2. **Get Domain Name:**
+   - Your Freshdesk URL (e.g., if URL is `yourcompany.freshdesk.com`, domain is `yourcompany`)
+
+3. **Configure Integration:**
+   - Enter API Key and Domain in CreateAI settings
+   - Test connection to verify it works
+
+## Expected Results
+- Simple API key + domain authentication (no OAuth complexity)
+- Real contact search and matching using Freshdesk
+- Enhanced search logic will find contacts if they exist
+- Green circles will appear for real contact matches
+- Meeting records created as tickets in Freshdesk
+- Uses Basic Auth (much simpler than OAuth)
+
+This eliminates all OAuth redirect issues and provides reliable CRM integration with Freshdesk's robust free tier.
