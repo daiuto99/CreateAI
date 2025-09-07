@@ -1080,26 +1080,35 @@ export async function registerRoutes(app: Express): Promise<Server> {
         console.log('⚠️ [SYNC] Otter not connected, using fallback data');
       }
       
-      // CRITICAL FIX: Base decision entirely on transcript existence, not flag status
-      console.log('🔍 [DEBUG] Final data source decision - transcripts array:', {
-        exists: !!transcripts,
-        isArray: Array.isArray(transcripts),
-        length: transcripts?.length || 0,
-        samples: transcripts?.slice(0, 2).map((t: any) => t.title) || []
+      // CRITICAL DEBUG: Show EXACT state before decision
+      console.log('🔍 [CRITICAL DEBUG] Pre-decision state:', {
+        transcripts_exists: !!transcripts,
+        transcripts_type: typeof transcripts,
+        transcripts_isArray: Array.isArray(transcripts),
+        transcripts_length: transcripts?.length,
+        transcripts_value: transcripts,
+        usingFallback_flag: usingFallback,
+        fallbackReason: fallbackReason
       });
       
+      // CRITICAL FIX: Never overwrite real data - check for ANY real transcripts
       if (transcripts && Array.isArray(transcripts) && transcripts.length > 0) {
-        // Real data exists - ALWAYS use it
+        // Real data exists - ALWAYS preserve it
         usingFallback = false;
-        console.log('✅ [SYNC] CONFIRMED: Using real API data -', transcripts.length, 'transcripts');
-        console.log('📋 [SYNC] Real transcript titles:', transcripts.map((t: any) => t.title));
+        console.log('✅ [SYNC] PRESERVING REAL API DATA:', {
+          count: transcripts.length,
+          titles: transcripts.map((t: any) => t.title)
+        });
       } else {
-        // No real data - use fallback
+        // Only use fallback when NO real data exists
+        console.log('⚠️ [SYNC] NO REAL DATA FOUND, using fallback');
         transcripts = fallbackTranscripts;
         usingFallback = true;
-        console.log('🔄 [SYNC] FALLBACK ACTIVE: Using realistic test data -', transcripts.length, 'transcripts');
-        console.log('📝 [SYNC] Fallback reason:', fallbackReason);
-        console.log('📋 [SYNC] Fallback transcript titles:', transcripts.map((t: any) => t.title));
+        console.log('🔄 [SYNC] FALLBACK ACTIVE:', {
+          count: transcripts.length,
+          titles: transcripts.map((t: any) => t.title),
+          reason: fallbackReason
+        });
       }
       
       // SMART Airtable CRM integration with fallback to realistic contact data
