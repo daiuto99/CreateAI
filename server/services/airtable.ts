@@ -343,15 +343,111 @@ export class AirtableService {
   }
 
   /**
-   * Get contacts for specific meetings - optimized bulk search
+   * Get transcripts with Processing Status = 'complete' from Transcripts table
+   */
+  async getTranscripts(): Promise<any[]> {
+    try {
+      console.log('📝 [AirtableService] Fetching completed transcripts from Transcripts table');
+      
+      const filterFormula = "{Processing Status} = 'complete'";
+      const url = `${this.baseUrl}/Transcripts?filterByFormula=${encodeURIComponent(filterFormula)}&maxRecords=100`;
+      
+      console.log('🌐 [AirtableService] Transcripts URL:', url);
+      
+      const response = await fetch(url, {
+        headers: {
+          'Authorization': `Bearer ${this.apiKey}`,
+          'Content-Type': 'application/json'
+        }
+      });
+
+      if (!response.ok) {
+        const errorText = await response.text();
+        console.log('❌ [AirtableService] Transcripts query failed:', response.status, errorText);
+        return [];
+      }
+
+      const data = await response.json() as AirtableResponse;
+      
+      const transcripts = data.records.map(record => ({
+        id: record.id,
+        title: record.fields.Title || record.fields.title || 'Untitled Transcript',
+        status: record.fields['Processing Status'],
+        content: record.fields['Transcript Content'] || record.fields.transcript || '',
+        meetingDate: record.fields['Meeting Date'],
+        duration: record.fields.Duration,
+        participants: record.fields.Participants || [],
+        otterId: record.fields['Otter ID'],
+        created: record.createdTime,
+        source: 'airtable-transcripts',
+        rawFields: record.fields
+      }));
+
+      console.log(`✅ [AirtableService] Fetched ${transcripts.length} completed transcripts`);
+      return transcripts;
+
+    } catch (error: any) {
+      console.error('🚨 [AirtableService] Error fetching transcripts:', error.message);
+      return [];
+    }
+  }
+
+  /**
+   * Get all contacts from Contacts table (for debugging)
+   */
+  async getContactsRaw(): Promise<any[]> {
+    try {
+      console.log('👥 [AirtableService] Fetching all contacts from Contacts table');
+      
+      const url = `${this.baseUrl}/Contacts?maxRecords=100`;
+      
+      const response = await fetch(url, {
+        headers: {
+          'Authorization': `Bearer ${this.apiKey}`,
+          'Content-Type': 'application/json'
+        }
+      });
+
+      if (!response.ok) {
+        const errorText = await response.text();
+        console.log('❌ [AirtableService] Contacts query failed:', response.status, errorText);
+        return [];
+      }
+
+      const data = await response.json() as AirtableResponse;
+      
+      const contacts = data.records.map(record => ({
+        id: record.id,
+        name: record.fields.Name || 'Unknown Contact',
+        company: record.fields.Company || '',
+        email: record.fields.Email || '',
+        phone: record.fields.Phone || '',
+        lastContacted: record.fields['Last Contacted'],
+        relationshipType: record.fields['Relationship Type'],
+        notes: record.fields.Notes || '',
+        created: record.createdTime,
+        source: 'airtable-contacts',
+        rawFields: record.fields
+      }));
+
+      console.log(`✅ [AirtableService] Fetched ${contacts.length} contacts from Contacts table`);
+      return contacts;
+
+    } catch (error: any) {
+      console.error('🚨 [AirtableService] Error fetching contacts:', error.message);
+      return [];
+    }
+  }
+
+  /**
+   * Get contacts for specific meetings - now uses proper Contacts table
    */
   async getContactsForMeetings(meetings: any[]): Promise<any[]> {
     try {
       console.log(`📇 [AirtableService] Getting contacts for ${meetings.length} meetings`);
       
-      // For now, just return all contacts since this is more efficient than individual searches
-      // In a real implementation, you might want to filter by meeting participants/attendees
-      const allContacts = await this.getContacts();
+      // Use the new getContactsRaw method that properly queries the Contacts table
+      const allContacts = await this.getContactsRaw();
       
       console.log(`✅ [AirtableService] Retrieved ${allContacts.length} contacts for meetings`);
       return allContacts;
