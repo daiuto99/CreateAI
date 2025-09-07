@@ -151,141 +151,17 @@ export class OtterService {
   }
 
   /**
-   * Fetch ALL speeches/meetings without date filtering 
+   * Fetch ALL speeches/meetings using pagination to get complete data
    */
   async getSpeeches(startDate: Date, endDate: Date): Promise<ExpectedTranscript[]> {
     try {
-      console.log('🎤 Fetching ALL Otter speeches (NO date filtering to get complete data)');
+      console.log('🎤 [PAGINATION] Fetching ALL Otter speeches using multiple API calls');
 
       // FIRST: Verify which account we're accessing
       await this.verifyAccountAccess();
 
-      const controller = new AbortController();
-      const timeoutId = setTimeout(() => {
-        controller.abort();
-        console.error('⏰ Otter API timeout after 15 seconds');
-      }, 15000);
-
-      // REMOVE ALL DATE FILTERING - get complete transcript list
-      // Add cache-busting timestamp to force fresh data
-      const timestamp = Date.now();
-      
-      // Try multiple API endpoints to get ALL transcripts
-      const possibleUrls = [
-        `${this.baseUrl}/speech/export?_t=${timestamp}&fresh=true&limit=100`, // Try with higher limit
-        `${this.baseUrl}/meetings?_t=${timestamp}&fresh=true&limit=100`, // Alternative meetings endpoint
-        `${this.baseUrl}/speech/export?_t=${timestamp}&fresh=true`, // Original endpoint
-        `${this.baseUrl}/meetings/list?_t=${timestamp}&fresh=true&limit=100` // Another potential endpoint
-      ];
-      
-      // Try each endpoint until we get data
-      for (const [index, url] of possibleUrls.entries()) {
-        try {
-          console.log(`🔗 [DEBUG] Trying Otter API endpoint ${index + 1}/4:`, url);
-      
-          const response = await fetch(url, {
-            method: 'GET',
-            headers: {
-              'Authorization': `Bearer ${this.apiKey}`,
-              'Content-Type': 'application/json',
-              // Cache-busting headers to force fresh data
-              'Cache-Control': 'no-cache, no-store, must-revalidate',
-              'Pragma': 'no-cache',
-              'If-None-Match': '*'
-            },
-            signal: controller.signal
-          });
-
-          const responseBody = await response.text();
-          console.log(`🔗 [DEBUG] Endpoint ${index + 1} response:`, {
-            url: url,
-            status: response.status,
-            ok: response.ok,
-            bodyLength: responseBody.length,
-            bodyPreview: responseBody.substring(0, 200) + (responseBody.length > 200 ? '...' : '')
-          });
-
-          if (response.ok && responseBody.length > 10) {
-            clearTimeout(timeoutId);
-            
-            // Parse and analyze the response structure
-            const data = JSON.parse(responseBody);
-            console.log('📊 [COMPLETE DEBUG] Full API response structure from endpoint', index + 1, ':', {
-              url: url,
-              dataKeys: Object.keys(data || {}),
-              hasData: !!data?.data,
-              dataType: Array.isArray(data?.data) ? 'array' : typeof data?.data,
-              dataArrayLength: Array.isArray(data?.data) ? data.data.length : 'N/A',
-              isDirectArray: Array.isArray(data),
-              directArrayLength: Array.isArray(data) ? data.length : 'N/A',
-              hasSpeeches: !!data?.speeches,
-              speechesLength: Array.isArray(data?.speeches) ? data.speeches.length : 'N/A',
-              hasRecordings: !!data?.recordings,
-              recordingsLength: Array.isArray(data?.recordings) ? data.recordings.length : 'N/A',
-              hasMeetings: !!data?.meetings,
-              meetingsLength: Array.isArray(data?.meetings) ? data.meetings.length : 'N/A',
-              rawResponse: JSON.stringify(data, null, 2).substring(0, 1000)
-            });
-
-            // Handle different possible response formats from Otter.ai API
-            let speeches = [];
-            if (Array.isArray(data?.data)) {
-              speeches = data.data;
-              console.log('📋 Using data.data array format from endpoint', index + 1);
-            } else if (Array.isArray(data?.speeches)) {
-              speeches = data.speeches;
-              console.log('📋 Using data.speeches array format from endpoint', index + 1);
-            } else if (Array.isArray(data?.recordings)) {
-              speeches = data.recordings;
-              console.log('📋 Using data.recordings array format from endpoint', index + 1);
-            } else if (Array.isArray(data?.meetings)) {
-              speeches = data.meetings;
-              console.log('📋 Using data.meetings array format from endpoint', index + 1);
-            } else if (Array.isArray(data)) {
-              speeches = data;
-              console.log('📋 Using direct array format from endpoint', index + 1);
-            } else {
-              console.log('⚠️ Unrecognized response format from endpoint', index + 1, ':', data);
-              continue; // Try next endpoint
-            }
-
-            if (speeches.length > 0) {
-              console.log(`📊 SUCCESS! Found ${speeches.length} speeches from endpoint ${index + 1}`);
-              console.log('🔍 All available speech titles:', speeches.map((s: any) => s.title || s.name || 'Untitled'));
-
-              // Transform to expected format  
-              const transcripts: ExpectedTranscript[] = speeches.map((speech: any) => {
-                return {
-                  id: speech.speech_id || speech.id || 'unknown',
-                  title: speech.title || speech.name || 'Untitled Meeting',
-                  date: new Date(speech.created_at || speech.date || Date.now()),
-                  duration: speech.duration || 'Unknown',
-                  summary: speech.summary || speech.abstract_summary || speech.description,
-                  participants: speech.calendar_guests ? [speech.calendar_guests.name].filter(Boolean) : []
-                };
-              });
-
-              console.log(`✅ SUCCESS: ${transcripts.length} transcripts processed from endpoint ${index + 1}`);
-              console.log('📝 Final transcript list:', transcripts.map(t => ({ title: t.title, date: t.date.toISOString().split('T')[0] })));
-
-              return transcripts;
-            } else {
-              console.log(`⚠️ Endpoint ${index + 1} returned empty speeches array`);
-            }
-          } else {
-            console.log(`❌ Endpoint ${index + 1} failed:`, response.status, responseBody.substring(0, 100));
-          }
-        } catch (endpointError) {
-          console.log(`❌ Error with endpoint ${index + 1}:`, endpointError);
-        }
-      }
-
-      clearTimeout(timeoutId);
-      console.log('❌ All endpoints failed or returned empty data');
-      
-      // FINAL: Try specific date queries for September 4th
-      console.log('🔍 [FINAL ATTEMPT] Trying specific September 4th date queries...');
-      return await this.trySpecificDateQueries();
+      // Implement pagination to get ALL transcripts (API returns only 3 per call)
+      return await this.getAllSpeechesWithPagination();
 
     } catch (error: any) {
       if (error.name === 'AbortError') {
@@ -298,6 +174,152 @@ export class OtterService {
         code: error?.code,
         stack: error?.stack?.substring(0, 500)
       });
+      return [];
+    }
+  }
+
+  /**
+   * Get ALL speeches using pagination - API only returns 3 most recent per call
+   */
+  private async getAllSpeechesWithPagination(): Promise<ExpectedTranscript[]> {
+    try {
+      console.log('📄 [PAGINATION] Starting paginated API calls to get ALL transcripts...');
+      
+      const allTranscripts: ExpectedTranscript[] = [];
+      const seenIds = new Set<string>();
+      let pageAttempt = 0;
+      const maxPages = 20; // Safety limit to prevent infinite loops
+      
+      const timestamp = Date.now();
+      const baseUrl = `${this.baseUrl}/speech/export`;
+      
+      // Try different pagination strategies
+      const paginationStrategies = [
+        // Strategy 1: offset-based pagination
+        (page: number) => `${baseUrl}?offset=${page * 3}&limit=50&_t=${timestamp}`,
+        // Strategy 2: page-based pagination  
+        (page: number) => `${baseUrl}?page=${page}&per_page=50&_t=${timestamp}`,
+        // Strategy 3: cursor-based pagination (if we get a cursor)
+        (page: number) => `${baseUrl}?cursor=${page}&limit=50&_t=${timestamp}`,
+        // Strategy 4: skip-based pagination
+        (page: number) => `${baseUrl}?skip=${page * 3}&take=50&_t=${timestamp}`,
+        // Strategy 5: start/count pagination
+        (page: number) => `${baseUrl}?start=${page * 3}&count=50&_t=${timestamp}`,
+        // Strategy 6: from parameter
+        (page: number) => `${baseUrl}?from=${page * 3}&_t=${timestamp}`,
+      ];
+
+      for (const [strategyIndex, urlBuilder] of paginationStrategies.entries()) {
+        console.log(`🔄 [STRATEGY ${strategyIndex + 1}] Trying pagination strategy...`);
+        
+        for (let page = 0; page < maxPages; page++) {
+          try {
+            const url = urlBuilder(page);
+            console.log(`📞 [CALL ${page + 1}] Strategy ${strategyIndex + 1}: ${url}`);
+
+            const response = await fetch(url, {
+              method: 'GET',
+              headers: {
+                'Authorization': `Bearer ${this.apiKey}`,
+                'Content-Type': 'application/json',
+                'Cache-Control': 'no-cache'
+              },
+              signal: AbortSignal.timeout(10000)
+            });
+
+            if (!response.ok) {
+              console.log(`❌ [CALL ${page + 1}] Strategy ${strategyIndex + 1} failed:`, response.status);
+              break; // Try next strategy
+            }
+
+            const responseBody = await response.text();
+            const data = JSON.parse(responseBody);
+            
+            // Extract speeches from response
+            let speeches = [];
+            if (Array.isArray(data?.data)) speeches = data.data;
+            else if (Array.isArray(data?.speeches)) speeches = data.speeches;
+            else if (Array.isArray(data?.recordings)) speeches = data.recordings;
+            else if (Array.isArray(data)) speeches = data;
+
+            console.log(`📊 [CALL ${page + 1}] Strategy ${strategyIndex + 1} returned ${speeches.length} transcripts`);
+
+            if (speeches.length === 0) {
+              console.log(`✅ [STRATEGY ${strategyIndex + 1}] No more transcripts found, moving to next strategy`);
+              break; // No more transcripts, try next strategy
+            }
+
+            // Process and deduplicate transcripts
+            let newTranscriptsCount = 0;
+            for (const speech of speeches) {
+              const speechId = speech.speech_id || speech.id || `unknown-${speech.title}`;
+              
+              if (!seenIds.has(speechId)) {
+                seenIds.add(speechId);
+                newTranscriptsCount++;
+                
+                const transcript: ExpectedTranscript = {
+                  id: speechId,
+                  title: speech.title || speech.name || 'Untitled Meeting',
+                  date: new Date(speech.created_at || speech.date || Date.now()),
+                  duration: speech.duration || 'Unknown',
+                  summary: speech.summary || speech.abstract_summary || speech.description,
+                  participants: speech.calendar_guests ? [speech.calendar_guests.name].filter(Boolean) : []
+                };
+                
+                allTranscripts.push(transcript);
+                console.log(`➕ [NEW] Found transcript: "${transcript.title}" (${transcript.date.toISOString().split('T')[0]})`);
+              }
+            }
+
+            console.log(`📈 [CALL ${page + 1}] Added ${newTranscriptsCount} new transcripts. Total: ${allTranscripts.length}`);
+
+            // If we got fewer than expected or no new transcripts, this strategy is exhausted
+            if (speeches.length < 3 || newTranscriptsCount === 0) {
+              console.log(`✅ [STRATEGY ${strategyIndex + 1}] Exhausted, trying next strategy`);
+              break;
+            }
+
+            pageAttempt++;
+            
+            // Small delay between calls to be respectful to the API
+            await new Promise(resolve => setTimeout(resolve, 200));
+
+          } catch (callError) {
+            console.log(`❌ [CALL ${page + 1}] Strategy ${strategyIndex + 1} error:`, callError);
+            break; // Try next strategy
+          }
+        }
+
+        // If we found transcripts with this strategy, log success
+        if (allTranscripts.length > 0) {
+          console.log(`🎉 [STRATEGY ${strategyIndex + 1}] Success! Found ${allTranscripts.length} total transcripts`);
+        }
+      }
+
+      // Sort by date (newest first)
+      allTranscripts.sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
+
+      console.log('🎯 [PAGINATION COMPLETE] Final results:');
+      console.log(`📊 Total unique transcripts found: ${allTranscripts.length}`);
+      console.log('📝 All transcript titles:', allTranscripts.map(t => `"${t.title}" (${t.date.toISOString().split('T')[0]})`));
+      
+      // Look specifically for the missing transcripts
+      const hasNicole = allTranscripts.some(t => t.title.toLowerCase().includes('nicole'));
+      const hasAshley = allTranscripts.some(t => t.title.toLowerCase().includes('ashley'));
+      const hasDante = allTranscripts.some(t => t.title.toLowerCase().includes('dante'));
+      
+      console.log('🔍 [MISSING TRANSCRIPT CHECK]:', {
+        hasNicole,
+        hasAshley,
+        hasDante,
+        foundMissingTranscripts: hasNicole || hasAshley || hasDante
+      });
+
+      return allTranscripts;
+
+    } catch (error) {
+      console.error('🚨 [PAGINATION ERROR] Failed to get all speeches:', error);
       return [];
     }
   }
