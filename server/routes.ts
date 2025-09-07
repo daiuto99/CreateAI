@@ -1025,11 +1025,24 @@ export async function registerRoutes(app: Express): Promise<Server> {
             
             console.log('📅 [SYNC] API Call: Fetching from', sixtyDaysAgo.toISOString().split('T')[0], 'to', today.toISOString().split('T')[0]);
             
-            // API call with 5-second timeout
-            const apiTranscripts = await Promise.race([
-              otterService.getSpeeches(sixtyDaysAgo, today),
-              new Promise((_, reject) => setTimeout(() => reject(new Error('API timeout after 5 seconds')), 5000))
-            ]);
+            // API call with timeout protection - but always try to get data
+            let apiTranscripts;
+            try {
+              apiTranscripts = await Promise.race([
+                otterService.getSpeeches(sixtyDaysAgo, today),
+                new Promise((_, reject) => setTimeout(() => reject(new Error('API timeout after 5 seconds')), 5000))
+              ]);
+            } catch (timeoutError) {
+              // Even if main call times out, try to get any available data
+              console.log('⚠️ [SYNC] Main API timed out, attempting data recovery...');
+              try {
+                apiTranscripts = await otterService.getAllSpeeches();
+                console.log('✅ [SYNC] Recovered transcripts despite timeout:', apiTranscripts?.length || 0);
+              } catch (recoveryError) {
+                console.log('❌ [SYNC] Recovery also failed:', recoveryError?.message);
+                apiTranscripts = [];
+              }
+            }
             
             console.log('📊 [SYNC] API Response:', {
               transcriptCount: Array.isArray(apiTranscripts) ? apiTranscripts.length : 0,
