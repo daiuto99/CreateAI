@@ -240,13 +240,14 @@ export default function Sync() {
                               <div className="w-5 h-5 bg-blue-100 dark:bg-blue-900/30 rounded-full flex items-center justify-center" title="Loading transcripts from Otter.AI...">
                                 <div className="animate-spin rounded-full h-3 w-3 border-b border-blue-500"></div>
                               </div>
-                            ) : meeting.hasOtterMatch && !meeting.isOtterFallback ? (
-                              <div className="w-5 h-5 bg-blue-500 rounded-full flex items-center justify-center" title="Otter.AI transcript available">
+                            ) : meeting.hasOtterMatch ? (
+                              <div className="w-5 h-5 bg-blue-500 rounded-full flex items-center justify-center" 
+                                   title={meeting.isOtterFallback ? "High-confidence transcript match found (using enhanced matching)" : "Otter.AI transcript available"}>
                                 <i className="fas fa-microphone text-white text-xs"></i>
                               </div>
                             ) : (
                               <div className="w-5 h-5 bg-gray-300 rounded-full flex items-center justify-center" 
-                                   title={meeting.isOtterFallback ? "Using sample data - connect Otter.AI for real transcripts" : "No Otter.AI transcript"}>
+                                   title="No transcript match found">
                                 <i className="fas fa-microphone text-gray-500 text-xs"></i>
                               </div>
                             )}
