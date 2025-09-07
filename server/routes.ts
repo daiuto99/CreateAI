@@ -1080,16 +1080,19 @@ export async function registerRoutes(app: Express): Promise<Server> {
         console.log('⚠️ [SYNC] Otter not connected, using fallback data');
       }
       
-      // CRITICAL FIX: Only use fallback if NO real data was retrieved
-      if (usingFallback && (!transcripts || transcripts.length === 0)) {
+      // CRITICAL FIX: Never use fallback if real data exists, regardless of usingFallback flag
+      if (transcripts && transcripts.length > 0) {
+        // Always use real data when available
+        usingFallback = false;
+        console.log('✅ [SYNC] CONFIRMED: Using real API data -', transcripts.length, 'transcripts');
+        console.log('📋 [SYNC] Real transcript titles:', transcripts.map((t: any) => t.title));
+      } else {
+        // Only use fallback when NO real data exists
         transcripts = fallbackTranscripts;
+        usingFallback = true;
         console.log('🔄 [SYNC] FALLBACK ACTIVE: Using realistic test data -', transcripts.length, 'transcripts');
         console.log('📝 [SYNC] Fallback reason:', fallbackReason);
         console.log('📋 [SYNC] Fallback transcript titles:', transcripts.map((t: any) => t.title));
-      } else if (transcripts && transcripts.length > 0) {
-        usingFallback = false; // Reset fallback flag if we have real data
-        console.log('✅ [SYNC] CONFIRMED: Using real API data -', transcripts.length, 'transcripts');
-        console.log('📋 [SYNC] Real transcript titles:', transcripts.map((t: any) => t.title));
       }
       
       // SMART Airtable CRM integration with fallback to realistic contact data
