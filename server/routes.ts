@@ -11,6 +11,7 @@ const isAuthenticated = (req: any, res: any, next: any) => {
 };
 import { openaiService } from "./services/openai";
 import { OtterService } from "./services/otter";
+const OtterEmailParser = require('./services/OtterEmailParser');
 import { 
   insertContentProjectSchema,
   insertContentItemSchema,
@@ -1494,6 +1495,86 @@ export async function registerRoutes(app: Express): Promise<Server> {
     } catch (error) {
       console.error('Error fetching Otter.ai transcripts:', error);
       res.json([]);
+    }
+  });
+
+  // Email webhook endpoint for Otter.ai transcript ingestion
+  app.post('/api/otter/email-webhook', async (req: any, res) => {
+    try {
+      console.log('📧 [OTTER EMAIL] Webhook received:', req.body);
+      
+      const { message, subscription } = req.body;
+      
+      // Validate webhook authenticity (implement security as needed)
+      if (!message || !message.data) {
+        return res.status(400).json({ error: 'Invalid webhook payload' });
+      }
+      
+      // Decode the Pub/Sub message
+      const messageData = JSON.parse(Buffer.from(message.data, 'base64').toString());
+      console.log('📧 [OTTER EMAIL] Decoded message:', messageData);
+      
+      // Extract email details
+      const { emailId, subject, sender, snippet } = messageData;
+      
+      // Check if this is an Otter email
+      if (!OtterEmailParser.isOtterEmail(sender, subject, snippet)) {
+        console.log('📧 [OTTER EMAIL] Email not from Otter, skipping:', subject);
+        return res.status(200).json({ message: 'Email not from Otter' });
+      }
+      
+      // TODO: Fetch full email content via Gmail API
+      // For now, parse with available data
+      const emailBody = snippet || '';
+      const parsedMeeting = OtterEmailParser.parseOtterEmail(emailBody, subject);
+      
+      if (parsedMeeting) {
+        console.log('📧 [OTTER EMAIL] Successfully parsed meeting:', parsedMeeting.title);
+        
+        // TODO: Store parsed meeting data in database
+        // await storage.storeEmailTranscript(parsedMeeting);
+        
+        res.status(200).json({ 
+          success: true, 
+          message: 'Email processed successfully',
+          meetingId: parsedMeeting.id,
+          title: parsedMeeting.title
+        });
+      } else {
+        console.error('📧 [OTTER EMAIL] Failed to parse email');
+        res.status(400).json({ error: 'Failed to parse Otter email' });
+      }
+      
+    } catch (error: any) {
+      console.error('🚨 [OTTER EMAIL] Webhook error:', error);
+      res.status(500).json({ error: 'Internal server error', message: error.message });
+    }
+  });
+
+  // Test endpoint for email parsing (development only)
+  app.post('/api/otter/test-email-parse', async (req: any, res) => {
+    try {
+      if (process.env.NODE_ENV === 'production') {
+        return res.status(403).json({ error: 'Test endpoint not available in production' });
+      }
+      
+      const { subject, emailBody } = req.body;
+      
+      if (!subject || !emailBody) {
+        return res.status(400).json({ error: 'subject and emailBody required' });
+      }
+      
+      const parsedMeeting = OtterEmailParser.parseOtterEmail(emailBody, subject);
+      
+      res.json({
+        success: true,
+        parsed: parsedMeeting,
+        isOtterEmail: OtterEmailParser.isOtterEmail('noreply@otter.ai', subject, emailBody)
+      });
+      
+    } catch (error: any) {
+      console.error('🚨 [OTTER EMAIL] Test parse error:', error);
+      res.status(500).json({ error: error.message });
     }
   });
 
