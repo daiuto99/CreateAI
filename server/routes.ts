@@ -186,99 +186,175 @@ async function debugAirtableIntegration(airtableIntegration: any) {
 import { z } from "zod";
 
 export async function registerRoutes(app: Express): Promise<Server> {
-  // Add a specific endpoint for fetching Airtable meetings for sync
+  
+  // Add general request logging to see what endpoints are being called
+  app.use((req, res, next) => {
+    if (req.path.includes('/api/sync') || req.path.includes('/api/otter') || req.path.includes('/api/airtable')) {
+      console.log(`🌐 ${req.method} ${req.path} - Called by SYNC page`);
+    }
+    next();
+  });
+
+  // Enhanced sync meetings endpoint with detailed debugging
   app.get('/api/sync/meetings', isAuthenticated, async (req: any, res) => {
+    console.log('\n🔍 === SYNC MEETINGS ENDPOINT CALLED ===');
+    console.log('👤 User ID:', req.user?.claims?.sub);
+    
     try {
       const userId = req.user.claims.sub;
+      const integrations = await storage.getUserIntegrations(userId);
+      console.log('🔍 Available integrations:', integrations.map(i => i.provider));
       
-      console.log('\n🔍 === SYNC MEETINGS ENDPOINT DEBUG ===');
-      console.log('🎯 Endpoint called: GET /api/sync/meetings');
-      console.log('👤 User ID:', userId);
+      const airtableIntegration = integrations.find(i => i.provider === 'airtable');
       
+      if (!airtableIntegration?.credentials) {
+        console.log('❌ No Airtable integration found');
+        return res.status(400).json({
+          success: false,
+          message: 'Airtable integration required'
+        });
+      }
+      
+      console.log('✅ Airtable integration found:', {
+        status: airtableIntegration.status,
+        hasApiKey: !!airtableIntegration.credentials.apiKey,
+        baseId: airtableIntegration.credentials.baseId
+      });
+      
+      // Test Airtable connection and fetch meetings
+      const meetingsUrl = `https://api.airtable.com/v0/${airtableIntegration.credentials.baseId}/Meetings`;
+      console.log('🌐 Fetching from:', meetingsUrl);
+      
+      const response = await fetch(meetingsUrl, {
+        headers: {
+          'Authorization': `Bearer ${airtableIntegration.credentials.apiKey}`
+        }
+      });
+      
+      if (!response.ok) {
+        console.log('❌ Airtable fetch failed:', response.status, response.statusText);
+        const errorText = await response.text();
+        console.log('❌ Error details:', errorText);
+        
+        return res.status(500).json({
+          success: false,
+          message: 'Failed to fetch meetings from Airtable',
+          error: errorText
+        });
+      }
+      
+      const data = await response.json();
+      console.log('✅ Airtable response received');
+      console.log('📊 Total records:', data.records?.length || 0);
+      
+      // Filter for meetings with status 'complete'
+      const completeMeetings = data.records?.filter((record: any) => 
+        record.fields['Processing Status'] === 'complete'
+      ) || [];
+      
+      console.log('📅 Meetings with status "complete":', completeMeetings.length);
+      
+      if (completeMeetings.length === 0) {
+        console.log('⚠️ No meetings found with Processing Status = "complete"');
+        console.log('💡 Available statuses in your data:');
+        data.records?.forEach((record: any, i: number) => {
+          console.log(`   Record ${i + 1}: "${record.fields['Processing Status'] || 'No status field'}"`);
+        });
+      }
+      
+      // Transform Airtable records to expected format
+      const meetings = completeMeetings.map((record: any) => ({
+        id: record.id,
+        title: record.fields.Title || 'Untitled Meeting',
+        summary: record.fields['Summary Gist'] || record.fields.Summary || '',
+        status: record.fields['Processing Status'],
+        contact: record.fields.Contact ? {
+          id: record.fields.Contact[0],
+          name: 'Contact Name' // We'd need to fetch this separately
+        } : null,
+        created: record.fields.Created || record.createdTime,
+        airtableRecordId: record.id
+      }));
+      
+      console.log('📋 Transformed meetings:', meetings);
+      
+      res.json({
+        success: true,
+        meetings: meetings,
+        totalFound: data.records?.length || 0,
+        completeMeetings: completeMeetings.length
+      });
+      
+    } catch (error: any) {
+      console.log('❌ SYNC meetings endpoint error:', error.message);
+      res.status(500).json({
+        success: false,
+        message: 'Internal server error',
+        error: error.message
+      });
+    }
+  });
+  
+  // Add sync status endpoint
+  app.get('/api/sync/status', isAuthenticated, async (req: any, res) => {
+    console.log('\n🔍 === SYNC STATUS ENDPOINT CALLED ===');
+    
+    try {
+      const userId = req.user.claims.sub;
+      const integrations = await storage.getUserIntegrations(userId);
+      const airtableIntegration = integrations.find(i => i.provider === 'airtable');
+      
+      const status = {
+        airtableConnected: !!airtableIntegration && airtableIntegration.status === 'connected',
+        airtableBaseId: airtableIntegration?.credentials?.baseId || null,
+        hasApiKey: !!airtableIntegration?.credentials?.apiKey,
+        endpoint: '/api/sync/meetings'
+      };
+      
+      console.log('📊 SYNC Status:', status);
+      
+      res.json(status);
+      
+    } catch (error: any) {
+      console.log('❌ SYNC status error:', error.message);
+      res.status(500).json({ success: false, error: error.message });
+    }
+  });
+  
+  // Add raw Airtable data debug endpoint
+  app.get('/api/debug/airtable-raw', isAuthenticated, async (req: any, res) => {
+    console.log('\n🔍 === RAW AIRTABLE DATA DEBUG ===');
+    
+    try {
+      const userId = req.user.claims.sub;
       const integrations = await storage.getUserIntegrations(userId);
       const airtableIntegration = integrations.find(i => i.provider === 'airtable');
       
       if (!airtableIntegration?.credentials) {
-        console.log('❌ No Airtable integration found for sync');
-        return res.json([]);
+        return res.json({ error: 'No Airtable integration' });
       }
       
-      // Debug the Airtable integration thoroughly
-      await debugAirtableIntegration(airtableIntegration);
+      // Get raw meetings data
+      const meetingsUrl = `https://api.airtable.com/v0/${airtableIntegration.credentials.baseId}/Meetings`;
+      const response = await fetch(meetingsUrl, {
+        headers: { 'Authorization': `Bearer ${airtableIntegration.credentials.apiKey}` }
+      });
       
-      console.log('\n🔍 === SYNC PAGE MEETING FETCH DEBUG ===');
-      console.log('🎯 Looking for meetings with status: complete');
-      console.log('📊 Query filters being applied:');
-      console.log('  - Processing Status = complete');
-      console.log('  - Created within last 30 days');
-      console.log('📋 Expected Airtable field names:');
-      console.log('  - Title (meeting title)');
-      console.log('  - Processing Status (should be "complete")');
-      console.log('  - Contact (linked to Contacts table)');
-      console.log('  - Created (creation timestamp)');
+      const data = await response.json();
       
-      // Query Airtable for completed meetings
-      try {
-        const filterFormula = `{Processing Status} = 'complete'`;
-        const airtableUrl = `https://api.airtable.com/v0/${airtableIntegration.credentials.baseId}/Meetings?filterByFormula=${encodeURIComponent(filterFormula)}&sort[0][field]=Created&sort[0][direction]=desc`;
-        
-        console.log('🌐 Querying Airtable URL:', airtableUrl);
-        
-        const response = await fetch(airtableUrl, {
-          headers: {
-            'Authorization': `Bearer ${airtableIntegration.credentials.apiKey}`,
-            'User-Agent': 'CreateAI-Sync/1.0'
-          }
-        });
-        
-        if (!response.ok) {
-          console.error('❌ Airtable query failed:', response.status, response.statusText);
-          const errorText = await response.text();
-          console.error('❌ Error details:', errorText);
-          return res.json([]);
-        }
-        
-        const data = await response.json();
-        console.log('✅ Raw Airtable response received');
-        console.log('📊 Total records found:', data.records?.length || 0);
-        
-        const meetings = data.records.map((record: any) => ({
-          id: record.id,
-          title: record.fields.Title || 'Untitled Meeting',
-          status: record.fields['Processing Status'] || 'unknown',
-          contact: record.fields.Contact || null,
-          created: record.fields.Created || record.createdTime,
-          summary: record.fields.Summary || '',
-          transcript: record.fields.Transcript || '',
-          actionItems: record.fields['Action Items'] || [],
-          attendees: record.fields.Attendees || [],
-          duration: record.fields.Duration || '',
-          meetingType: record.fields['Meeting Type'] || '',
-          outcome: record.fields.Outcome || '',
-          allFields: Object.keys(record.fields)
-        }));
-        
-        console.log('📋 Processed meetings for sync page:', meetings.length);
-        meetings.forEach((meeting, index) => {
-          console.log(`📝 Sync Meeting ${index + 1}:`, {
-            id: meeting.id,
-            title: meeting.title,
-            status: meeting.status,
-            hasContact: !!meeting.contact,
-            created: meeting.created,
-            fields: meeting.allFields
-          });
-        });
-        
-        res.json(meetings);
-      } catch (error: any) {
-        console.error('❌ Error fetching sync meetings from Airtable:', error.message);
-        res.json([]);
-      }
+      console.log('📊 Raw Airtable Data:');
+      console.log(JSON.stringify(data, null, 2));
+      
+      res.json({
+        success: true,
+        rawData: data,
+        recordCount: data.records?.length || 0,
+        fields: data.records?.[0]?.fields ? Object.keys(data.records[0].fields) : []
+      });
       
     } catch (error: any) {
-      console.error('❌ Error in sync meetings endpoint:', error.message);
-      res.json([]);
+      console.log('❌ Raw debug error:', error.message);
+      res.status(500).json({ error: error.message });
     }
   });
   // Auth middleware
@@ -2256,6 +2332,11 @@ export async function registerRoutes(app: Express): Promise<Server> {
   });
 
   // Airtable API Endpoints (duplicate removed - keeping the one above at line 1465)
+  
+  console.log('🔧 SYNC debug endpoints added:');
+  console.log('   GET /api/sync/meetings');
+  console.log('   GET /api/sync/status'); 
+  console.log('   GET /api/debug/airtable-raw');
   
   // HTTP server creation
 
