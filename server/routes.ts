@@ -1038,6 +1038,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
             
             if (apiTranscripts && Array.isArray(apiTranscripts) && apiTranscripts.length > 0) {
               transcripts = apiTranscripts;
+              usingFallback = false; // CRITICAL: Reset fallback flag when real data exists
               console.log('✅ [SYNC] SUCCESS: Using real Otter.AI data -', transcripts.length, 'transcripts');
               console.log('📋 [SYNC] Real transcript titles:', transcripts.map((t: any) => t.title));
             } else {
