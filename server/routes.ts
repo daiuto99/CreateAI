@@ -1052,15 +1052,27 @@ export async function registerRoutes(app: Express): Promise<Server> {
             console.log('⚠️ [SYNC] Could not create Otter service, switching to fallback data');
           }
         } catch (error: any) {
-          usingFallback = true;
-          fallbackReason = `API error: ${error?.message || 'Unknown error'}`;
-          console.error('🚨 [SYNC] Otter API failed:', {
-            error: error?.message,
-            code: error?.code,
-            type: error?.name,
-            isTimeout: error?.message?.includes('timeout')
-          });
-          console.log('🔄 [SYNC] API error occurred, switching to fallback data');
+          // CRITICAL FIX: Only use fallback if NO data was retrieved
+          if (!transcripts || transcripts.length === 0) {
+            usingFallback = true;
+            fallbackReason = `API error: ${error?.message || 'Unknown error'}`;
+            console.error('🚨 [SYNC] Otter API failed with no data retrieved:', {
+              error: error?.message,
+              code: error?.code,
+              type: error?.name,
+              isTimeout: error?.message?.includes('timeout')
+            });
+            console.log('🔄 [SYNC] API error occurred with no data, switching to fallback data');
+          } else {
+            // Real data was retrieved despite errors (e.g., timeout in some pagination strategies)
+            usingFallback = false;
+            console.warn('⚠️ [SYNC] API error occurred but real data was retrieved:', {
+              error: error?.message,
+              transcriptCount: transcripts.length,
+              transcripts: transcripts.map((t: any) => t.title)
+            });
+            console.log('✅ [SYNC] Using real data despite pagination errors');
+          }
         }
       } else {
         usingFallback = true;
