@@ -883,6 +883,42 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  // Add disconnect/delete integration endpoint
+  app.delete('/api/integrations/:provider', isAuthenticated, async (req: any, res) => {
+    try {
+      const userId = req.user.claims.sub;
+      const { provider } = req.params;
+
+      if (!provider) {
+        return res.status(400).json({ message: "Provider is required" });
+      }
+
+      console.log(`🗑️ [DISCONNECT] User ${userId} disconnecting ${provider} integration`);
+
+      // Check if integration exists
+      const integrations = await storage.getUserIntegrations(userId);
+      const existingIntegration = integrations.find(i => i.provider === provider);
+
+      if (!existingIntegration) {
+        return res.status(404).json({ message: "Integration not found" });
+      }
+
+      // Delete the integration
+      await storage.deleteUserIntegration(userId, provider);
+      
+      console.log(`✅ [DISCONNECT] Successfully disconnected ${provider} for user ${userId}`);
+      
+      res.json({ 
+        success: true, 
+        message: `${provider} integration disconnected successfully` 
+      });
+
+    } catch (error: any) {
+      console.error(`❌ [DISCONNECT] Error disconnecting integration:`, error.message);
+      res.status(500).json({ message: "Failed to disconnect integration" });
+    }
+  });
+
   app.post('/api/integrations', isAuthenticated, async (req: any, res) => {
     try {
       const userId = req.user.claims.sub;
