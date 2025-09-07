@@ -1029,11 +1029,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
               
               if (isEmailConfigured) {
                 console.log('📧 [SYNC] Email integration configured, querying stored transcripts...');
-                
-                // Query real email-parsed transcripts from database
-                // TODO: Implement actual database query: await storage.getEmailTranscripts(userId)
-                emailTranscripts = []; // Real database query would go here
-                
+                emailTranscripts = await getEmailTranscripts(userId);
                 console.log('📧 [SYNC] Email transcripts found:', emailTranscripts.length);
               } else {
                 console.log('📧 [SYNC] Email integration not configured, skipping email transcript retrieval');
@@ -1515,6 +1511,37 @@ export async function registerRoutes(app: Express): Promise<Server> {
   });
 
   // Email webhook endpoint for Otter.ai transcript ingestion
+  // Helper function to check if email integration is properly configured
+  function isEmailIntegrationConfigured(integrations: any[]): boolean {
+    const emailIntegration = integrations.find(i => i.provider === 'gmail');
+    return emailIntegration?.status === 'connected' && 
+           emailIntegration?.credentials?.webhookUrl &&
+           emailIntegration?.credentials?.gmailConnected;
+  }
+
+  // Helper function to get real email transcripts from database
+  async function getEmailTranscripts(userId: string): Promise<any[]> {
+    try {
+      const integrations = await storage.getUserIntegrations(userId);
+      
+      if (!isEmailIntegrationConfigured(integrations)) {
+        console.log('📧 [EMAIL] No email integration configured, returning empty array');
+        return [];
+      }
+      
+      // TODO: Implement actual database query for email transcripts
+      // return await storage.getStoredEmailTranscripts(userId);
+      
+      // For now, return empty array until database storage is implemented
+      console.log('📧 [EMAIL] Database storage not yet implemented, returning empty array');
+      return [];
+      
+    } catch (error: any) {
+      console.error('📧 [EMAIL] Error fetching email transcripts:', error.message);
+      return [];
+    }
+  }
+
   app.post('/api/otter/email-webhook', async (req: any, res) => {
     try {
       console.log('📧 [OTTER EMAIL] Webhook received:', req.body);
@@ -1531,7 +1558,16 @@ export async function registerRoutes(app: Express): Promise<Server> {
       console.log('📧 [OTTER EMAIL] Decoded message:', messageData);
       
       // Extract email details
-      const { emailId, subject, sender, snippet } = messageData;
+      const { emailId, subject, sender, snippet, userId } = messageData;
+      
+      // Validate user has email integration configured
+      if (userId) {
+        const integrations = await storage.getUserIntegrations(userId);
+        if (!isEmailIntegrationConfigured(integrations)) {
+          console.log('📧 [OTTER EMAIL] User email integration not configured, rejecting webhook');
+          return res.status(403).json({ error: 'Email integration not configured for user' });
+        }
+      }
       
       // Check if this is an Otter email
       if (!OtterEmailParser.isOtterEmail(sender, subject, snippet)) {
@@ -1539,31 +1575,35 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(200).json({ message: 'Email not from Otter' });
       }
       
-      // Fetch full email content via Gmail API
+      // Fetch full email content via Gmail API (only if integration is configured)
       let emailBody = snippet || '';
       
-      try {
-        // Try to get Gmail integration for full email content
-        const integrations = await storage.getUserIntegrations('system'); // Use system user for email processing
-        const gmailIntegration = integrations.find(i => i.provider === 'gmail');
-        
-        if (gmailIntegration && emailId) {
-          const gmailService = createGmailService(gmailIntegration.credentials);
-          const fullEmail = await gmailService.getEmailContent(emailId);
-          emailBody = fullEmail.body;
-          console.log('📧 [OTTER EMAIL] Retrieved full email content:', fullEmail.subject);
+      if (userId) {
+        try {
+          const integrations = await storage.getUserIntegrations(userId);
+          const gmailIntegration = integrations.find(i => i.provider === 'gmail');
+          
+          if (gmailIntegration && emailId && isEmailIntegrationConfigured(integrations)) {
+            const gmailService = createGmailService(gmailIntegration.credentials);
+            const fullEmail = await gmailService.getEmailContent(emailId);
+            emailBody = fullEmail.body;
+            console.log('📧 [OTTER EMAIL] Retrieved full email content:', fullEmail.subject);
+          }
+        } catch (gmailError: any) {
+          console.warn('📧 [OTTER EMAIL] Gmail fetch failed, using snippet:', gmailError.message);
         }
-      } catch (gmailError: any) {
-        console.warn('📧 [OTTER EMAIL] Gmail fetch failed, using snippet:', gmailError.message);
       }
       
       const parsedMeeting = OtterEmailParser.parseOtterEmail(emailBody, subject);
       
-      if (parsedMeeting) {
+      if (parsedMeeting && userId) {
         console.log('📧 [OTTER EMAIL] Successfully parsed meeting:', parsedMeeting.title);
         
-        // Store parsed meeting data (implement storage method as needed)
+        // TODO: Store parsed meeting data in database
+        // await storage.storeEmailTranscript(userId, parsedMeeting);
+        
         console.log('📧 [OTTER EMAIL] Would store meeting data:', {
+          userId,
           id: parsedMeeting.id,
           title: parsedMeeting.title,
           participants: parsedMeeting.participants.length,
@@ -1577,8 +1617,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
           title: parsedMeeting.title
         });
       } else {
-        console.error('📧 [OTTER EMAIL] Failed to parse email');
-        res.status(400).json({ error: 'Failed to parse Otter email' });
+        console.error('📧 [OTTER EMAIL] Failed to parse email or missing userId');
+        res.status(400).json({ error: 'Failed to parse Otter email or missing user information' });
       }
       
     } catch (error: any) {
