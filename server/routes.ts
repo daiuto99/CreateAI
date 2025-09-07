@@ -1017,45 +1017,28 @@ export async function registerRoutes(app: Express): Promise<Server> {
           if (otterService) {
             console.log('📧 [SYNC] Using EMAIL-BASED Otter transcript ingestion...');
             
-            // Try to get email-parsed transcripts first
+            // Get email-parsed transcripts only if email integration is properly configured
             let emailTranscripts = [];
             
             try {
-              // In a real implementation, we'd query stored email-parsed transcripts from database
-              // For now, simulate email-parsed transcripts based on what we know exists
-              // TODO: Replace with actual database query: await storage.getEmailTranscripts(userId)
+              // Check if email integration is properly configured
+              const emailIntegration = integrations.find(i => i.provider === 'gmail');
+              const isEmailConfigured = emailIntegration?.status === 'connected' && 
+                                       emailIntegration?.credentials?.webhookUrl &&
+                                       emailIntegration?.credentials?.gmailConnected;
               
-              console.log('📧 [SYNC] Checking for stored email transcripts...');
-              
-              // Simulate email-parsed transcripts (replace with actual storage query)
-              emailTranscripts = [
-                {
-                  id: 'email-brooklyn-1',
-                  title: 'Brooklyn | RTLC Coaching Session',
-                  date: new Date('2025-09-05T14:00:00Z'),
-                  participants: ['Brooklyn', 'Coach'],
-                  source: 'otter_email',
-                  duration: 45
-                },
-                {
-                  id: 'email-brooklyn-2',
-                  title: 'FW: Brooklyn | RTLC Coaching Session',
-                  date: new Date('2025-09-04T16:00:00Z'),
-                  participants: ['Brooklyn', 'Coach'],
-                  source: 'otter_email',
-                  duration: 38
-                },
-                {
-                  id: 'email-virind-1',
-                  title: 'FW: Virind | RTLC Coaching Session',
-                  date: new Date('2025-09-03T15:00:00Z'),
-                  participants: ['Virind', 'Coach'],
-                  source: 'otter_email',
-                  duration: 42
-                }
-              ];
-              
-              console.log('📧 [SYNC] Email transcripts found:', emailTranscripts.length);
+              if (isEmailConfigured) {
+                console.log('📧 [SYNC] Email integration configured, querying stored transcripts...');
+                
+                // Query real email-parsed transcripts from database
+                // TODO: Implement actual database query: await storage.getEmailTranscripts(userId)
+                emailTranscripts = []; // Real database query would go here
+                
+                console.log('📧 [SYNC] Email transcripts found:', emailTranscripts.length);
+              } else {
+                console.log('📧 [SYNC] Email integration not configured, skipping email transcript retrieval');
+                emailTranscripts = [];
+              }
               
             } catch (emailError: any) {
               console.warn('📧 [SYNC] Email transcript fetch failed:', emailError.message);
