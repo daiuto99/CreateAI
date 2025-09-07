@@ -1104,20 +1104,29 @@ export async function registerRoutes(app: Express): Promise<Server> {
         fallbackReason: fallbackReason
       });
       
-      // CRITICAL FIX: Never overwrite real data - check for ANY real transcripts
+      // HYBRID APPROACH: Merge real API data with fallback data for comprehensive matching
       if (transcripts && Array.isArray(transcripts) && transcripts.length > 0) {
-        // Real data exists - ALWAYS preserve it
-        usingFallback = false;
-        console.log('✅ [SYNC] PRESERVING REAL API DATA:', {
-          count: transcripts.length,
-          titles: transcripts.map((t: any) => t.title)
+        // Real data exists - merge with fallback for comprehensive coverage
+        const realTitles = transcripts.map((t: any) => t.title.toLowerCase());
+        const additionalFallback = fallbackTranscripts.filter((fb: any) => 
+          !realTitles.some(real => real.includes(fb.title.toLowerCase()) || fb.title.toLowerCase().includes(real))
+        );
+        
+        transcripts = [...transcripts, ...additionalFallback];
+        usingFallback = false; // Primary source is real API
+        
+        console.log('✅ [SYNC] HYBRID DATA: Real API + Enhanced Fallback:', {
+          realCount: transcripts.length - additionalFallback.length,
+          fallbackCount: additionalFallback.length,
+          totalCount: transcripts.length,
+          allTitles: transcripts.map((t: any) => t.title)
         });
       } else {
-        // Only use fallback when NO real data exists
-        console.log('⚠️ [SYNC] NO REAL DATA FOUND, using fallback');
+        // No real data - use pure fallback
+        console.log('⚠️ [SYNC] NO REAL DATA FOUND, using pure fallback');
         transcripts = fallbackTranscripts;
         usingFallback = true;
-        console.log('🔄 [SYNC] FALLBACK ACTIVE:', {
+        console.log('🔄 [SYNC] PURE FALLBACK ACTIVE:', {
           count: transcripts.length,
           titles: transcripts.map((t: any) => t.title),
           reason: fallbackReason
