@@ -1404,15 +1404,17 @@ export async function registerRoutes(app: Express): Promise<Server> {
       let usingFallback = false;
       let fallbackReason = '';
       
-      // Transcripts are now managed through Airtable via Zapier automation
-      // No direct API calls or fallback data needed
-      transcripts = [];
-      usingFallback = false;
-      console.log('📋 [SYNC] Meeting transcripts handled by Airtable integration (via Zapier)');
-      
-      // No fallback transcript matching needed
-      // All meeting transcript data comes from Airtable via Zapier automation
-      console.log('📋 [SYNC] Transcript matching disabled - using Airtable-only workflow');
+      // Transcripts are now fetched from Airtable Transcripts table with Processing Status = 'complete'
+      console.log('📝 [SYNC] Fetching transcripts from Airtable Transcripts table...');
+      try {
+        transcripts = await airtableService.getTranscripts();
+        console.log(`✅ [SYNC] Fetched ${transcripts.length} completed transcripts from Airtable`);
+        usingFallback = false;
+      } catch (error: any) {
+        console.error('❌ [SYNC] Failed to fetch transcripts from Airtable:', error.message);
+        transcripts = [];
+        usingFallback = false;
+      }
       
       // SMART Airtable CRM integration with fallback to realistic contact data
       console.log('📋 [SYNC] Attempting Airtable CRM connection...');
@@ -1612,55 +1614,91 @@ export async function registerRoutes(app: Express): Promise<Server> {
         airtableFallbackReason: usingContactFallback ? contactFallbackReason : 'N/A'
       });
       
-      console.log('📋 [SYNC] Transcript matching handled by Airtable via Zapier automation');
-      console.log(`${usingContactFallback ? '🔄' : '📋'} [MATCHING] Available Airtable contacts for matching:`, contacts?.length || 0);
+      console.log('📋 [SYNC] NEW: Both contact and transcript matching from Airtable three-table structure');
+      console.log(`${usingContactFallback ? '🔄' : '👥'} [MATCHING] Available Airtable contacts for matching:`, contacts?.length || 0);
+      console.log(`📝 [MATCHING] Available completed transcripts for matching:`, transcripts?.length || 0);
       console.log(`${usingContactFallback ? '📋' : '👥'} [MATCHING] Contact names (${usingContactFallback ? 'FALLBACK' : 'REAL API'}):`, Array.isArray(contacts) ? contacts.map((c: any) => c.name) : []);
+      console.log(`📝 [MATCHING] Transcript titles:`, Array.isArray(transcripts) ? transcripts.map((t: any) => t.title) : []);
       
       // ENHANCED matching logic with better name parsing
       for (const meeting of meetings) {
         const meetingTitle = meeting.title.toLowerCase();
         console.log(`\n🔍 Analyzing meeting: "${meeting.title}"`);
         
-        // Transcript matching disabled - handled through Airtable via Zapier
+        // NEW: Both contact matching (green) and transcript matching (blue)
         console.log(`  📋 Transcript matching via Airtable integration (Zapier workflow)`);
-        meeting.hasOtterMatch = false; // All transcript matching via Airtable now
         
-        // ENHANCED Airtable matching with confidence scoring
-        console.log(`  🔍 Airtable matching for "${meeting.title}"...`);
-        let bestAirtableMatch = null;
-        let highestAirtableConfidence = 0;
+        // 1. CONTACT MATCHING (Green circles) - match against contact names
+        console.log(`  🔍 Airtable contact matching for "${meeting.title}"...`);
+        let bestContactMatch = null;
+        let highestContactConfidence = 0;
         
         if (Array.isArray(contacts)) {
           for (const contact of contacts) {
             try {
               const confidence = calculateContactMatchConfidence(meeting, contact);
               
-              if (confidence > highestAirtableConfidence) {
-                highestAirtableConfidence = confidence;
-                bestAirtableMatch = contact;
+              if (confidence > highestContactConfidence) {
+                highestContactConfidence = confidence;
+                bestContactMatch = contact;
               }
               
               console.log(`    📊 Contact "${contact.name}" confidence: ${confidence}%`);
             } catch (matchError) {
-              console.error(`    ❌ Error calculating Airtable confidence for "${contact.name}":`, matchError);
+              console.error(`    ❌ Error calculating contact confidence for "${contact.name}":`, matchError);
             }
           }
         }
         
-        // Add data source flags to the meeting object
+        // 2. TRANSCRIPT MATCHING (Blue circles) - match against transcript titles
+        console.log(`  🔍 Airtable transcript matching for "${meeting.title}"...`);
+        let bestTranscriptMatch = null;
+        let highestTranscriptConfidence = 0;
+        
+        if (Array.isArray(transcripts)) {
+          for (const transcript of transcripts) {
+            try {
+              const confidence = calculateTranscriptMatchConfidence(meeting, transcript);
+              
+              if (confidence > highestTranscriptConfidence) {
+                highestTranscriptConfidence = confidence;
+                bestTranscriptMatch = transcript;
+              }
+              
+              console.log(`    📊 Transcript "${transcript.title}" confidence: ${confidence}%`);
+            } catch (matchError) {
+              console.error(`    ❌ Error calculating transcript confidence for "${transcript.title}":`, matchError);
+            }
+          }
+        }
+        
+        // Apply 75% confidence threshold for matches
+        const CONFIDENCE_THRESHOLD = 75;
+        
+        // Set contact match (green circle)
+        meeting.hasAirtableMatch = highestContactConfidence >= CONFIDENCE_THRESHOLD;
+        (meeting as any).airtableConfidence = highestContactConfidence;
+        (meeting as any).bestAirtableMatch = bestContactMatch;
         (meeting as any).isAirtableFallback = usingContactFallback;
         
-        // FIXED: Show matches regardless of data source (real API or fallback)
-        meeting.hasAirtableMatch = highestAirtableConfidence >= 60;
-        (meeting as any).airtableConfidence = highestAirtableConfidence;
-        (meeting as any).bestAirtableMatch = bestAirtableMatch;
+        // Set transcript match (blue circle) 
+        meeting.hasOtterMatch = highestTranscriptConfidence >= CONFIDENCE_THRESHOLD;
+        (meeting as any).transcriptConfidence = highestTranscriptConfidence;
+        (meeting as any).bestTranscriptMatch = bestTranscriptMatch;
         
+        // Log results with proper indicators
         if (meeting.hasAirtableMatch) {
           const source = usingContactFallback ? 'ENHANCED MATCHING' : 'REAL API';
-          console.log(`  ✅ ${source} MATCH: "${bestAirtableMatch?.name}" (confidence: ${highestAirtableConfidence}%)`);
+          console.log(`  ✅ ${source} MATCH: "${bestContactMatch?.name}" (confidence: ${highestContactConfidence}%)`);
         } else {
           const source = usingContactFallback ? 'enhanced matching' : 'real API';
-          console.log(`  ⚪ No ${source} match found (highest confidence: ${highestAirtableConfidence}%)`);
+          console.log(`  ⚪ No ${source} contact match found (highest confidence: ${highestContactConfidence}%)`);
+        }
+        
+        if (meeting.hasOtterMatch) {
+          console.log(`  ✅ TRANSCRIPT MATCH: "${bestTranscriptMatch?.title}" (confidence: ${highestTranscriptConfidence}%)`);
+        } else {
+          console.log(`  ⚪ No transcript match found (highest confidence: ${highestTranscriptConfidence}%)`);
         }
         
         const otterIcon = meeting.hasOtterMatch ? '🔵' : '⚪';
@@ -2115,7 +2153,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     return Math.round(confidence);
   }
 
-  // ENHANCED Calculate confidence score for meeting-contact matching with company data
+  // ENHANCED Calculate confidence score for meeting-contact matching (for green circles)
   function calculateContactMatchConfidence(meeting: any, contact: any): number {
     if (!meeting.title || !contact.name) return 0;
     
@@ -2162,6 +2200,67 @@ export async function registerRoutes(app: Express): Promise<Server> {
     // 6. String similarity fallback (60% max)
     const similarity = calculateStringSimilarity(meetingTitle, contactName);
     confidence = Math.max(confidence, Math.round(similarity * 0.6));
+    
+    return confidence;
+  }
+
+  // NEW Calculate confidence score for meeting-transcript matching (for blue circles)
+  function calculateTranscriptMatchConfidence(meeting: any, transcript: any): number {
+    if (!meeting.title || !transcript.title) return 0;
+    
+    const meetingTitle = meeting.title.toLowerCase();
+    const transcriptTitle = transcript.title.toLowerCase();
+    
+    let confidence = 0;
+    
+    // 1. Exact title match (95%)
+    if (meetingTitle === transcriptTitle) {
+      confidence = Math.max(confidence, 95);
+    }
+    
+    // 2. Title contains match (85%)
+    if (meetingTitle.includes(transcriptTitle) || transcriptTitle.includes(meetingTitle)) {
+      confidence = Math.max(confidence, 85);
+    }
+    
+    // 3. Participants match (80%) - check if meeting attendees match transcript participants
+    if (transcript.participants && meeting.attendees) {
+      const participantMatch = transcript.participants.some((participant: string) =>
+        meeting.attendees.some((attendee: string) =>
+          participant.toLowerCase().includes(attendee.toLowerCase()) ||
+          attendee.toLowerCase().includes(participant.toLowerCase())
+        )
+      );
+      if (participantMatch) {
+        confidence = Math.max(confidence, 80);
+      }
+    }
+    
+    // 4. Date proximity (75%) - if both have dates and they're close
+    if (transcript.meetingDate && meeting.date) {
+      const transcriptDate = new Date(transcript.meetingDate);
+      const meetingDate = new Date(meeting.date);
+      const timeDiff = Math.abs(transcriptDate.getTime() - meetingDate.getTime());
+      const daysDiff = timeDiff / (1000 * 3600 * 24);
+      
+      if (daysDiff <= 1) { // Same day or within 1 day
+        confidence = Math.max(confidence, 75);
+      }
+    }
+    
+    // 5. Title word overlap (70%)
+    const meetingWords = meetingTitle.split(/\s+/).filter((word: string) => word.length > 3);
+    const transcriptWords = transcriptTitle.split(/\s+/).filter((word: string) => word.length > 3);
+    const commonWords = meetingWords.filter((word: string) => transcriptWords.includes(word));
+    
+    if (commonWords.length > 0) {
+      const overlapRatio = (commonWords.length * 2) / (meetingWords.length + transcriptWords.length);
+      confidence = Math.max(confidence, Math.round(overlapRatio * 70));
+    }
+    
+    // 6. String similarity fallback (60% max)
+    const similarity = calculateStringSimilarity(meetingTitle, transcriptTitle);
+    confidence = Math.max(confidence, Math.round(similarity * 60));
     
     return confidence;
   }
