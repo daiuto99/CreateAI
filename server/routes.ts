@@ -12,6 +12,7 @@ const isAuthenticated = (req: any, res: any, next: any) => {
 import { openaiService } from "./services/openai";
 import { OtterService } from "./services/otter";
 const OtterEmailParser = require('./services/OtterEmailParser');
+import { createGmailService } from './services/gmail';
 import { 
   insertContentProjectSchema,
   insertContentItemSchema,
