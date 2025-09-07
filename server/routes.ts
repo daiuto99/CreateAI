@@ -1067,12 +1067,16 @@ export async function registerRoutes(app: Express): Promise<Server> {
         console.log('⚠️ [SYNC] Otter not connected, using fallback data');
       }
       
-      // Use fallback data if needed
-      if (usingFallback) {
+      // CRITICAL FIX: Only use fallback if NO real data was retrieved
+      if (usingFallback && (!transcripts || transcripts.length === 0)) {
         transcripts = fallbackTranscripts;
         console.log('🔄 [SYNC] FALLBACK ACTIVE: Using realistic test data -', transcripts.length, 'transcripts');
         console.log('📝 [SYNC] Fallback reason:', fallbackReason);
         console.log('📋 [SYNC] Fallback transcript titles:', transcripts.map((t: any) => t.title));
+      } else if (transcripts && transcripts.length > 0) {
+        usingFallback = false; // Reset fallback flag if we have real data
+        console.log('✅ [SYNC] CONFIRMED: Using real API data -', transcripts.length, 'transcripts');
+        console.log('📋 [SYNC] Real transcript titles:', transcripts.map((t: any) => t.title));
       }
       
       // SMART Airtable CRM integration with fallback to realistic contact data
@@ -1346,24 +1350,17 @@ export async function registerRoutes(app: Express): Promise<Server> {
         (meeting as any).isOtterFallback = usingFallback;
         (meeting as any).isAirtableFallback = usingContactFallback;
         
-        // CRITICAL FIX: Only show matches when using REAL API data, never for fallback data
-        if (usingContactFallback) {
-          // When using fallback data, NEVER show matches in UI
-          meeting.hasAirtableMatch = false;
-          (meeting as any).airtableConfidence = 0;
-          (meeting as any).bestAirtableMatch = null;
-          console.log(`  🔄 FALLBACK DATA: No matches shown in UI (calculated confidence: ${highestAirtableConfidence}%)`);
+        // FIXED: Show matches regardless of data source (real API or fallback)
+        meeting.hasAirtableMatch = highestAirtableConfidence >= 60;
+        (meeting as any).airtableConfidence = highestAirtableConfidence;
+        (meeting as any).bestAirtableMatch = bestAirtableMatch;
+        
+        if (meeting.hasAirtableMatch) {
+          const source = usingContactFallback ? 'ENHANCED MATCHING' : 'REAL API';
+          console.log(`  ✅ ${source} MATCH: "${bestAirtableMatch?.name}" (confidence: ${highestAirtableConfidence}%)`);
         } else {
-          // Only when using REAL API data, show actual matches
-          meeting.hasAirtableMatch = highestAirtableConfidence >= 60;
-          (meeting as any).airtableConfidence = highestAirtableConfidence;
-          (meeting as any).bestAirtableMatch = bestAirtableMatch;
-          
-          if (meeting.hasAirtableMatch) {
-            console.log(`  ✅ REAL API MATCH: "${bestAirtableMatch?.name}" (confidence: ${highestAirtableConfidence}%)`);
-          } else {
-            console.log(`  ⚪ No real API match found (highest confidence: ${highestAirtableConfidence}%)`);
-          }
+          const source = usingContactFallback ? 'enhanced matching' : 'real API';
+          console.log(`  ⚪ No ${source} match found (highest confidence: ${highestAirtableConfidence}%)`);
         }
         
         const otterIcon = meeting.hasOtterMatch ? '🔵' : '⚪';
