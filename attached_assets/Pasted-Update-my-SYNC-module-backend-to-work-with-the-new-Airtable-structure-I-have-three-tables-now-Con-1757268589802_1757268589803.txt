@@ -1,0 +1,58 @@
+Update my SYNC module backend to work with the new Airtable structure. I have three tables now: "Contacts", "Transcripts", and "Meetings".
+Current Problem: My AirtableService class is querying a "Meetings" table but I now have separate "Contacts" and "Transcripts" tables. The system throws 422 errors when filtering by "processing_status" field.
+New Airtable Structure:
+
+Contacts table: Name, Company, Email, Phone, Last Contacted, Relationship Type, Notes
+Transcripts table: Title, Processing Status (pending/processing/complete/failed), Transcript Content, Meeting Date, Duration, Participants, Otter ID
+Meetings table: Name, Contact (linked), Meeting Date, Status, Duration, Action Items
+
+Required Updates:
+
+Update AirtableService class in shared/services/airtable.ts:
+
+Replace getMeetings() method to query "Contacts" table instead
+Add getTranscripts() method to query "Transcripts" table with filter: {Processing Status} = 'complete'
+Add getContactsRaw() method for debugging
+Fix the 422 error by using correct field names
+
+
+Update /api/sync/meetings endpoint in routes.ts:
+
+Query both Contacts and Transcripts tables separately
+Match calendar meetings against both contact names and transcript titles
+Return proper indicator flags (green for contacts, blue for transcripts)
+Handle the confidence scoring for both types of matches
+
+
+Fix the matching algorithm:
+
+Match meeting titles against contact names (for green circles)
+Match meeting titles against transcript titles (for blue circles)
+Keep the existing 75% confidence threshold
+Ensure past meetings only get transcript matches
+
+
+Add debug endpoints:
+
+/api/debug/airtable-contacts - Show all contacts
+/api/debug/airtable-transcripts - Show all transcripts with processing_status=complete
+/api/sync/status - Show integration health
+
+
+
+Expected Behavior After Fix:
+
+Calendar meetings should match against contact names for green circles
+Calendar meetings should match against transcript titles for blue circles
+No more 422 errors when querying Airtable
+SYNC page shows meetings with proper visual indicators
+
+Key Code Requirements:
+
+Use this.base('Contacts') and this.base('Transcripts') instead of this.base('Meetings')
+Filter transcripts with: filterByFormula: "{Processing Status} = 'complete'"
+Extract contact names from "Name" field, not meeting titles
+Keep existing Levenshtein distance matching logic
+Maintain the same endpoint response format for frontend compatibility
+
+Please update the backend code to implement this new structure while keeping the existing matching intelligence and API response format.
