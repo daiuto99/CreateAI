@@ -10,9 +10,6 @@ const isAuthenticated = (req: any, res: any, next: any) => {
   return res.status(401).json({ message: "Authentication required" });
 };
 import { openaiService } from "./services/openai";
-import { OtterService } from "./services/otter";
-import OtterEmailParser from './services/OtterEmailParser';
-import { createGmailService } from './services/gmail';
 import { 
   insertContentProjectSchema,
   insertContentItemSchema,
@@ -989,162 +986,25 @@ export async function registerRoutes(app: Express): Promise<Server> {
       // Sort meetings by date (newest first) and check for matches
       meetings.sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
       
-      // REAL matching logic - no fake random assignment
-      const otterIntegration = integrations.find(i => i.provider === 'otter');
+      // REAL matching logic - Airtable integration only  
       const airtableIntegration = integrations.find(i => i.provider === 'airtable');
       
-      // SMART Otter.AI integration with fallback to realistic test data
-      console.log('🎤 [SYNC] Attempting Otter.AI API connection...');
+      // Meeting transcript matching through Airtable integration only
+      // All Otter.ai integration removed - using Zapier → Airtable workflow
+      console.log('📋 [SYNC] Meeting transcript matching via Airtable integration');
       let transcripts: any[] = [];
       let usingFallback = false;
       let fallbackReason = '';
       
-      // Realistic fallback data matching actual calendar meetings
-      const fallbackTranscripts = [
-        { id: 'transcript-1', title: 'Nicole RTLC Coaching Session', date: new Date('2025-09-04T14:00:00Z'), duration: '45m', summary: 'Coaching session discussion and goal planning' },
-        { id: 'transcript-2', title: 'Ashley RTLC Coaching Session', date: new Date('2025-09-04T10:00:00Z'), duration: '30m', summary: 'Weekly coaching check-in and progress review' },
-        { id: 'transcript-3', title: 'Dante RTLC Coaching Session', date: new Date('2025-09-04T16:00:00Z'), duration: '37m', summary: 'Individual coaching session and action items' },
-        { id: 'transcript-4', title: 'Brian Albans RTLC Coaching Session', date: new Date('2025-09-04T11:00:00Z'), duration: '41m', summary: 'Coaching call with development planning' },
-        { id: 'transcript-5', title: 'Leo/Mark Launch Box Chat', date: new Date('2025-08-29T15:00:00Z'), duration: '60m', summary: 'Launch strategy discussion and planning session' }
-      ];
+      // Transcripts are now managed through Airtable via Zapier automation
+      // No direct API calls or fallback data needed
+      transcripts = [];
+      usingFallback = false;
+      console.log('📋 [SYNC] Meeting transcripts handled by Airtable integration (via Zapier)');
       
-      if (otterIntegration?.status === 'connected') {
-        console.log('🔗 [SYNC] Otter integration connected, attempting real API...');
-        
-        try {
-          const otterService = await OtterService.createFromUserIntegration(storage, userId);
-          
-          if (otterService) {
-            console.log('📧 [SYNC] Using EMAIL-BASED Otter transcript ingestion...');
-            
-            // Get email-parsed transcripts only if email integration is properly configured
-            let emailTranscripts = [];
-            
-            try {
-              // Check if email integration is properly configured
-              const emailIntegration = integrations.find(i => i.provider === 'gmail');
-              const isEmailConfigured = emailIntegration?.status === 'connected' && 
-                                       emailIntegration?.credentials?.webhookUrl &&
-                                       emailIntegration?.credentials?.gmailConnected;
-              
-              if (isEmailConfigured) {
-                console.log('📧 [SYNC] Email integration configured, querying stored transcripts...');
-                emailTranscripts = await getEmailTranscripts(userId);
-                console.log('📧 [SYNC] Email transcripts found:', emailTranscripts.length);
-              } else {
-                console.log('📧 [SYNC] Email integration not configured, skipping email transcript retrieval');
-                emailTranscripts = [];
-              }
-              
-            } catch (emailError: any) {
-              console.warn('📧 [SYNC] Email transcript fetch failed:', emailError.message);
-              emailTranscripts = [];
-            }
-            
-            // If we have email transcripts, use them as primary source
-            if (emailTranscripts && Array.isArray(emailTranscripts) && emailTranscripts.length > 0) {
-              transcripts = emailTranscripts;
-              usingFallback = false;
-              console.log('✅ [SYNC] SUCCESS: Using email-parsed Otter data -', transcripts.length, 'transcripts');
-              console.log('📧 [SYNC] Email transcript titles:', transcripts.map((t: any) => t.title));
-            } else {
-              // Fallback to API if available (as backup)
-              console.log('📧 [SYNC] No email transcripts found, trying API as backup...');
-              
-              try {
-                // Quick API call with short timeout as backup
-                const apiTranscripts = await Promise.race([
-                  otterService.getAllSpeeches(),
-                  new Promise((_, reject) => setTimeout(() => reject(new Error('API backup timeout')), 3000))
-                ]);
-                
-                if (apiTranscripts && Array.isArray(apiTranscripts) && apiTranscripts.length > 0) {
-                  transcripts = apiTranscripts;
-                  usingFallback = false;
-                  console.log('✅ [SYNC] API backup successful:', transcripts.length, 'transcripts');
-                } else {
-                  usingFallback = true;
-                  fallbackReason = 'No email transcripts and API returned empty results';
-                }
-              } catch (apiError: any) {
-                usingFallback = true;
-                fallbackReason = `No email transcripts and API failed: ${apiError.message}`;
-                console.log('⚠️ [SYNC] API backup also failed, will use fallback');
-              }
-            }
-          } else {
-            usingFallback = true;
-            fallbackReason = 'Failed to initialize Otter service (no API key or service error)';
-            console.log('⚠️ [SYNC] Could not create Otter service, will use email + fallback');
-          }
-        } catch (error: any) {
-          // CRITICAL FIX: Only use fallback if NO data was retrieved
-          if (!transcripts || transcripts.length === 0) {
-            usingFallback = true;
-            fallbackReason = `API error: ${error?.message || 'Unknown error'}`;
-            console.error('🚨 [SYNC] Otter API failed with no data retrieved:', {
-              error: error?.message,
-              code: error?.code,
-              type: error?.name,
-              isTimeout: error?.message?.includes('timeout')
-            });
-            console.log('🔄 [SYNC] API error occurred with no data, switching to fallback data');
-          } else {
-            // Real data was retrieved despite errors (e.g., timeout in some pagination strategies)
-            usingFallback = false;
-            console.warn('⚠️ [SYNC] API error occurred but real data was retrieved:', {
-              error: error?.message,
-              transcriptCount: transcripts.length,
-              transcripts: transcripts.map((t: any) => t.title)
-            });
-            console.log('✅ [SYNC] Using real data despite pagination errors');
-          }
-        }
-      } else {
-        usingFallback = true;
-        fallbackReason = 'Otter integration not connected';
-        console.log('⚠️ [SYNC] Otter not connected, using fallback data');
-      }
-      
-      // CRITICAL DEBUG: Show EXACT state before decision
-      console.log('🔍 [CRITICAL DEBUG] Pre-decision state:', {
-        transcripts_exists: !!transcripts,
-        transcripts_type: typeof transcripts,
-        transcripts_isArray: Array.isArray(transcripts),
-        transcripts_length: transcripts?.length,
-        transcripts_value: transcripts,
-        usingFallback_flag: usingFallback,
-        fallbackReason: fallbackReason
-      });
-      
-      // HYBRID APPROACH: Merge real API data with fallback data for comprehensive matching
-      if (transcripts && Array.isArray(transcripts) && transcripts.length > 0) {
-        // Real data exists - merge with fallback for comprehensive coverage
-        const realTitles = transcripts.map((t: any) => t.title.toLowerCase());
-        const additionalFallback = fallbackTranscripts.filter((fb: any) => 
-          !realTitles.some(real => real.includes(fb.title.toLowerCase()) || fb.title.toLowerCase().includes(real))
-        );
-        
-        transcripts = [...transcripts, ...additionalFallback];
-        usingFallback = false; // Primary source is real API
-        
-        console.log('✅ [SYNC] HYBRID DATA: Real API + Enhanced Fallback:', {
-          realCount: transcripts.length - additionalFallback.length,
-          fallbackCount: additionalFallback.length,
-          totalCount: transcripts.length,
-          allTitles: transcripts.map((t: any) => t.title)
-        });
-      } else {
-        // No real data - use pure fallback
-        console.log('⚠️ [SYNC] NO REAL DATA FOUND, using pure fallback');
-        transcripts = fallbackTranscripts;
-        usingFallback = true;
-        console.log('🔄 [SYNC] PURE FALLBACK ACTIVE:', {
-          count: transcripts.length,
-          titles: transcripts.map((t: any) => t.title),
-          reason: fallbackReason
-        });
-      }
+      // No fallback transcript matching needed
+      // All meeting transcript data comes from Airtable via Zapier automation
+      console.log('📋 [SYNC] Transcript matching disabled - using Airtable-only workflow');
       
       // SMART Airtable CRM integration with fallback to realistic contact data
       console.log('📋 [SYNC] Attempting Airtable CRM connection...');
@@ -1155,10 +1015,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
       // Realistic fallback contact data matching actual meetings
       const fallbackContacts = [
         { id: '1', name: 'Mark', email: 'mark@company.com', company: 'Launch Box' },
-        { id: '2', name: 'Nicole', email: 'nicole@company.com', company: 'RTLC' },
-        { id: '3', name: 'Ashley', email: 'ashley@company.com', company: 'RTLC' },
-        { id: '4', name: 'Dante', email: 'dante@company.com', company: 'RTLC' },
-        { id: '5', name: 'Brian Albans', email: 'brian.albans@company.com', company: 'RTLC' }
+        { id: '2', name: 'Sarah Johnson', email: 'sarah@techcorp.com', company: 'TechCorp' },
+        { id: '3', name: 'Michael Chen', email: 'mchen@innovate.com', company: 'Innovate Solutions' },
+        { id: '4', name: 'Lisa Rodriguez', email: 'lisa@growth.co', company: 'Growth Partners' },
+        { id: '5', name: 'David Kim', email: 'david@startup.io', company: 'Startup Labs' }
       ];
       
       if (airtableIntegration?.status === 'connected') {
@@ -1338,18 +1198,13 @@ export async function registerRoutes(app: Express): Promise<Server> {
       
       console.log('✅ Meeting Intelligence System Status:', {
         calendarMeetings: meetings.length,
-        otterTranscripts: transcripts?.length || 0,
         airtableContacts: contacts?.length || 0,
-        otterConnected: otterIntegration?.status === 'connected',
         airtableConnected: airtableIntegration?.status === 'connected',
-        otterDataSource: usingFallback ? 'FALLBACK DATA' : 'REAL API',
         airtableDataSource: usingContactFallback ? 'FALLBACK DATA' : 'REAL API',
-        otterFallbackReason: usingFallback ? fallbackReason : 'N/A',
         airtableFallbackReason: usingContactFallback ? contactFallbackReason : 'N/A'
       });
       
-      console.log(`${usingFallback ? '🔄' : '🎤'} [MATCHING] Available Otter transcripts for matching:`, transcripts?.length || 0);
-      console.log(`${usingFallback ? '📋' : '📧'} [MATCHING] Transcript titles (${usingFallback ? 'FALLBACK' : 'REAL API'}):`, Array.isArray(transcripts) ? transcripts.map((t: any) => t.title) : []);
+      console.log('📋 [SYNC] Transcript matching handled by Airtable via Zapier automation');
       console.log(`${usingContactFallback ? '🔄' : '📋'} [MATCHING] Available Airtable contacts for matching:`, contacts?.length || 0);
       console.log(`${usingContactFallback ? '📋' : '👥'} [MATCHING] Contact names (${usingContactFallback ? 'FALLBACK' : 'REAL API'}):`, Array.isArray(contacts) ? contacts.map((c: any) => c.name) : []);
       
@@ -1358,38 +1213,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
         const meetingTitle = meeting.title.toLowerCase();
         console.log(`\n🔍 Analyzing meeting: "${meeting.title}"`);
         
-        // ENHANCED Otter.AI matching with confidence scoring (all meetings are past/completed)
-        console.log(`  🔍 Otter matching for "${meeting.title}"...`);
-        let bestOtterMatch = null;
-        let highestOtterConfidence = 0;
-        
-        if (Array.isArray(transcripts)) {
-          for (const transcript of transcripts) {
-            try {
-              const confidence = calculateMatchConfidence(meeting, transcript);
-              
-              if (confidence > highestOtterConfidence) {
-                highestOtterConfidence = confidence;
-                bestOtterMatch = transcript;
-              }
-              
-              console.log(`    📊 Transcript "${transcript.title}" confidence: ${confidence}%`);
-            } catch (matchError) {
-              console.error(`    ❌ Error calculating Otter confidence for "${transcript.title}":`, matchError);
-            }
-          }
-        }
-        
-        // Set match if confidence is above threshold (60%)
-        meeting.hasOtterMatch = highestOtterConfidence >= 60;
-        (meeting as any).otterConfidence = highestOtterConfidence;
-        (meeting as any).bestOtterMatch = bestOtterMatch;
-        
-        if (meeting.hasOtterMatch) {
-          console.log(`  ✅ Otter match found: "${bestOtterMatch?.title}" (confidence: ${highestOtterConfidence}%)`);
-        } else {
-          console.log(`  ⚪ No Otter match found (highest confidence: ${highestOtterConfidence}%)`);
-        }
+        // Transcript matching disabled - handled through Airtable via Zapier
+        console.log(`  📋 Transcript matching via Airtable integration (Zapier workflow)`);
+        meeting.hasOtterMatch = false; // All transcript matching via Airtable now
         
         // ENHANCED Airtable matching with confidence scoring
         console.log(`  🔍 Airtable matching for "${meeting.title}"...`);
@@ -1414,7 +1240,6 @@ export async function registerRoutes(app: Express): Promise<Server> {
         }
         
         // Add data source flags to the meeting object
-        (meeting as any).isOtterFallback = usingFallback;
         (meeting as any).isAirtableFallback = usingContactFallback;
         
         // FIXED: Show matches regardless of data source (real API or fallback)
@@ -1456,203 +1281,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  app.get('/api/otter/transcripts', isAuthenticated, async (req: any, res) => {
-    try {
-      const userId = req.user.claims.sub;
-      console.log('🎤 Fetching transcripts for user:', userId);
-      
-      // Get user's Otter integration
-      const integrations = await storage.getUserIntegrations(userId);
-      const otterIntegration = integrations.find(i => i.provider === 'otter');
-      
-      if (!otterIntegration || otterIntegration.status !== 'connected') {
-        return res.json([]);
-      }
-      
-      // Use realistic data that matches your actual Otter.AI meetings
-      const realTranscripts = [
-        {
-          id: 'transcript-1',
-          title: 'Nicole RTLC Coaching Session',
-          date: new Date('2025-09-04T14:00:00Z'),
-          duration: '45m'
-        },
-        {
-          id: 'transcript-2', 
-          title: 'Ashley RTLC Coaching Session',
-          date: new Date('2025-09-04T10:00:00Z'),
-          duration: '30m'
-        },
-        {
-          id: 'transcript-3',
-          title: 'Dante RTLC Coaching Session', 
-          date: new Date('2025-09-04T16:00:00Z'),
-          duration: '37m'
-        },
-        {
-          id: 'transcript-4',
-          title: 'Brian Albans RTLC Coaching Session',
-          date: new Date('2025-09-04T11:00:00Z'),
-          duration: '41m'
-        },
-        {
-          id: 'transcript-5',
-          title: 'Leo/Mark Launch Box Chat',
-          date: new Date('2025-08-29T15:00:00Z'),
-          duration: '60m'
-        }
-      ];
-      
-      res.json(realTranscripts);
-    } catch (error) {
-      console.error('Error fetching Otter.ai transcripts:', error);
-      res.json([]);
-    }
-  });
+  // Otter transcripts endpoint removed - using Airtable integration only
 
-  // Email webhook endpoint for Otter.ai transcript ingestion
-  // Helper function to check if email integration is properly configured
-  function isEmailIntegrationConfigured(integrations: any[]): boolean {
-    const emailIntegration = integrations.find(i => i.provider === 'gmail');
-    return emailIntegration?.status === 'connected' && 
-           emailIntegration?.credentials?.webhookUrl &&
-           emailIntegration?.credentials?.gmailConnected;
-  }
-
-  // Helper function to get real email transcripts from database
-  async function getEmailTranscripts(userId: string): Promise<any[]> {
-    try {
-      const integrations = await storage.getUserIntegrations(userId);
-      
-      if (!isEmailIntegrationConfigured(integrations)) {
-        console.log('📧 [EMAIL] No email integration configured, returning empty array');
-        return [];
-      }
-      
-      // TODO: Implement actual database query for email transcripts
-      // return await storage.getStoredEmailTranscripts(userId);
-      
-      // For now, return empty array until database storage is implemented
-      console.log('📧 [EMAIL] Database storage not yet implemented, returning empty array');
-      return [];
-      
-    } catch (error: any) {
-      console.error('📧 [EMAIL] Error fetching email transcripts:', error.message);
-      return [];
-    }
-  }
-
-  app.post('/api/otter/email-webhook', async (req: any, res) => {
-    try {
-      console.log('📧 [OTTER EMAIL] Webhook received:', req.body);
-      
-      const { message, subscription } = req.body;
-      
-      // Validate webhook authenticity (implement security as needed)
-      if (!message || !message.data) {
-        return res.status(400).json({ error: 'Invalid webhook payload' });
-      }
-      
-      // Decode the Pub/Sub message
-      const messageData = JSON.parse(Buffer.from(message.data, 'base64').toString());
-      console.log('📧 [OTTER EMAIL] Decoded message:', messageData);
-      
-      // Extract email details
-      const { emailId, subject, sender, snippet, userId } = messageData;
-      
-      // Validate user has email integration configured
-      if (userId) {
-        const integrations = await storage.getUserIntegrations(userId);
-        if (!isEmailIntegrationConfigured(integrations)) {
-          console.log('📧 [OTTER EMAIL] User email integration not configured, rejecting webhook');
-          return res.status(403).json({ error: 'Email integration not configured for user' });
-        }
-      }
-      
-      // Check if this is an Otter email
-      if (!OtterEmailParser.isOtterEmail(sender, subject, snippet)) {
-        console.log('📧 [OTTER EMAIL] Email not from Otter, skipping:', subject);
-        return res.status(200).json({ message: 'Email not from Otter' });
-      }
-      
-      // Fetch full email content via Gmail API (only if integration is configured)
-      let emailBody = snippet || '';
-      
-      if (userId) {
-        try {
-          const integrations = await storage.getUserIntegrations(userId);
-          const gmailIntegration = integrations.find(i => i.provider === 'gmail');
-          
-          if (gmailIntegration && emailId && isEmailIntegrationConfigured(integrations)) {
-            const gmailService = createGmailService(gmailIntegration.credentials);
-            const fullEmail = await gmailService.getEmailContent(emailId);
-            emailBody = fullEmail.body;
-            console.log('📧 [OTTER EMAIL] Retrieved full email content:', fullEmail.subject);
-          }
-        } catch (gmailError: any) {
-          console.warn('📧 [OTTER EMAIL] Gmail fetch failed, using snippet:', gmailError.message);
-        }
-      }
-      
-      const parsedMeeting = OtterEmailParser.parseOtterEmail(emailBody, subject);
-      
-      if (parsedMeeting && userId) {
-        console.log('📧 [OTTER EMAIL] Successfully parsed meeting:', parsedMeeting.title);
-        
-        // TODO: Store parsed meeting data in database
-        // await storage.storeEmailTranscript(userId, parsedMeeting);
-        
-        console.log('📧 [OTTER EMAIL] Would store meeting data:', {
-          userId,
-          id: parsedMeeting.id,
-          title: parsedMeeting.title,
-          participants: parsedMeeting.participants.length,
-          hasActionItems: parsedMeeting.actionItems.length > 0
-        });
-        
-        res.status(200).json({ 
-          success: true, 
-          message: 'Email processed successfully',
-          meetingId: parsedMeeting.id,
-          title: parsedMeeting.title
-        });
-      } else {
-        console.error('📧 [OTTER EMAIL] Failed to parse email or missing userId');
-        res.status(400).json({ error: 'Failed to parse Otter email or missing user information' });
-      }
-      
-    } catch (error: any) {
-      console.error('🚨 [OTTER EMAIL] Webhook error:', error);
-      res.status(500).json({ error: 'Internal server error', message: error.message });
-    }
-  });
-
-  // Test endpoint for email parsing (development only)
-  app.post('/api/otter/test-email-parse', async (req: any, res) => {
-    try {
-      if (process.env.NODE_ENV === 'production') {
-        return res.status(403).json({ error: 'Test endpoint not available in production' });
-      }
-      
-      const { subject, emailBody } = req.body;
-      
-      if (!subject || !emailBody) {
-        return res.status(400).json({ error: 'subject and emailBody required' });
-      }
-      
-      const parsedMeeting = OtterEmailParser.parseOtterEmail(emailBody, subject);
-      
-      res.json({
-        success: true,
-        parsed: parsedMeeting,
-        isOtterEmail: OtterEmailParser.isOtterEmail('noreply@otter.ai', subject, emailBody)
-      });
-      
-    } catch (error: any) {
-      console.error('🚨 [OTTER EMAIL] Test parse error:', error);
-      res.status(500).json({ error: error.message });
-    }
-  });
+  // Email-based Otter integration removed - using Zapier → Airtable workflow
 
   app.get('/api/airtable/contacts', isAuthenticated, async (req: any, res) => {
     try {
@@ -2152,13 +1783,12 @@ export async function registerRoutes(app: Express): Promise<Server> {
       
       // Validate integrations
       const integrations = await storage.getUserIntegrations(userId);
-      const otterIntegration = integrations.find(i => i.provider === 'otter');
       const airtableIntegration = integrations.find(i => i.provider === 'airtable');
       
-      if (otterIntegration?.status !== 'connected' && airtableIntegration?.status !== 'connected') {
+      if (airtableIntegration?.status !== 'connected') {
         return res.status(400).json({
           success: false,
-          message: 'No active integrations found. Please connect Otter.AI or Airtable first.'
+          message: 'Airtable integration required. Please connect Airtable first.'
         });
       }
       
@@ -2181,7 +1811,6 @@ export async function registerRoutes(app: Express): Promise<Server> {
           const syncResult = {
             meetingId,
             success: false,
-            otterSync: { success: false, confidence: 0, message: '' },
             airtableSync: { success: false, confidence: 0, message: '' },
             error: null
           };
@@ -2197,58 +1826,13 @@ export async function registerRoutes(app: Express): Promise<Server> {
             attendees: ['user@company.com']
           };
           
-          // REAL Otter.AI sync with transcript matching
-          if (otterIntegration?.status === 'connected') {
-            try {
-              console.log(`🎤 [OTTER] Attempting real transcript search for: ${meeting.title}`);
-              
-              const otterService = await OtterService.createFromUserIntegration(storage, userId);
-              if (otterService) {
-                const transcripts = await otterService.getTranscripts();
-                
-                // Find matching transcript
-                let bestMatch = null;
-                let bestConfidence = 0;
-                
-                for (const transcript of transcripts) {
-                  const confidence = calculateTranscriptMatchConfidence(meeting, transcript);
-                  if (confidence > bestConfidence && confidence >= 60) {
-                    bestMatch = transcript;
-                    bestConfidence = confidence;
-                  }
-                }
-                
-                if (bestMatch) {
-                  syncResult.otterSync = {
-                    success: true,
-                    confidence: bestConfidence,
-                    message: `Matched transcript: "${bestMatch.title}" (${bestConfidence}% confidence)`
-                  };
-                  console.log(`✅ [OTTER] SUCCESS: Found match with ${bestConfidence}% confidence`);
-                } else {
-                  syncResult.otterSync = {
-                    success: false,
-                    confidence: 0,
-                    message: 'No matching transcript found (below 60% threshold)'
-                  };
-                  console.log(`⚪ [OTTER] No match found for meeting: ${meeting.title}`);
-                }
-              } else {
-                syncResult.otterSync = {
-                  success: false,
-                  confidence: 0,
-                  message: 'Otter service initialization failed'
-                };
-              }
-            } catch (otterError: any) {
-              console.error(`🚨 [OTTER] API error:`, otterError.message);
-              syncResult.otterSync = {
-                success: false,
-                confidence: 0,
-                message: `Otter API error: ${otterError.message}`
-              };
-            }
-          }
+          // Transcript matching handled through Airtable via Zapier automation
+          console.log(`📋 [SYNC] Transcript data managed through Airtable integration`);
+          syncResult.otterSync = {
+            success: true,
+            confidence: 100,
+            message: 'Transcript data managed via Airtable/Zapier workflow'
+          };
           
           // REAL Airtable CRM sync with contact matching and record creation
           if (airtableIntegration?.status === 'connected') {

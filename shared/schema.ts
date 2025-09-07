@@ -36,6 +36,15 @@ export const users = pgTable("users", {
   firstName: varchar("first_name"),
   lastName: varchar("last_name"),
   profileImageUrl: varchar("profile_image_url"),
+  meetingEnrichmentPreferences: jsonb("meeting_enrichment_preferences").default({
+    auto_categorize: true,
+    require_outcome: true,
+    default_meeting_type: null,
+    notification_preferences: {
+      immediate: true,
+      daily_digest: false
+    }
+  }),
   createdAt: timestamp("created_at").defaultNow(),
   updatedAt: timestamp("updated_at").defaultNow(),
 });
@@ -108,7 +117,7 @@ export const contentItems = pgTable("content_items", {
 
 // Integration provider enum
 export const integrationProviderEnum = pgEnum('integration_provider', [
-  'airtable', 'wordpress', 'transistor', 'elevenlabs', 'openai', 'adobe_stock', 'otter', 'outlook'
+  'airtable', 'wordpress', 'transistor', 'elevenlabs', 'openai', 'adobe_stock', 'outlook'
 ]);
 
 // Integration status enum
@@ -143,6 +152,23 @@ export const analyticsSnapshots = pgTable("analytics_snapshots", {
   timestamp: timestamp("timestamp").defaultNow(),
   createdAt: timestamp("created_at").defaultNow(),
 });
+
+// Airtable sync logs for enhanced meeting enrichment tracking
+export const airtableSyncLogs = pgTable("airtable_sync_logs", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  userId: varchar("user_id").references(() => users.id).notNull(),
+  operationType: varchar("operation_type").notNull(), // 'fetch', 'enrich', 'sync'
+  status: varchar("status").notNull(), // 'pending', 'completed', 'failed'
+  enrichmentData: jsonb("enrichment_data").default({}),
+  meetingMetadata: jsonb("meeting_metadata").default({}),
+  recordId: varchar("record_id"), // Airtable record ID
+  errorDetails: text("error_details"),
+  createdAt: timestamp("created_at").defaultNow(),
+  updatedAt: timestamp("updated_at").defaultNow(),
+}, (table) => [
+  index("idx_airtable_enrichment_status").on(table.status, table.operationType),
+  index("idx_airtable_sync_user").on(table.userId, table.createdAt),
+]);
 
 // Define relations
 export const usersRelations = relations(users, ({ many }) => ({
@@ -206,6 +232,13 @@ export const analyticsSnapshotsRelations = relations(analyticsSnapshots, ({ one 
   }),
 }));
 
+export const airtableSyncLogsRelations = relations(airtableSyncLogs, ({ one }) => ({
+  user: one(users, {
+    fields: [airtableSyncLogs.userId],
+    references: [users.id],
+  }),
+}));
+
 // Schema types
 export type UpsertUser = typeof users.$inferInsert;
 export type User = typeof users.$inferSelect;
@@ -227,6 +260,9 @@ export type InsertUserIntegration = typeof userIntegrations.$inferInsert;
 
 export type AnalyticsSnapshot = typeof analyticsSnapshots.$inferSelect;
 export type InsertAnalyticsSnapshot = typeof analyticsSnapshots.$inferInsert;
+
+export type AirtableSyncLog = typeof airtableSyncLogs.$inferSelect;
+export type InsertAirtableSyncLog = typeof airtableSyncLogs.$inferInsert;
 
 // Zod schemas for validation
 export const insertOrganizationSchema = createInsertSchema(organizations).omit({
