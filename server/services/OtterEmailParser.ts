@@ -1,4 +1,4 @@
-const crypto = require('crypto');
+import crypto from 'crypto';
 
 /**
  * OtterEmailParser - Parses Otter.AI meeting emails to extract transcript data
@@ -206,4 +206,4 @@ class OtterEmailParser {
   }
 }
 
-module.exports = OtterEmailParser;
+export default OtterEmailParser;
