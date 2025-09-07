@@ -1080,14 +1080,21 @@ export async function registerRoutes(app: Express): Promise<Server> {
         console.log('⚠️ [SYNC] Otter not connected, using fallback data');
       }
       
-      // CRITICAL FIX: Never use fallback if real data exists, regardless of usingFallback flag
-      if (transcripts && transcripts.length > 0) {
-        // Always use real data when available
+      // CRITICAL FIX: Base decision entirely on transcript existence, not flag status
+      console.log('🔍 [DEBUG] Final data source decision - transcripts array:', {
+        exists: !!transcripts,
+        isArray: Array.isArray(transcripts),
+        length: transcripts?.length || 0,
+        samples: transcripts?.slice(0, 2).map((t: any) => t.title) || []
+      });
+      
+      if (transcripts && Array.isArray(transcripts) && transcripts.length > 0) {
+        // Real data exists - ALWAYS use it
         usingFallback = false;
         console.log('✅ [SYNC] CONFIRMED: Using real API data -', transcripts.length, 'transcripts');
         console.log('📋 [SYNC] Real transcript titles:', transcripts.map((t: any) => t.title));
       } else {
-        // Only use fallback when NO real data exists
+        // No real data - use fallback
         transcripts = fallbackTranscripts;
         usingFallback = true;
         console.log('🔄 [SYNC] FALLBACK ACTIVE: Using realistic test data -', transcripts.length, 'transcripts');
