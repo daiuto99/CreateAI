@@ -9,6 +9,7 @@ import Header from "@/components/layout/header";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
+import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { useLocation } from "wouter";
 import { apiRequest } from "@/lib/queryClient";
 
@@ -18,6 +19,55 @@ export default function Sync() {
   const [, setLocation] = useLocation();
   const queryClient = useQueryClient();
   const [dismissedMeetings, setDismissedMeetings] = useState(new Set<string>());
+  const [selectedMeetingId, setSelectedMeetingId] = useState<string | null>(null);
+  const [isMeetingModalOpen, setIsMeetingModalOpen] = useState(false);
+
+  /**
+   * 🛠️ Fix Meeting ID Matching Logic
+   * 
+   * Ensures the correct meeting is matched and displayed in the modal.
+   * Improves matching logic to handle exact ID match, title match, and fallback.
+   */
+  function findMeetingByIdOrTitle(selectedMeetingId: string, meetings: any[]) {
+    // Normalize ID
+    const normalizedId = selectedMeetingId.trim().toLowerCase();
+
+    // Try direct ID match
+    let matched = meetings.find(m => m.id?.trim().toLowerCase() === normalizedId);
+    if (matched) return matched;
+
+    // Try title includes match
+    matched = meetings.find(m => m.title?.toLowerCase().includes(normalizedId));
+    if (matched) return matched;
+
+    // Log failure and fallback
+    console.warn(`Meeting not found for ID: ${selectedMeetingId}`);
+    return {
+      id: 'fallback',
+      title: 'Meeting Not Found',
+      description: 'No matching meeting found. Please check the ID or title.',
+      date: new Date().toISOString(),
+      attendees: [],
+      hasOtterMatch: false,
+      hasAirtableMatch: false
+    };
+  }
+
+  // Get the currently selected meeting using improved matching logic
+  const selectedMeeting = selectedMeetingId ? findMeetingByIdOrTitle(selectedMeetingId, meetings) : null;
+
+  // Function to handle meeting click
+  const handleMeetingClick = (meetingId: string) => {
+    console.log(`🔍 Opening meeting modal for ID: ${meetingId}`);
+    setSelectedMeetingId(meetingId);
+    setIsMeetingModalOpen(true);
+  };
+
+  // Function to close modal
+  const handleCloseModal = () => {
+    setIsMeetingModalOpen(false);
+    setSelectedMeetingId(null);
+  };
   
   // Fetch user integrations to show real connection status
   const { data: integrations = [] } = useQuery<UserIntegration[]>({
