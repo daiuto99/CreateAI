@@ -9,6 +9,7 @@ import Header from "@/components/layout/header";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
+import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { useLocation } from "wouter";
 import { apiRequest } from "@/lib/queryClient";
 
@@ -18,6 +19,11 @@ export default function Sync() {
   const [, setLocation] = useLocation();
   const queryClient = useQueryClient();
   const [dismissedMeetings, setDismissedMeetings] = useState(new Set<string>());
+  
+  // Modal state for Details
+  const [selectedMeeting, setSelectedMeeting] = useState<any>(null);
+  const [isDetailsModalOpen, setIsDetailsModalOpen] = useState(false);
+  const [meetingDetails, setMeetingDetails] = useState<any>(null);
   
   // Fetch user integrations to show real connection status
   const { data: integrations = [] } = useQuery<UserIntegration[]>({
@@ -111,6 +117,67 @@ export default function Sync() {
       toast({
         title: "Error",
         description: "Failed to create Airtable record. Please try again.",
+        variant: "destructive"
+      });
+    }
+  });
+
+  // Mutation for creating contacts from meetings (NEW SYNC FEATURE)
+  const createContactFromMeeting = useMutation({
+    mutationFn: async (meeting: any) => {
+      const response = await fetch('/api/sync/create-contact', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          meetingId: meeting.id,
+          meetingTitle: meeting.title,
+          attendees: meeting.attendees
+        })
+      });
+      if (!response.ok) {
+        const error = await response.json();
+        throw new Error(error.message || 'Failed to create contact');
+      }
+      return response.json();
+    },
+    onSuccess: (data: any) => {
+      queryClient.invalidateQueries({ queryKey: ['/api/meetings'] });
+      toast({
+        title: "Contact Created!",
+        description: data.message || `Contact "${data.contact?.name}" created successfully`
+      });
+    },
+    onError: (error: any) => {
+      toast({
+        title: "Failed to Create Contact",
+        description: error.message || "Could not create contact record",
+        variant: "destructive"
+      });
+    }
+  });
+
+  // Mutation for fetching meeting details (NEW SYNC FEATURE)
+  const fetchMeetingDetails = useMutation({
+    mutationFn: async (meetingId: string) => {
+      const response = await fetch(`/api/sync/meeting-details/${meetingId}`, {
+        method: 'GET',
+        headers: { 'Content-Type': 'application/json' }
+      });
+      if (!response.ok) {
+        const error = await response.json();
+        throw new Error(error.message || 'Failed to fetch meeting details');
+      }
+      return response.json();
+    },
+    onSuccess: (data: any) => {
+      setMeetingDetails(data.meeting);
+      setSelectedMeeting(data.meeting);
+      setIsDetailsModalOpen(true);
+    },
+    onError: (error: any) => {
+      toast({
+        title: "Failed to Load Details",
+        description: error.message || "Could not fetch meeting details",
         variant: "destructive"
       });
     }
@@ -276,15 +343,37 @@ export default function Sync() {
                         </p>
                       </div>
                       <div className="flex items-center space-x-2">
+                        <Button 
+                          size="sm" 
+                          variant="outline"
+                          onClick={() => fetchMeetingDetails.mutate(meeting.id)}
+                          disabled={fetchMeetingDetails.isPending}
+                          data-testid={`button-details-${meeting.id}`}
+                        >
+                          <i className="fas fa-info-circle mr-1"></i>
+                          {fetchMeetingDetails.isPending ? 'Loading...' : 'Details'}
+                        </Button>
                         {!meeting.hasAirtableMatch && (
                           <Button 
                             size="sm" 
                             variant="outline"
-                            onClick={() => createAirtableRecord.mutate(meeting)}
-                            disabled={createAirtableRecord.isPending}
+                            onClick={() => createContactFromMeeting.mutate(meeting)}
+                            disabled={createContactFromMeeting.isPending}
+                            data-testid={`button-create-contact-${meeting.id}`}
                           >
-                            <i className="fas fa-plus mr-1"></i>
-                            Create Record
+                            <i className="fas fa-user-plus mr-1"></i>
+                            {createContactFromMeeting.isPending ? 'Creating...' : 'Create Record'}
+                          </Button>
+                        )}
+                        {meeting.hasAirtableMatch && (
+                          <Button 
+                            size="sm" 
+                            variant="outline"
+                            disabled
+                            data-testid={`button-contact-exists-${meeting.id}`}
+                          >
+                            <i className="fas fa-check mr-1"></i>
+                            Contact Exists
                           </Button>
                         )}
                         <Button 
@@ -514,6 +603,130 @@ export default function Sync() {
               </CardContent>
             </Card>
           </div>
+
+          {/* Meeting Details Modal */}
+          <Dialog open={isDetailsModalOpen} onOpenChange={setIsDetailsModalOpen}>
+            <DialogContent className="max-w-2xl max-h-[80vh] overflow-y-auto">
+              <DialogHeader>
+                <DialogTitle className="flex items-center space-x-2">
+                  <i className="fas fa-info-circle text-blue-500"></i>
+                  <span>Meeting Details</span>
+                </DialogTitle>
+                <DialogDescription>
+                  Complete information and attendee details for this meeting
+                </DialogDescription>
+              </DialogHeader>
+              
+              {meetingDetails && (
+                <div className="space-y-6">
+                  {/* Basic Meeting Info */}
+                  <div className="grid grid-cols-2 gap-4">
+                    <div>
+                      <h4 className="font-medium text-sm text-muted-foreground">Meeting Title</h4>
+                      <p className="font-medium">{meetingDetails.title}</p>
+                    </div>
+                    <div>
+                      <h4 className="font-medium text-sm text-muted-foreground">Type</h4>
+                      <Badge variant="outline">{meetingDetails.meetingType}</Badge>
+                    </div>
+                    <div>
+                      <h4 className="font-medium text-sm text-muted-foreground">Date & Time</h4>
+                      <p>{meetingDetails.date ? new Date(meetingDetails.date.replace(/(\d{4})(\d{2})(\d{2})T(\d{2})(\d{2})(\d{2})/, '$1-$2-$3T$4:$5:$6')).toLocaleString() : 'Unknown'}</p>
+                    </div>
+                    <div>
+                      <h4 className="font-medium text-sm text-muted-foreground">Duration</h4>
+                      <p>{meetingDetails.duration}</p>
+                    </div>
+                    <div>
+                      <h4 className="font-medium text-sm text-muted-foreground">Location</h4>
+                      <p>{meetingDetails.location}</p>
+                    </div>
+                    <div>
+                      <h4 className="font-medium text-sm text-muted-foreground">Attendees</h4>
+                      <p>{meetingDetails.attendeeCount} people</p>
+                    </div>
+                  </div>
+
+                  {/* Contact Name Suggestion */}
+                  <div className="p-3 border rounded-lg bg-blue-50 dark:bg-blue-900/20">
+                    <h4 className="font-medium text-sm text-blue-800 dark:text-blue-200 mb-2">
+                      <i className="fas fa-lightbulb mr-2"></i>
+                      Suggested Contact Name
+                    </h4>
+                    <p className="text-blue-700 dark:text-blue-300 font-medium">
+                      {meetingDetails.suggestedContactName}
+                    </p>
+                    <p className="text-xs text-blue-600 dark:text-blue-400 mt-1">
+                      Extracted from meeting title using intelligent parsing
+                    </p>
+                  </div>
+
+                  {/* Description */}
+                  {meetingDetails.description && meetingDetails.description !== 'No description available' && (
+                    <div>
+                      <h4 className="font-medium text-sm text-muted-foreground mb-2">Description</h4>
+                      <p className="text-sm bg-muted/20 p-3 rounded-lg">{meetingDetails.description}</p>
+                    </div>
+                  )}
+
+                  {/* Attendees List */}
+                  {meetingDetails.attendees && meetingDetails.attendees.length > 0 && (
+                    <div>
+                      <h4 className="font-medium text-sm text-muted-foreground mb-3">
+                        Attendees ({meetingDetails.attendees.length})
+                      </h4>
+                      <div className="space-y-2">
+                        {meetingDetails.attendees.map((attendee: any, index: number) => (
+                          <div key={index} className="flex items-center justify-between p-3 border rounded-lg">
+                            <div className="flex items-center space-x-3">
+                              <div className="w-8 h-8 bg-muted rounded-full flex items-center justify-center">
+                                <i className="fas fa-user text-xs text-muted-foreground"></i>
+                              </div>
+                              <div>
+                                <p className="font-medium text-sm">{attendee.name}</p>
+                                <p className="text-xs text-muted-foreground">{attendee.email}</p>
+                              </div>
+                            </div>
+                            <Badge variant={attendee.role === 'Required' ? 'default' : 'outline'} className="text-xs">
+                              {attendee.role}
+                            </Badge>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Action Buttons in Modal */}
+                  <div className="flex space-x-2 pt-4 border-t">
+                    {!meetingDetails.hasAirtableMatch && (
+                      <Button 
+                        onClick={() => {
+                          setIsDetailsModalOpen(false);
+                          createContactFromMeeting.mutate({
+                            id: meetingDetails.id,
+                            title: meetingDetails.title,
+                            attendees: meetingDetails.attendees?.map((a: any) => a.email) || []
+                          });
+                        }}
+                        disabled={createContactFromMeeting.isPending}
+                        className="flex-1"
+                      >
+                        <i className="fas fa-user-plus mr-2"></i>
+                        {createContactFromMeeting.isPending ? 'Creating Contact...' : 'Create Contact Record'}
+                      </Button>
+                    )}
+                    <Button 
+                      variant="outline" 
+                      onClick={() => setIsDetailsModalOpen(false)}
+                      className="flex-1"
+                    >
+                      Close
+                    </Button>
+                  </div>
+                </div>
+              )}
+            </DialogContent>
+          </Dialog>
         </div>
       </main>
     </div>
