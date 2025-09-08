@@ -193,41 +193,22 @@ export class AirtableService {
   }
 
   /**
-   * Create a new contact record in the first table
+   * Create a new contact record in the Contacts table
    */
-  async createContact(contactData: { name: string; email: string; description?: string }): Promise<any> {
+  async createContact(contactData: any): Promise<any> {
     try {
-      console.log('➕ [AirtableService] Creating contact:', contactData.name);
+      console.log('➕ [AirtableService] Creating contact:', contactData.Name || contactData.name);
       
-      // Get the first table name
-      const tablesResponse = await fetch(`https://api.airtable.com/v0/meta/bases/${this.baseId}/tables`, {
-        headers: {
-          'Authorization': `Bearer ${this.apiKey}`,
-          'Content-Type': 'application/json'
-        }
-      });
-
-      if (!tablesResponse.ok) {
-        throw new Error('Failed to fetch base schema');
-      }
-
-      const tablesData = await tablesResponse.json();
-      const firstTable = tablesData.tables?.[0];
-      
-      if (!firstTable) {
-        throw new Error('No tables found in base');
-      }
-
-      // Create the record
+      // Create the record in the Contacts table directly
       const recordData = {
         records: [
           {
-            fields: this.buildContactFields(contactData, firstTable.fields)
+            fields: contactData
           }
         ]
       };
 
-      const response = await fetch(`${this.baseUrl}/${encodeURIComponent(firstTable.name)}`, {
+      const response = await fetch(`${this.baseUrl}/Contacts`, {
         method: 'POST',
         headers: {
           'Authorization': `Bearer ${this.apiKey}`,

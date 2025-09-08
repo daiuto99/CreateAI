@@ -2565,6 +2565,277 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  // SYNC Module - Create Contact endpoint
+  app.post('/api/sync/create-contact', isAuthenticated, async (req: any, res) => {
+    try {
+      const userId = req.user.claims.sub;
+      const { meetingId, meetingTitle, attendees } = req.body;
+
+      console.log('🆕 [CREATE CONTACT] User:', userId, 'Meeting:', meetingTitle);
+
+      if (!meetingTitle) {
+        return res.status(400).json({ message: "Meeting title is required" });
+      }
+
+      // Extract contact name from meeting title patterns
+      const extractContactName = (title: string): string => {
+        // Remove common meeting words first
+        let cleanTitle = title.replace(/\b(meeting|call|session|sync|update|check\-?in)\b/gi, '').trim();
+        
+        // Pattern 1: "Name | something" -> "Name"
+        let match = cleanTitle.match(/^([^|]+)\s*\|/);
+        if (match) {
+          return match[1].trim();
+        }
+        
+        // Pattern 2: "Meet with Name" -> "Name"
+        match = cleanTitle.match(/meet\s+with\s+(.+)/i);
+        if (match) {
+          return match[1].trim();
+        }
+        
+        // Pattern 3: "Name - something" -> "Name"
+        match = cleanTitle.match(/^([^-]+)\s*-/);
+        if (match) {
+          return match[1].trim();
+        }
+        
+        // Pattern 4: Just take first 1-2 words (likely a name)
+        const words = cleanTitle.split(/\s+/).filter(w => w.length > 0);
+        if (words.length >= 1) {
+          // If first word looks like a name (capitalized), use it
+          if (words[0].charAt(0) === words[0].charAt(0).toUpperCase()) {
+            return words.length >= 2 && words[1].charAt(0) === words[1].charAt(0).toUpperCase() 
+              ? `${words[0]} ${words[1]}` // First and last name
+              : words[0]; // Just first name
+          }
+        }
+        
+        // Fallback: use whole cleaned title
+        return cleanTitle || title;
+      };
+
+      // Auto-determine relationship type from meeting title
+      const determineRelationshipType = (title: string): string => {
+        const lowerTitle = title.toLowerCase();
+        if (lowerTitle.includes('coaching') || lowerTitle.includes('rtlc')) return 'Client';
+        if (lowerTitle.includes('partner') || lowerTitle.includes('collaboration')) return 'Partner';
+        if (lowerTitle.includes('team') || lowerTitle.includes('internal')) return 'Alumni';
+        return 'Prospect';
+      };
+
+      const contactName = extractContactName(meetingTitle);
+      const relationshipType = determineRelationshipType(meetingTitle);
+
+      console.log('🏷️ [CREATE CONTACT] Extracted name:', contactName, 'Type:', relationshipType);
+
+      // Get Airtable service
+      const { AirtableService } = await import('./services/airtable');
+      const airtableService = await AirtableService.createFromUserIntegration(storage, userId);
+
+      if (!airtableService) {
+        return res.status(400).json({ message: "Airtable integration not found or not connected" });
+      }
+
+      // Extract email from attendees if available
+      let contactEmail = '';
+      if (attendees && Array.isArray(attendees)) {
+        const attendeeEmails = attendees.filter((email: string) => email.includes('@'));
+        contactEmail = attendeeEmails[0] || '';
+      }
+
+      // Create contact in Airtable
+      const contactData = {
+        Name: contactName,
+        Email: contactEmail || undefined,
+        'Last Contacted': new Date().toISOString().split('T')[0], // Today's date
+        'Relationship Type': relationshipType,
+        Notes: `Created from meeting: ${meetingTitle}`
+      };
+
+      console.log('📝 [CREATE CONTACT] Creating contact with data:', contactData);
+
+      // Create the contact using Airtable service
+      const createdContact = await airtableService.createContact(contactData);
+
+      console.log('✅ [CREATE CONTACT] Contact created successfully:', createdContact.id);
+
+      res.json({
+        success: true,
+        message: `Contact "${contactName}" created successfully`,
+        contact: {
+          id: createdContact.id,
+          name: contactName,
+          email: contactEmail,
+          relationshipType: relationshipType
+        }
+      });
+
+    } catch (error: any) {
+      console.error('❌ [CREATE CONTACT] Error:', error.message);
+      res.status(500).json({ 
+        message: error.message || "Failed to create contact" 
+      });
+    }
+  });
+
+  // SYNC Module - Meeting Details endpoint
+  app.get('/api/sync/meeting-details/:meetingId', isAuthenticated, async (req: any, res) => {
+    try {
+      const userId = req.user.claims.sub;
+      const { meetingId } = req.params;
+
+      console.log('🔍 [MEETING DETAILS] User:', userId, 'Meeting ID:', meetingId);
+
+      if (!meetingId) {
+        return res.status(400).json({ message: "Meeting ID is required" });
+      }
+
+      // Get meeting from calendar data (using the same logic as /api/meetings)
+      const integrations = await storage.getUserIntegrations(userId);
+      const outlookIntegration = integrations.find(int => int.provider === 'outlook');
+      
+      if (!outlookIntegration || outlookIntegration.status !== 'connected') {
+        return res.status(404).json({ message: "Calendar integration not found" });
+      }
+
+      const credentials = outlookIntegration.credentials as any;
+      if (!credentials?.feedUrl) {
+        return res.status(404).json({ message: "Calendar feed URL not configured" });
+      }
+
+      // Fetch calendar data
+      const response = await fetch(credentials.feedUrl, { 
+        timeout: 30000,
+        headers: {
+          'User-Agent': 'CreateAI-Calendar-Sync/1.0'
+        }
+      });
+      
+      if (!response.ok) {
+        throw new Error(`Calendar fetch failed: ${response.status}`);
+      }
+
+      const icalData = await response.text();
+      
+      // Parse iCal data to find the specific meeting
+      const events = icalData.split('BEGIN:VEVENT').slice(1);
+      let targetMeeting = null;
+
+      for (const eventBlock of events) {
+        const lines = eventBlock.split('\n');
+        const event: any = {};
+        
+        for (const line of lines) {
+          const colonIndex = line.indexOf(':');
+          if (colonIndex > 0) {
+            const key = line.substring(0, colonIndex).trim();
+            const value = line.substring(colonIndex + 1).trim();
+            
+            if (key === 'UID') event.id = value;
+            if (key === 'SUMMARY') event.title = value;
+            if (key === 'DTSTART') event.startTime = value;
+            if (key === 'DTEND') event.endTime = value;
+            if (key === 'LOCATION') event.location = value;
+            if (key === 'DESCRIPTION') event.description = value;
+            if (key === 'ATTENDEE') {
+              if (!event.attendees) event.attendees = [];
+              event.attendees.push(value);
+            }
+          }
+        }
+
+        // Match by meeting ID
+        if (event.id === meetingId || 
+            `meeting-${event.startTime?.replace(/[^\d]/g, '')}` === meetingId) {
+          targetMeeting = event;
+          break;
+        }
+      }
+
+      if (!targetMeeting) {
+        return res.status(404).json({ message: "Meeting not found" });
+      }
+
+      // Calculate duration and enhanced details
+      let duration = 'Unknown';
+      let meetingType = 'Standard';
+      
+      if (targetMeeting.startTime && targetMeeting.endTime) {
+        const start = new Date(targetMeeting.startTime.replace(/(\d{4})(\d{2})(\d{2})T(\d{2})(\d{2})(\d{2})/, '$1-$2-$3T$4:$5:$6'));
+        const end = new Date(targetMeeting.endTime.replace(/(\d{4})(\d{2})(\d{2})T(\d{2})(\d{2})(\d{2})/, '$1-$2-$3T$4:$5:$6'));
+        const durationMs = end.getTime() - start.getTime();
+        const minutes = Math.round(durationMs / 60000);
+        duration = `${minutes} minutes`;
+      }
+
+      // Classify meeting type
+      const title = targetMeeting.title?.toLowerCase() || '';
+      if (title.includes('coaching') || title.includes('rtlc')) meetingType = 'Coaching Session';
+      else if (title.includes('sync') || title.includes('update')) meetingType = 'Sync Meeting';
+      else if (title.includes('partner') || title.includes('collaboration')) meetingType = 'Partnership';
+      else if (title.includes('demo') || title.includes('presentation')) meetingType = 'Demo/Presentation';
+
+      // Parse attendees
+      const attendeeList = targetMeeting.attendees ? 
+        targetMeeting.attendees.map((att: string) => {
+          const emailMatch = att.match(/mailto:([^;]+)/);
+          const nameMatch = att.match(/CN=([^;]+)/);
+          return {
+            email: emailMatch ? emailMatch[1] : att,
+            name: nameMatch ? nameMatch[1] : 'Unknown',
+            role: att.includes('ROLE=REQ-PARTICIPANT') ? 'Required' : 'Optional'
+          };
+        }) : [];
+
+      // Extract contact name suggestion
+      const extractContactName = (title: string): string => {
+        let cleanTitle = title.replace(/\b(meeting|call|session|sync|update|check\-?in)\b/gi, '').trim();
+        let match = cleanTitle.match(/^([^|]+)\s*\|/);
+        if (match) return match[1].trim();
+        match = cleanTitle.match(/meet\s+with\s+(.+)/i);
+        if (match) return match[1].trim();
+        match = cleanTitle.match(/^([^-]+)\s*-/);
+        if (match) return match[1].trim();
+        const words = cleanTitle.split(/\s+/).filter(w => w.length > 0);
+        if (words.length >= 1 && words[0].charAt(0) === words[0].charAt(0).toUpperCase()) {
+          return words.length >= 2 && words[1].charAt(0) === words[1].charAt(0).toUpperCase() 
+            ? `${words[0]} ${words[1]}` : words[0];
+        }
+        return cleanTitle || title;
+      };
+
+      const enhancedMeeting = {
+        id: targetMeeting.id,
+        title: targetMeeting.title,
+        date: targetMeeting.startTime,
+        endTime: targetMeeting.endTime,
+        duration: duration,
+        location: targetMeeting.location || 'Not specified',
+        description: targetMeeting.description || 'No description available',
+        attendees: attendeeList,
+        attendeeCount: attendeeList.length,
+        meetingType: meetingType,
+        suggestedContactName: extractContactName(targetMeeting.title || ''),
+        hasTranscript: false, // Will be determined by matching logic
+        hasAirtableMatch: false // Will be determined by matching logic
+      };
+
+      console.log('✅ [MEETING DETAILS] Meeting details retrieved successfully');
+
+      res.json({
+        success: true,
+        meeting: enhancedMeeting
+      });
+
+    } catch (error: any) {
+      console.error('❌ [MEETING DETAILS] Error:', error.message);
+      res.status(500).json({ 
+        message: error.message || "Failed to retrieve meeting details" 
+      });
+    }
+  });
+
   const httpServer = createServer(app);
   return httpServer;
 }
