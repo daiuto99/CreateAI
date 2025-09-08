@@ -328,8 +328,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
     
     try {
       const userId = req.user.claims.sub;
-      const { AirtableService } = await import('./services/airtable');
-      const airtableService = await AirtableService.createFromUserIntegration(storage, userId);
+      const { createAirtableServiceForRequest } = await import('./services/airtable');
+      const airtableService = await createAirtableServiceForRequest(req);
       
       if (!airtableService) {
         return res.json({ error: 'No Airtable integration' });
@@ -358,8 +358,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
     
     try {
       const userId = req.user.claims.sub;
-      const { AirtableService } = await import('./services/airtable');
-      const airtableService = await AirtableService.createFromUserIntegration(storage, userId);
+      const { createAirtableServiceForRequest } = await import('./services/airtable');
+      const airtableService = await createAirtableServiceForRequest(req);
       
       if (!airtableService) {
         return res.json({ error: 'No Airtable integration' });
@@ -1013,8 +1013,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
             const airtableCreds = integration.credentials as any;
             if (airtableCreds.apiKey && airtableCreds.baseId) {
               try {
-                const { AirtableService } = await import('./services/airtable');
-                const airtableService = new AirtableService(airtableCreds.apiKey, airtableCreds.baseId);
+                const { createAirtableServiceForRequest } = await import('./services/airtable');
+                const airtableService = await createAirtableServiceForRequest(req);
                 const connectionTest = await airtableService.testConnection();
                 
                 if (connectionTest.success) {
@@ -1458,9 +1458,13 @@ export async function registerRoutes(app: Express): Promise<Server> {
       // Transcripts are now fetched from Airtable Transcripts table with Processing Status = 'complete'
       console.log('📝 [SYNC] Fetching transcripts from Airtable Transcripts table...');
       try {
-        transcripts = await airtableService.getTranscripts();
-        console.log(`✅ [SYNC] Fetched ${transcripts.length} completed transcripts from Airtable`);
-        usingFallback = false;
+        const { createAirtableServiceForRequest } = await import('./services/airtable');
+        const airtableService = await createAirtableServiceForRequest(req);
+        if (airtableService) {
+          transcripts = await airtableService.getTranscripts();
+          console.log(`✅ [SYNC] Fetched ${transcripts.length} completed transcripts from Airtable`);
+          usingFallback = false;
+        }
       } catch (error: any) {
         console.error('❌ [SYNC] Failed to fetch transcripts from Airtable:', error.message);
         transcripts = [];
@@ -1497,8 +1501,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
           });
           
           // Import AirtableService dynamically to avoid circular dependency
-          const { AirtableService } = await import('./services/airtable');
-          const airtableService = await AirtableService.createFromUserIntegration(storage, userId);
+          const { createAirtableServiceForRequest } = await import('./services/airtable');
+          const airtableService = await createAirtableServiceForRequest(req);
           
           console.log('🔗 [DEBUG] AirtableService.createFromUserIntegration result:', {
             success: !!airtableService,
@@ -2413,8 +2417,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
               console.log(`📋 [BIGIN] Attempting real CRM operations for: ${meeting.title}`);
               
               // Import AirtableService dynamically
-              const { AirtableService } = await import('./services/airtable');
-              const airtableService = await AirtableService.createFromUserIntegration(storage, userId);
+              const { createAirtableServiceForRequest } = await import('./services/airtable');
+              const airtableService = await createAirtableServiceForRequest(req);
               if (airtableService) {
                 // Search for matching contacts
                 const contacts = await airtableService.getContactsForMeetings([meeting]);
@@ -2562,9 +2566,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(400).json({ error: 'Airtable integration not configured' });
       }
       
-      const { AirtableService } = await import('./services/airtable');
-      const creds = airtableIntegration.credentials as any;
-      const airtableService = new AirtableService(creds.apiKey, creds.baseId);
+      const { createAirtableServiceForRequest } = await import('./services/airtable');
+      const airtableService = await createAirtableServiceForRequest(req);
       
       const record = await airtableService.createContact({
         name: meeting.title,
@@ -2664,8 +2667,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
       console.log('🏷️ [CREATE CONTACT] Extracted name:', contactName, 'Type:', relationshipType);
 
       // Get Airtable service
-      const { AirtableService } = await import('./services/airtable');
-      const airtableService = await AirtableService.createFromUserIntegration(storage, userId);
+      const { createAirtableServiceForRequest } = await import('./services/airtable');
+      const airtableService = await createAirtableServiceForRequest(req);
 
       if (!airtableService) {
         return res.status(400).json({ message: "Airtable integration not found or not connected" });
