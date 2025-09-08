@@ -45,7 +45,6 @@ export interface IStorage {
   // Integration operations
   getUserIntegrations(userId: string): Promise<UserIntegration[]>;
   upsertUserIntegration(integration: InsertUserIntegration): Promise<UserIntegration>;
-  deleteUserIntegration(userId: string, provider: string): Promise<void>;
   
   // Analytics operations
   getAnalyticsSnapshots(organizationId: string, source?: string): Promise<AnalyticsSnapshot[]>;
@@ -195,17 +194,6 @@ export class DatabaseStorage implements IStorage {
       })
       .returning();
     return result;
-  }
-
-  async deleteUserIntegration(userId: string, provider: string): Promise<void> {
-    await db
-      .delete(userIntegrations)
-      .where(
-        and(
-          eq(userIntegrations.userId, userId),
-          eq(userIntegrations.provider, provider)
-        )
-      );
   }
 
   // Analytics operations

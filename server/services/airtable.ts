@@ -193,22 +193,41 @@ export class AirtableService {
   }
 
   /**
-   * Create a new contact record in the Contacts table
+   * Create a new contact record in the first table
    */
-  async createContact(contactData: any): Promise<any> {
+  async createContact(contactData: { name: string; email: string; description?: string }): Promise<any> {
     try {
-      console.log('➕ [AirtableService] Creating contact:', contactData.Name || contactData.name);
+      console.log('➕ [AirtableService] Creating contact:', contactData.name);
       
-      // Create the record in the Contacts table directly
+      // Get the first table name
+      const tablesResponse = await fetch(`https://api.airtable.com/v0/meta/bases/${this.baseId}/tables`, {
+        headers: {
+          'Authorization': `Bearer ${this.apiKey}`,
+          'Content-Type': 'application/json'
+        }
+      });
+
+      if (!tablesResponse.ok) {
+        throw new Error('Failed to fetch base schema');
+      }
+
+      const tablesData = await tablesResponse.json();
+      const firstTable = tablesData.tables?.[0];
+      
+      if (!firstTable) {
+        throw new Error('No tables found in base');
+      }
+
+      // Create the record
       const recordData = {
         records: [
           {
-            fields: contactData
+            fields: this.buildContactFields(contactData, firstTable.fields)
           }
         ]
       };
 
-      const response = await fetch(`${this.baseUrl}/Contacts`, {
+      const response = await fetch(`${this.baseUrl}/${encodeURIComponent(firstTable.name)}`, {
         method: 'POST',
         headers: {
           'Authorization': `Bearer ${this.apiKey}`,
@@ -324,111 +343,15 @@ export class AirtableService {
   }
 
   /**
-   * Get transcripts with Processing Status = 'complete' from Transcripts table
-   */
-  async getTranscripts(): Promise<any[]> {
-    try {
-      console.log('📝 [AirtableService] Fetching completed transcripts from Transcripts table');
-      
-      const filterFormula = "{Processing Status} = 'complete'";
-      const url = `${this.baseUrl}/Transcripts?filterByFormula=${encodeURIComponent(filterFormula)}&maxRecords=100`;
-      
-      console.log('🌐 [AirtableService] Transcripts URL:', url);
-      
-      const response = await fetch(url, {
-        headers: {
-          'Authorization': `Bearer ${this.apiKey}`,
-          'Content-Type': 'application/json'
-        }
-      });
-
-      if (!response.ok) {
-        const errorText = await response.text();
-        console.log('❌ [AirtableService] Transcripts query failed:', response.status, errorText);
-        return [];
-      }
-
-      const data = await response.json() as AirtableResponse;
-      
-      const transcripts = data.records.map(record => ({
-        id: record.id,
-        title: record.fields.Title || record.fields.title || 'Untitled Transcript',
-        status: record.fields['Processing Status'],
-        content: record.fields['Transcript Content'] || record.fields.transcript || '',
-        meetingDate: record.fields['Meeting Date'],
-        duration: record.fields.Duration,
-        participants: record.fields.Participants || [],
-        otterId: record.fields['Otter ID'],
-        created: record.createdTime,
-        source: 'airtable-transcripts',
-        rawFields: record.fields
-      }));
-
-      console.log(`✅ [AirtableService] Fetched ${transcripts.length} completed transcripts`);
-      return transcripts;
-
-    } catch (error: any) {
-      console.error('🚨 [AirtableService] Error fetching transcripts:', error.message);
-      return [];
-    }
-  }
-
-  /**
-   * Get all contacts from Contacts table (for debugging)
-   */
-  async getContactsRaw(): Promise<any[]> {
-    try {
-      console.log('👥 [AirtableService] Fetching all contacts from Contacts table');
-      
-      const url = `${this.baseUrl}/Contacts?maxRecords=100`;
-      
-      const response = await fetch(url, {
-        headers: {
-          'Authorization': `Bearer ${this.apiKey}`,
-          'Content-Type': 'application/json'
-        }
-      });
-
-      if (!response.ok) {
-        const errorText = await response.text();
-        console.log('❌ [AirtableService] Contacts query failed:', response.status, errorText);
-        return [];
-      }
-
-      const data = await response.json() as AirtableResponse;
-      
-      const contacts = data.records.map(record => ({
-        id: record.id,
-        name: record.fields.Name || 'Unknown Contact',
-        company: record.fields.Company || '',
-        email: record.fields.Email || '',
-        phone: record.fields.Phone || '',
-        lastContacted: record.fields['Last Contacted'],
-        relationshipType: record.fields['Relationship Type'],
-        notes: record.fields.Notes || '',
-        created: record.createdTime,
-        source: 'airtable-contacts',
-        rawFields: record.fields
-      }));
-
-      console.log(`✅ [AirtableService] Fetched ${contacts.length} contacts from Contacts table`);
-      return contacts;
-
-    } catch (error: any) {
-      console.error('🚨 [AirtableService] Error fetching contacts:', error.message);
-      return [];
-    }
-  }
-
-  /**
-   * Get contacts for specific meetings - now uses proper Contacts table
+   * Get contacts for specific meetings - optimized bulk search
    */
   async getContactsForMeetings(meetings: any[]): Promise<any[]> {
     try {
       console.log(`📇 [AirtableService] Getting contacts for ${meetings.length} meetings`);
       
-      // Use the new getContactsRaw method that properly queries the Contacts table
-      const allContacts = await this.getContactsRaw();
+      // For now, just return all contacts since this is more efficient than individual searches
+      // In a real implementation, you might want to filter by meeting participants/attendees
+      const allContacts = await this.getContacts();
       
       console.log(`✅ [AirtableService] Retrieved ${allContacts.length} contacts for meetings`);
       return allContacts;
@@ -450,22 +373,4 @@ export class AirtableService {
     }
     return null;
   }
-}
-
-// ⬇️ ADD factory helper for request-scoped usage
-import type { Request } from 'express';
-import { extractAuth } from '../auth/context';
-import { storage } from '../storage';
-
-export async function createAirtableServiceForRequest(req: Request) {
-  const a = extractAuth(req);
-  const userId = a.userId || (req.headers['x-user-id'] as string) || (req.query.userId as string) || (req as any).body?.userId || process.env.AUTH_DEV_USER_ID;
-  if (!userId) throw new Error('[Airtable] No authenticated user on request');
-  return AirtableService.createFromUserIntegration(storage, userId);
-}
-
-// For completed transcripts:
-export async function listCompletedTranscripts(base: any) {
-  const filterByFormula = "({Transcript Processing Status} = 'complete')";
-  return base('Transcripts').select({ filterByFormula, pageSize: 100 }).all();
 }

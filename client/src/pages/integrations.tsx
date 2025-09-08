@@ -249,32 +249,6 @@ export default function Integrations() {
     },
   });
 
-  const disconnectMutation = useMutation({
-    mutationFn: async (provider: string) => {
-      const response = await fetch(`/api/integrations/${provider}`, {
-        method: 'DELETE',
-        headers: { 'Content-Type': 'application/json' }
-      });
-      if (!response.ok) {
-        throw new Error('Failed to disconnect integration');
-      }
-      return response.json();
-    },
-    onSuccess: (result) => {
-      queryClient.invalidateQueries({ queryKey: ['/api/integrations'] });
-      toast({ 
-        title: 'Integration disconnected', 
-        description: result.message || 'Integration has been successfully disconnected' 
-      });
-    },
-    onError: (error) => {
-      toast({ 
-        title: 'Failed to disconnect', 
-        description: error.message, 
-        variant: 'destructive' 
-      });
-    },
-  });
 
   const getIntegrationByProvider = (provider: string) => {
     return integrations.find(integration => integration.provider === provider);
@@ -333,11 +307,6 @@ export default function Integrations() {
     });
   };
 
-  const handleDisconnect = (provider: string) => {
-    if (confirm(`Are you sure you want to disconnect ${provider}? You'll need to reconfigure it to use it again.`)) {
-      disconnectMutation.mutate(provider);
-    }
-  };
 
   if (isLoading) {
     return (
@@ -441,15 +410,8 @@ export default function Integrations() {
                       >
                         {testConnectionMutation.isPending ? 'Testing...' : 'Test Connection'}
                       </Button>
-                      <Button 
-                        variant="outline" 
-                        size="sm" 
-                        className="flex-1"
-                        onClick={() => handleDisconnect(provider)}
-                        disabled={disconnectMutation.isPending}
-                        data-testid={`button-disconnect-${provider}`}
-                      >
-                        {disconnectMutation.isPending ? 'Disconnecting...' : 'Disconnect'}
+                      <Button variant="outline" size="sm" className="flex-1">
+                        Disconnect
                       </Button>
                     </div>
                   </div>

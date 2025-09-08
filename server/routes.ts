@@ -1,432 +1,23 @@
 import type { Express } from "express";
 import { createServer, type Server } from "http";
 import { storage } from "./storage";
-// Import improved auth context and middleware
-import { extractAuth } from './auth/context';
-import { attachAuth } from './auth/middleware';
-import { createAirtableServiceForRequest } from './services/airtable';
-import type { Request, Response, NextFunction } from 'express';
-
-// Enhanced auth middleware that sets req.auth consistently
-function requireAuth(req: Request, res: Response, next: NextFunction) {
-  const auth = extractAuth(req);
-  if (!auth.userId) {
-    return res.status(401).json({ message: 'Authentication required' });
+// Basic auth middleware for Firebase sessions
+const isAuthenticated = (req: any, res: any, next: any) => {
+  if (req.session && req.session.user && req.session.user.claims) {
+    req.user = req.session.user;
+    return next();
   }
-  next();
-}
-
-// Legacy alias for backward compatibility
-const isAuthenticated = requireAuth;
+  return res.status(401).json({ message: "Authentication required" });
+};
 import { openaiService } from "./services/openai";
 import { 
   insertContentProjectSchema,
   insertContentItemSchema,
   insertUserIntegrationSchema 
 } from "@shared/schema";
-import { requestId, log, withCtx } from './services/logger';
-import { processMeeting } from './services/sync';
-
-// Debug helper function for Airtable integration
-async function debugAirtableIntegration(airtableIntegration: any) {
-  console.log('\n🔍 === AIRTABLE DEBUG START ===');
-  
-  if (!airtableIntegration) {
-    console.log('❌ No Airtable integration found');
-    return null;
-  }
-  
-  console.log('✅ Airtable Integration Status:', airtableIntegration.status);
-  console.log('🔑 API Key exists:', !!airtableIntegration.credentials?.apiKey);
-  console.log('🏠 Base ID:', airtableIntegration.credentials?.baseId);
-  
-  // Test basic connection
-  try {
-    const baseUrl = `https://api.airtable.com/v0/meta/bases/${airtableIntegration.credentials?.baseId}`;
-    console.log('🌐 Testing connection to:', baseUrl);
-    
-    const baseResponse = await fetch(baseUrl, {
-      headers: {
-        'Authorization': `Bearer ${airtableIntegration.credentials?.apiKey}`,
-        'User-Agent': 'CreateAI-Debug/1.0'
-      }
-    });
-    
-    if (baseResponse.ok) {
-      const baseData = await baseResponse.json();
-      console.log('✅ Base connection successful');
-      console.log('📋 Base name:', baseData.name);
-      console.log('📊 Tables found:', baseData.tables?.map((t: any) => t.name) || 'none');
-      
-      // Check for required tables
-      const tables = baseData.tables || [];
-      const contactsTable = tables.find((t: any) => t.name === 'Contacts');
-      const meetingsTable = tables.find((t: any) => t.name === 'Meetings');
-      
-      console.log('👥 Contacts table exists:', !!contactsTable);
-      console.log('📅 Meetings table exists:', !!meetingsTable);
-      
-      if (contactsTable) {
-        console.log('👥 Contacts table fields:', contactsTable.fields?.map((f: any) => f.name) || 'none');
-      }
-      
-      if (meetingsTable) {
-        console.log('📅 Meetings table fields:', meetingsTable.fields?.map((f: any) => f.name) || 'none');
-      }
-      
-    } else {
-      console.log('❌ Base connection failed:', baseResponse.status, baseResponse.statusText);
-      const errorData = await baseResponse.text();
-      console.log('❌ Error details:', errorData);
-    }
-  } catch (error: any) {
-    console.log('❌ Base connection error:', error.message);
-  }
-  
-  // Test Contacts table
-  try {
-    console.log('\n📋 Testing Contacts table...');
-    const contactsUrl = `https://api.airtable.com/v0/${airtableIntegration.credentials?.baseId}/Contacts?maxRecords=5`;
-    
-    const contactsResponse = await fetch(contactsUrl, {
-      headers: {
-        'Authorization': `Bearer ${airtableIntegration.credentials?.apiKey}`,
-        'User-Agent': 'CreateAI-Debug/1.0'
-      }
-    });
-    
-    if (contactsResponse.ok) {
-      const contactsData = await contactsResponse.json();
-      console.log('✅ Contacts query successful');
-      console.log('👥 Total contacts found:', contactsData.records?.length || 0);
-      
-      if (contactsData.records?.length > 0) {
-        console.log('👤 Sample contact fields:', Object.keys(contactsData.records[0].fields || {}));
-        console.log('👤 Sample contact data:', JSON.stringify(contactsData.records[0], null, 2));
-      }
-    } else {
-      console.log('❌ Contacts query failed:', contactsResponse.status, contactsResponse.statusText);
-      const errorData = await contactsResponse.text();
-      console.log('❌ Contacts error details:', errorData);
-    }
-  } catch (error: any) {
-    console.log('❌ Contacts query error:', error.message);
-  }
-  
-  // Test Meetings table
-  try {
-    console.log('\n📅 Testing Meetings table...');
-    const meetingsUrl = `https://api.airtable.com/v0/${airtableIntegration.credentials?.baseId}/Meetings?maxRecords=5`;
-    
-    const meetingsResponse = await fetch(meetingsUrl, {
-      headers: {
-        'Authorization': `Bearer ${airtableIntegration.credentials?.apiKey}`,
-        'User-Agent': 'CreateAI-Debug/1.0'
-      }
-    });
-    
-    if (meetingsResponse.ok) {
-      const meetingsData = await meetingsResponse.json();
-      console.log('✅ Meetings query successful');
-      console.log('📅 Total meetings found:', meetingsData.records?.length || 0);
-      
-      if (meetingsData.records?.length > 0) {
-        console.log('📝 Sample meeting fields:', Object.keys(meetingsData.records[0].fields || {}));
-        meetingsData.records.forEach((meeting: any, index: number) => {
-          console.log(`📝 Meeting ${index + 1}:`, {
-            id: meeting.id,
-            title: meeting.fields.Title || 'No title',
-            status: meeting.fields['Processing Status'] || 'No status',
-            created: meeting.fields.Created || meeting.createdTime,
-            fields: Object.keys(meeting.fields)
-          });
-        });
-      }
-    } else {
-      console.log('❌ Meetings query failed:', meetingsResponse.status, meetingsResponse.statusText);
-      const errorData = await meetingsResponse.text();
-      console.log('❌ Meetings error details:', errorData);
-    }
-  } catch (error: any) {
-    console.log('❌ Meetings query error:', error.message);
-  }
-  
-  // Test for meetings with specific status
-  try {
-    console.log('\n🔍 Testing for meetings with processing_status=complete...');
-    const filterFormula = `{Processing Status} = 'complete'`;
-    const filteredUrl = `https://api.airtable.com/v0/${airtableIntegration.credentials?.baseId}/Meetings?filterByFormula=${encodeURIComponent(filterFormula)}`;
-    
-    const filteredResponse = await fetch(filteredUrl, {
-      headers: {
-        'Authorization': `Bearer ${airtableIntegration.credentials?.apiKey}`,
-        'User-Agent': 'CreateAI-Debug/1.0'
-      }
-    });
-    
-    if (filteredResponse.ok) {
-      const filteredData = await filteredResponse.json();
-      console.log('✅ Filtered meetings query successful');
-      console.log('📅 Meetings with status "complete":', filteredData.records?.length || 0);
-      
-      if (filteredData.records?.length > 0) {
-        filteredData.records.forEach((meeting: any, index: number) => {
-          console.log(`📝 Complete Meeting ${index + 1}:`, {
-            id: meeting.id,
-            title: meeting.fields.Title || 'No title',
-            status: meeting.fields['Processing Status'],
-            contact: meeting.fields.Contact || 'No contact linked',
-            created: meeting.fields.Created || meeting.createdTime
-          });
-        });
-      } else {
-        console.log('⚠️ No meetings found with status "complete" - this is why SYNC page is empty');
-        console.log('💡 Your manually added record might have a different status');
-      }
-    } else {
-      console.log('❌ Filtered meetings query failed:', filteredResponse.status, filteredResponse.statusText);
-    }
-  } catch (error: any) {
-    console.log('❌ Filtered meetings query error:', error.message);
-  }
-  
-  console.log('🔍 === AIRTABLE DEBUG END ===\n');
-  
-  return airtableIntegration;
-}
 import { z } from "zod";
 
 export async function registerRoutes(app: Express): Promise<Server> {
-  
-  // Add auth context attachment middleware
-  app.use(attachAuth);
-  
-  // Add general request logging to see what endpoints are being called
-  // Add correlation ID middleware
-  app.use(requestId);
-  
-  app.use((req, res, next) => {
-    if (req.path.includes('/api/sync') || req.path.includes('/api/otter') || req.path.includes('/api/airtable')) {
-      console.log(`🌐 ${req.method} ${req.path} - Called by SYNC page`);
-    }
-    next();
-  });
-
-  // Enhanced sync meetings endpoint - now queries Contacts and Transcripts separately
-  app.get('/api/sync/meetings', isAuthenticated, async (req: any, res) => {
-    console.log('\n🔍 === SYNC MEETINGS ENDPOINT CALLED ===');
-    const auth = extractAuth(req);
-    console.log('👤 User ID:', auth.userId);
-    
-    try {
-      const userId = auth.userId;
-      if (!userId) {
-        return res.status(401).json({ message: 'User ID not found' });
-      }
-      const integrations = await storage.getUserIntegrations(userId);
-      console.log('🔍 Available integrations:', integrations.map(i => i.provider));
-      
-      const airtableIntegration = integrations.find(i => i.provider === 'airtable');
-      
-      if (!airtableIntegration?.credentials) {
-        console.log('❌ No Airtable integration found');
-        return res.status(400).json({
-          success: false,
-          message: 'Airtable integration required'
-        });
-      }
-      
-      console.log('✅ Airtable integration found:', {
-        status: airtableIntegration.status,
-        hasApiKey: !!airtableIntegration.credentials.apiKey,
-        baseId: airtableIntegration.credentials.baseId
-      });
-      
-      // Use request-scoped Airtable factory
-      const { createAirtableServiceForRequest } = await import('./services/airtable');
-      const airtableService = await createAirtableServiceForRequest(req);
-      
-      if (!airtableService) {
-        return res.status(500).json({
-          success: false,
-          message: 'Failed to initialize Airtable service'
-        });
-      }
-      
-      // Query both Contacts and Transcripts tables separately
-      console.log('📋 [SYNC] Querying Contacts and Transcripts tables...');
-      
-      const [contacts, transcripts] = await Promise.all([
-        airtableService.getContactsRaw(),
-        airtableService.getTranscripts()
-      ]);
-      
-      console.log('✅ Airtable data retrieved:');
-      console.log('👥 Contacts:', contacts.length);
-      console.log('📝 Completed Transcripts:', transcripts.length);
-      
-      // For the sync page, we want to show completed transcripts that can be matched to calendar meetings
-      const meetings = transcripts.map((transcript: any) => ({
-        id: transcript.id,
-        title: transcript.title,
-        summary: transcript.content ? transcript.content.substring(0, 200) + '...' : '',
-        status: transcript.status,
-        meetingDate: transcript.meetingDate,
-        duration: transcript.duration,
-        participants: transcript.participants,
-        hasTranscript: true,
-        hasContact: false, // Will be determined by matching
-        source: 'transcript',
-        airtableRecordId: transcript.id,
-        created: transcript.created
-      }));
-      
-      console.log('📋 Processed sync meetings:', meetings.length);
-      
-      res.json({
-        success: true,
-        meetings: meetings,
-        contacts: contacts,
-        transcripts: transcripts,
-        totalFound: transcripts.length,
-        completeMeetings: transcripts.length
-      });
-      
-    } catch (error: any) {
-      console.log('❌ SYNC meetings endpoint error:', error.message);
-      res.status(500).json({
-        success: false,
-        message: 'Internal server error',
-        error: error.message
-      });
-    }
-  });
-  
-  // PUBLIC sync status endpoint
-  app.get('/api/sync/status', (req, res) => {
-    const a = extractAuth(req);
-    res.json({ ok: true, userId: a.userId ?? null, dev: Boolean(a.claims?.dev) });
-  });
-  
-  // Add debug endpoints for the new three-table structure
-  app.get('/api/debug/airtable-contacts', isAuthenticated, async (req: any, res) => {
-    console.log('\n🔍 === AIRTABLE CONTACTS DEBUG ===');
-    
-    try {
-      const auth = extractAuth(req);
-      const userId = auth.userId;
-      if (!userId) {
-        return res.status(401).json({ message: 'User ID not found' });
-      }
-      const { createAirtableServiceForRequest } = await import('./services/airtable');
-      const airtableService = await createAirtableServiceForRequest(req);
-      
-      if (!airtableService) {
-        return res.json({ error: 'No Airtable integration' });
-      }
-      
-      const contacts = await airtableService.getContactsRaw();
-      
-      console.log('👥 Contacts Data:');
-      console.log(JSON.stringify(contacts, null, 2));
-      
-      res.json({
-        success: true,
-        contacts: contacts,
-        recordCount: contacts.length,
-        fields: contacts.length > 0 ? Object.keys(contacts[0].rawFields) : []
-      });
-      
-    } catch (error: any) {
-      console.log('❌ Contacts debug error:', error.message);
-      res.status(500).json({ error: error.message });
-    }
-  });
-
-  app.get('/api/debug/airtable-transcripts', isAuthenticated, async (req: any, res) => {
-    console.log('\n🔍 === AIRTABLE TRANSCRIPTS DEBUG ===');
-    
-    try {
-      const auth = extractAuth(req);
-      const userId = auth.userId;
-      if (!userId) {
-        return res.status(401).json({ message: 'User ID not found' });
-      }
-      const { createAirtableServiceForRequest } = await import('./services/airtable');
-      const airtableService = await createAirtableServiceForRequest(req);
-      
-      if (!airtableService) {
-        return res.json({ error: 'No Airtable integration' });
-      }
-      
-      const transcripts = await airtableService.getTranscripts();
-      
-      console.log('📝 Transcripts Data:');
-      console.log(JSON.stringify(transcripts, null, 2));
-      
-      res.json({
-        success: true,
-        transcripts: transcripts,
-        recordCount: transcripts.length,
-        completedTranscripts: transcripts.filter(t => t.status === 'complete').length,
-        fields: transcripts.length > 0 ? Object.keys(transcripts[0].rawFields) : []
-      });
-      
-    } catch (error: any) {
-      console.log('❌ Transcripts debug error:', error.message);
-      res.status(500).json({ error: error.message });
-    }
-  });
-
-  app.get('/api/debug/airtable-raw', isAuthenticated, async (req: any, res) => {
-    console.log('\n🔍 === RAW AIRTABLE DATA DEBUG ===');
-    
-    try {
-      const auth = extractAuth(req);
-    const userId = auth.userId;
-      const integrations = await storage.getUserIntegrations(userId);
-      const airtableIntegration = integrations.find(i => i.provider === 'airtable');
-      
-      if (!airtableIntegration?.credentials) {
-        return res.json({ error: 'No Airtable integration' });
-      }
-      
-      // Get raw data from all three tables
-      const baseUrl = `https://api.airtable.com/v0/${airtableIntegration.credentials.baseId}`;
-      const headers = { 'Authorization': `Bearer ${airtableIntegration.credentials.apiKey}` };
-      
-      const [contactsResponse, transcriptsResponse, meetingsResponse] = await Promise.allSettled([
-        fetch(`${baseUrl}/Contacts`, { headers }),
-        fetch(`${baseUrl}/Transcripts`, { headers }),
-        fetch(`${baseUrl}/Meetings`, { headers })
-      ]);
-      
-      const result: any = { success: true };
-      
-      if (contactsResponse.status === 'fulfilled' && contactsResponse.value.ok) {
-        result.contacts = await contactsResponse.value.json();
-      }
-      
-      if (transcriptsResponse.status === 'fulfilled' && transcriptsResponse.value.ok) {
-        result.transcripts = await transcriptsResponse.value.json();
-      }
-      
-      if (meetingsResponse.status === 'fulfilled' && meetingsResponse.value.ok) {
-        result.meetings = await meetingsResponse.value.json();
-      }
-      
-      console.log('📊 Raw Three-Table Data Summary:');
-      console.log('👥 Contacts:', result.contacts?.records?.length || 0);
-      console.log('📝 Transcripts:', result.transcripts?.records?.length || 0);
-      console.log('📅 Meetings:', result.meetings?.records?.length || 0);
-      
-      res.json(result);
-      
-    } catch (error: any) {
-      console.log('❌ Raw debug error:', error.message);
-      res.status(500).json({ error: error.message });
-    }
-  });
   // Auth middleware
   // Setup basic session middleware for Firebase auth
   const sessionTtl = 7 * 24 * 60 * 60 * 1000; // 1 week
@@ -557,8 +148,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.get('/api/auth/user', isAuthenticated, async (req: any, res) => {
     const startTime = Date.now();
     try {
-      const auth = extractAuth(req);
-    const userId = auth.userId;
+      const userId = req.user.claims.sub;
       console.log('🔍 [/api/auth/user] Fetching user data for userId:', userId);
       
       const user = await storage.getUser(userId);
@@ -617,8 +207,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // Organization routes
   app.post('/api/organizations', isAuthenticated, async (req: any, res) => {
     try {
-      const auth = extractAuth(req);
-    const userId = auth.userId;
+      const userId = req.user.claims.sub;
       const { name, billingPlan = 'starter' } = req.body;
       
       if (!name) {
@@ -670,8 +259,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.post('/api/content-projects', isAuthenticated, async (req: any, res) => {
     const startTime = Date.now();
     try {
-      const auth = extractAuth(req);
-    const userId = auth.userId;
+      const userId = req.user.claims.sub;
       console.log('📁 [/api/content-projects] POST - Creating project:', {
         userId,
         requestBody: req.body,
@@ -725,8 +313,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     const startTime = Date.now();
     try {
       const { projectId } = req.params;
-      const auth = extractAuth(req);
-    const userId = auth.userId;
+      const userId = req.user.claims.sub;
       
       console.log('🔍 [/api/content-projects/:id] Fetching project details:', {
         projectId,
@@ -788,8 +375,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.post('/api/content-projects/:projectId/items', isAuthenticated, async (req: any, res) => {
     try {
       const { projectId } = req.params;
-      const auth = extractAuth(req);
-    const userId = auth.userId;
+      const userId = req.user.claims.sub;
       
       const itemData = insertContentItemSchema.parse({
         ...req.body,
@@ -889,8 +475,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // Integration routes
   app.get('/api/integrations', isAuthenticated, async (req: any, res) => {
     try {
-      const auth = extractAuth(req);
-    const userId = auth.userId;
+      const userId = req.user.claims.sub;
       const integrations = await storage.getUserIntegrations(userId);
       res.json(integrations);
     } catch (error) {
@@ -899,47 +484,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  // Add disconnect/delete integration endpoint
-  app.delete('/api/integrations/:provider', isAuthenticated, async (req: any, res) => {
-    try {
-      const auth = extractAuth(req);
-    const userId = auth.userId;
-      const { provider } = req.params;
-
-      if (!provider) {
-        return res.status(400).json({ message: "Provider is required" });
-      }
-
-      console.log(`🗑️ [DISCONNECT] User ${userId} disconnecting ${provider} integration`);
-
-      // Check if integration exists
-      const integrations = await storage.getUserIntegrations(userId);
-      const existingIntegration = integrations.find(i => i.provider === provider);
-
-      if (!existingIntegration) {
-        return res.status(404).json({ message: "Integration not found" });
-      }
-
-      // Delete the integration
-      await storage.deleteUserIntegration(userId, provider);
-      
-      console.log(`✅ [DISCONNECT] Successfully disconnected ${provider} for user ${userId}`);
-      
-      res.json({ 
-        success: true, 
-        message: `${provider} integration disconnected successfully` 
-      });
-
-    } catch (error: any) {
-      console.error(`❌ [DISCONNECT] Error disconnecting integration:`, error.message);
-      res.status(500).json({ message: "Failed to disconnect integration" });
-    }
-  });
-
   app.post('/api/integrations', isAuthenticated, async (req: any, res) => {
     try {
-      const auth = extractAuth(req);
-    const userId = auth.userId;
+      const userId = req.user.claims.sub;
       const integrationData = insertUserIntegrationSchema.parse({
         ...req.body,
         userId
@@ -958,8 +505,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
   app.post('/api/integrations/test', isAuthenticated, async (req: any, res) => {
     try {
-      const auth = extractAuth(req);
-    const userId = auth.userId;
+      const userId = req.user.claims.sub;
       const { provider } = req.body;
 
       if (!provider) {
@@ -1017,8 +563,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
             const airtableCreds = integration.credentials as any;
             if (airtableCreds.apiKey && airtableCreds.baseId) {
               try {
-                const { createAirtableServiceForRequest } = await import('./services/airtable');
-                const airtableService = await createAirtableServiceForRequest(req);
+                const { AirtableService } = await import('./services/airtable');
+                const airtableService = new AirtableService(airtableCreds.apiKey, airtableCreds.baseId);
                 const connectionTest = await airtableService.testConnection();
                 
                 if (connectionTest.success) {
@@ -1205,8 +751,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     try {
       const userId = req.params.userId;
       
-      const auth = extractAuth(req);
-      if (auth.userId !== userId) {
+      if (req.user.claims.sub !== userId) {
         return res.status(403).json({ error: 'Access denied' });
       }
       
@@ -1238,15 +783,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // Data fetching routes
   app.get('/api/meetings', isAuthenticated, async (req: any, res) => {
     try {
-      const auth = extractAuth(req);
-    const userId = auth.userId;
+      const userId = req.user.claims.sub;
       console.log('📅 Fetching meetings for user:', userId);
-      
-      // Environment debug
-      console.log('\n🔍 === ENVIRONMENT DEBUG ===');
-      console.log('🌍 NODE_ENV:', process.env.NODE_ENV);
-      console.log('🔑 DATABASE_URL exists:', !!process.env.DATABASE_URL);
-      console.log('🔥 Firebase project configured:', !!process.env.VITE_FIREBASE_PROJECT_ID);
       
       // Debug: Check what integrations exist
       const integrations = await storage.getUserIntegrations(userId);
@@ -1425,19 +963,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
             
             console.log(`📧 Meeting "${event.title}" attendees:`, event.attendees);
             
-            // Generate consistent meeting ID format
-            let formattedDate;
-            if (event.startTime) {
-              // Parse iCal format like "20250907T090000Z" to "20250907T090000"
-              formattedDate = event.startTime.replace(/[Z:]|\.\d+Z?$/g, '').substring(0, 15);
-            } else {
-              // Fallback to current timestamp
-              const now = new Date();
-              formattedDate = now.toISOString().replace(/[-:]/g, '').substring(0, 15);
-            }
-
             meetings.push({
-              id: `meeting-${formattedDate}`,
+              id: `meeting-${event.startTime || Date.now()}`,
               title: event.title,
               date: meetingDate,
               duration: '1h',
@@ -1462,9 +989,6 @@ export async function registerRoutes(app: Express): Promise<Server> {
       // REAL matching logic - Airtable integration only  
       const airtableIntegration = integrations.find(i => i.provider === 'airtable');
       
-      // Add comprehensive Airtable debug
-      await debugAirtableIntegration(airtableIntegration);
-      
       // Meeting transcript matching through Airtable integration only
       // All Otter.ai integration removed - using Zapier → Airtable workflow
       console.log('📋 [SYNC] Meeting transcript matching via Airtable integration');
@@ -1472,21 +996,15 @@ export async function registerRoutes(app: Express): Promise<Server> {
       let usingFallback = false;
       let fallbackReason = '';
       
-      // Transcripts are now fetched from Airtable Transcripts table with Processing Status = 'complete'
-      console.log('📝 [SYNC] Fetching transcripts from Airtable Transcripts table...');
-      try {
-        const { createAirtableServiceForRequest } = await import('./services/airtable');
-        const airtableService = await createAirtableServiceForRequest(req);
-        if (airtableService) {
-          transcripts = await airtableService.getTranscripts();
-          console.log(`✅ [SYNC] Fetched ${transcripts.length} completed transcripts from Airtable`);
-          usingFallback = false;
-        }
-      } catch (error: any) {
-        console.error('❌ [SYNC] Failed to fetch transcripts from Airtable:', error.message);
-        transcripts = [];
-        usingFallback = false;
-      }
+      // Transcripts are now managed through Airtable via Zapier automation
+      // No direct API calls or fallback data needed
+      transcripts = [];
+      usingFallback = false;
+      console.log('📋 [SYNC] Meeting transcripts handled by Airtable integration (via Zapier)');
+      
+      // No fallback transcript matching needed
+      // All meeting transcript data comes from Airtable via Zapier automation
+      console.log('📋 [SYNC] Transcript matching disabled - using Airtable-only workflow');
       
       // SMART Airtable CRM integration with fallback to realistic contact data
       console.log('📋 [SYNC] Attempting Airtable CRM connection...');
@@ -1518,8 +1036,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
           });
           
           // Import AirtableService dynamically to avoid circular dependency
-          const { createAirtableServiceForRequest } = await import('./services/airtable');
-          const airtableService = await createAirtableServiceForRequest(req);
+          const { AirtableService } = await import('./services/airtable');
+          const airtableService = await AirtableService.createFromUserIntegration(storage, userId);
           
           console.log('🔗 [DEBUG] AirtableService.createFromUserIntegration result:', {
             success: !!airtableService,
@@ -1686,91 +1204,55 @@ export async function registerRoutes(app: Express): Promise<Server> {
         airtableFallbackReason: usingContactFallback ? contactFallbackReason : 'N/A'
       });
       
-      console.log('📋 [SYNC] NEW: Both contact and transcript matching from Airtable three-table structure');
-      console.log(`${usingContactFallback ? '🔄' : '👥'} [MATCHING] Available Airtable contacts for matching:`, contacts?.length || 0);
-      console.log(`📝 [MATCHING] Available completed transcripts for matching:`, transcripts?.length || 0);
+      console.log('📋 [SYNC] Transcript matching handled by Airtable via Zapier automation');
+      console.log(`${usingContactFallback ? '🔄' : '📋'} [MATCHING] Available Airtable contacts for matching:`, contacts?.length || 0);
       console.log(`${usingContactFallback ? '📋' : '👥'} [MATCHING] Contact names (${usingContactFallback ? 'FALLBACK' : 'REAL API'}):`, Array.isArray(contacts) ? contacts.map((c: any) => c.name) : []);
-      console.log(`📝 [MATCHING] Transcript titles:`, Array.isArray(transcripts) ? transcripts.map((t: any) => t.title) : []);
       
       // ENHANCED matching logic with better name parsing
       for (const meeting of meetings) {
         const meetingTitle = meeting.title.toLowerCase();
         console.log(`\n🔍 Analyzing meeting: "${meeting.title}"`);
         
-        // NEW: Both contact matching (green) and transcript matching (blue)
+        // Transcript matching disabled - handled through Airtable via Zapier
         console.log(`  📋 Transcript matching via Airtable integration (Zapier workflow)`);
+        meeting.hasOtterMatch = false; // All transcript matching via Airtable now
         
-        // 1. CONTACT MATCHING (Green circles) - match against contact names
-        console.log(`  🔍 Airtable contact matching for "${meeting.title}"...`);
-        let bestContactMatch = null;
-        let highestContactConfidence = 0;
+        // ENHANCED Airtable matching with confidence scoring
+        console.log(`  🔍 Airtable matching for "${meeting.title}"...`);
+        let bestAirtableMatch = null;
+        let highestAirtableConfidence = 0;
         
         if (Array.isArray(contacts)) {
           for (const contact of contacts) {
             try {
               const confidence = calculateContactMatchConfidence(meeting, contact);
               
-              if (confidence > highestContactConfidence) {
-                highestContactConfidence = confidence;
-                bestContactMatch = contact;
+              if (confidence > highestAirtableConfidence) {
+                highestAirtableConfidence = confidence;
+                bestAirtableMatch = contact;
               }
               
               console.log(`    📊 Contact "${contact.name}" confidence: ${confidence}%`);
             } catch (matchError) {
-              console.error(`    ❌ Error calculating contact confidence for "${contact.name}":`, matchError);
+              console.error(`    ❌ Error calculating Airtable confidence for "${contact.name}":`, matchError);
             }
           }
         }
         
-        // 2. TRANSCRIPT MATCHING (Blue circles) - match against transcript titles
-        console.log(`  🔍 Airtable transcript matching for "${meeting.title}"...`);
-        let bestTranscriptMatch = null;
-        let highestTranscriptConfidence = 0;
-        
-        if (Array.isArray(transcripts)) {
-          for (const transcript of transcripts) {
-            try {
-              const confidence = calculateTranscriptMatchConfidence(meeting, transcript);
-              
-              if (confidence > highestTranscriptConfidence) {
-                highestTranscriptConfidence = confidence;
-                bestTranscriptMatch = transcript;
-              }
-              
-              console.log(`    📊 Transcript "${transcript.title}" confidence: ${confidence}%`);
-            } catch (matchError) {
-              console.error(`    ❌ Error calculating transcript confidence for "${transcript.title}":`, matchError);
-            }
-          }
-        }
-        
-        // Apply 75% confidence threshold for matches
-        const CONFIDENCE_THRESHOLD = 75;
-        
-        // Set contact match (green circle)
-        meeting.hasAirtableMatch = highestContactConfidence >= CONFIDENCE_THRESHOLD;
-        (meeting as any).airtableConfidence = highestContactConfidence;
-        (meeting as any).bestAirtableMatch = bestContactMatch;
+        // Add data source flags to the meeting object
         (meeting as any).isAirtableFallback = usingContactFallback;
         
-        // Set transcript match (blue circle) 
-        meeting.hasOtterMatch = highestTranscriptConfidence >= CONFIDENCE_THRESHOLD;
-        (meeting as any).transcriptConfidence = highestTranscriptConfidence;
-        (meeting as any).bestTranscriptMatch = bestTranscriptMatch;
+        // FIXED: Show matches regardless of data source (real API or fallback)
+        meeting.hasAirtableMatch = highestAirtableConfidence >= 60;
+        (meeting as any).airtableConfidence = highestAirtableConfidence;
+        (meeting as any).bestAirtableMatch = bestAirtableMatch;
         
-        // Log results with proper indicators
         if (meeting.hasAirtableMatch) {
           const source = usingContactFallback ? 'ENHANCED MATCHING' : 'REAL API';
-          console.log(`  ✅ ${source} MATCH: "${bestContactMatch?.name}" (confidence: ${highestContactConfidence}%)`);
+          console.log(`  ✅ ${source} MATCH: "${bestAirtableMatch?.name}" (confidence: ${highestAirtableConfidence}%)`);
         } else {
           const source = usingContactFallback ? 'enhanced matching' : 'real API';
-          console.log(`  ⚪ No ${source} contact match found (highest confidence: ${highestContactConfidence}%)`);
-        }
-        
-        if (meeting.hasOtterMatch) {
-          console.log(`  ✅ TRANSCRIPT MATCH: "${bestTranscriptMatch?.title}" (confidence: ${highestTranscriptConfidence}%)`);
-        } else {
-          console.log(`  ⚪ No transcript match found (highest confidence: ${highestTranscriptConfidence}%)`);
+          console.log(`  ⚪ No ${source} match found (highest confidence: ${highestAirtableConfidence}%)`);
         }
         
         const otterIcon = meeting.hasOtterMatch ? '🔵' : '⚪';
@@ -1805,8 +1287,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
   app.get('/api/airtable/contacts', isAuthenticated, async (req: any, res) => {
     try {
-      const auth = extractAuth(req);
-    const userId = auth.userId;
+      const userId = req.user.claims.sub;
       console.log('📋 Fetching contacts for user:', userId);
       
       const integrations = await storage.getUserIntegrations(userId);
@@ -1850,8 +1331,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.post('/api/airtable/create-record', isAuthenticated, async (req: any, res) => {
     try {
       const { meeting } = req.body;
-      const auth = extractAuth(req);
-    const userId = auth.userId;
+      const userId = req.user.claims.sub;
       
       // Simulate creating a record in Airtable by Zoho
       const airtableRecord = {
@@ -1921,8 +1401,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     try {
       const { projectId } = req.params;
       const { type, prompt, settings } = req.body;
-      const auth = extractAuth(req);
-    const userId = auth.userId;
+      const userId = req.user.claims.sub;
       
       console.log('🤖 [/api/content/generate-outline] Generating outline:', {
         projectId,
@@ -1969,8 +1448,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     try {
       const { projectId } = req.params;
       const { type, outline, settings } = req.body;
-      const auth = extractAuth(req);
-    const userId = auth.userId;
+      const userId = req.user.claims.sub;
       
       console.log('🤖 [/api/content/generate-content] Generating content:', {
         projectId,
@@ -2024,8 +1502,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     try {
       const { projectId } = req.params;
       const { type, content, settings } = req.body;
-      const auth = extractAuth(req);
-    const userId = auth.userId;
+      const userId = req.user.claims.sub;
       
       console.log('🤖 [/api/content/generate-enhancement] Generating enhancement:', {
         projectId,
@@ -2102,8 +1579,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     try {
       const { projectId } = req.params;
       const { type, content, audioFile, settings } = req.body;
-      const auth = extractAuth(req);
-    const userId = auth.userId;
+      const userId = req.user.claims.sub;
       
       console.log('🚀 [/api/content/publish] Publishing content:', {
         projectId,
@@ -2231,7 +1707,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     return Math.round(confidence);
   }
 
-  // ENHANCED Calculate confidence score for meeting-contact matching (for green circles)
+  // ENHANCED Calculate confidence score for meeting-contact matching with company data
   function calculateContactMatchConfidence(meeting: any, contact: any): number {
     if (!meeting.title || !contact.name) return 0;
     
@@ -2282,67 +1758,6 @@ export async function registerRoutes(app: Express): Promise<Server> {
     return confidence;
   }
 
-  // NEW Calculate confidence score for meeting-transcript matching (for blue circles)
-  function calculateTranscriptMatchConfidence(meeting: any, transcript: any): number {
-    if (!meeting.title || !transcript.title) return 0;
-    
-    const meetingTitle = meeting.title.toLowerCase();
-    const transcriptTitle = transcript.title.toLowerCase();
-    
-    let confidence = 0;
-    
-    // 1. Exact title match (95%)
-    if (meetingTitle === transcriptTitle) {
-      confidence = Math.max(confidence, 95);
-    }
-    
-    // 2. Title contains match (85%)
-    if (meetingTitle.includes(transcriptTitle) || transcriptTitle.includes(meetingTitle)) {
-      confidence = Math.max(confidence, 85);
-    }
-    
-    // 3. Participants match (80%) - check if meeting attendees match transcript participants
-    if (transcript.participants && meeting.attendees) {
-      const participantMatch = transcript.participants.some((participant: string) =>
-        meeting.attendees.some((attendee: string) =>
-          participant.toLowerCase().includes(attendee.toLowerCase()) ||
-          attendee.toLowerCase().includes(participant.toLowerCase())
-        )
-      );
-      if (participantMatch) {
-        confidence = Math.max(confidence, 80);
-      }
-    }
-    
-    // 4. Date proximity (75%) - if both have dates and they're close
-    if (transcript.meetingDate && meeting.date) {
-      const transcriptDate = new Date(transcript.meetingDate);
-      const meetingDate = new Date(meeting.date);
-      const timeDiff = Math.abs(transcriptDate.getTime() - meetingDate.getTime());
-      const daysDiff = timeDiff / (1000 * 3600 * 24);
-      
-      if (daysDiff <= 1) { // Same day or within 1 day
-        confidence = Math.max(confidence, 75);
-      }
-    }
-    
-    // 5. Title word overlap (70%)
-    const meetingWords = meetingTitle.split(/\s+/).filter((word: string) => word.length > 3);
-    const transcriptWords = transcriptTitle.split(/\s+/).filter((word: string) => word.length > 3);
-    const commonWords = meetingWords.filter((word: string) => transcriptWords.includes(word));
-    
-    if (commonWords.length > 0) {
-      const overlapRatio = (commonWords.length * 2) / (meetingWords.length + transcriptWords.length);
-      confidence = Math.max(confidence, Math.round(overlapRatio * 70));
-    }
-    
-    // 6. String similarity fallback (60% max)
-    const similarity = calculateStringSimilarity(meetingTitle, transcriptTitle);
-    confidence = Math.max(confidence, Math.round(similarity * 60));
-    
-    return confidence;
-  }
-
   // =============================================================================
   // ENHANCED SYNC EXECUTE ENDPOINT
   // =============================================================================
@@ -2351,19 +1766,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     const startTime = Date.now();
     try {
       const { meetingIds } = req.body;
-      const auth = extractAuth(req);
-    const userId = auth.userId;
-      
-      // Debug the sync execute endpoint
-      console.log('\n🔍 === SYNC EXECUTE ENDPOINT DEBUG ===');
-      console.log('🎯 Endpoint called: POST /api/sync/execute');
-      console.log('👤 User ID:', userId);
-      console.log('📊 Meeting IDs to sync:', meetingIds);
-      
-      // Get and debug Airtable integration
-      const integrations = await storage.getUserIntegrations(userId);
-      const airtableIntegration = integrations.find(i => i.provider === 'airtable');
-      await debugAirtableIntegration(airtableIntegration);
+      const userId = req.user.claims.sub;
       
       console.log('🔄 [/api/sync/execute] Starting sync operation:', {
         userId,
@@ -2378,13 +1781,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
         });
       }
       
-      // Validate integrations (already declared above)
-      
-      // Debug environment and Airtable integration for enrichment
-      console.log('\n🔍 === ENRICHMENT ENDPOINT DEBUG ===');
-      console.log('🎯 Endpoint called: POST /api/meetings/enrich');
-      console.log('👤 User ID:', userId);
-      await debugAirtableIntegration(airtableIntegration);
+      // Validate integrations
+      const integrations = await storage.getUserIntegrations(userId);
+      const airtableIntegration = integrations.find(i => i.provider === 'airtable');
       
       if (airtableIntegration?.status !== 'connected') {
         return res.status(400).json({
@@ -2441,8 +1840,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
               console.log(`📋 [BIGIN] Attempting real CRM operations for: ${meeting.title}`);
               
               // Import AirtableService dynamically
-              const { createAirtableServiceForRequest } = await import('./services/airtable');
-              const airtableService = await createAirtableServiceForRequest(req);
+              const { AirtableService } = await import('./services/airtable');
+              const airtableService = await AirtableService.createFromUserIntegration(storage, userId);
               if (airtableService) {
                 // Search for matching contacts
                 const contacts = await airtableService.getContactsForMeetings([meeting]);
@@ -2569,19 +1968,33 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  // Airtable API Endpoints (duplicate removed - keeping the one above at line 1465)
-  
-  console.log('🔧 SYNC debug endpoints added:');
-  console.log('   GET /api/sync/meetings');
-  console.log('   GET /api/sync/status'); 
-  console.log('   GET /api/debug/airtable-raw');
-  
-  // HTTP server creation
+  // Airtable API Endpoints
+  app.get('/api/airtable/contacts', isAuthenticated, async (req: any, res) => {
+    try {
+      const userId = req.user.claims.sub;
+      const integrations = await storage.getUserIntegrations(userId);
+      const airtableIntegration = integrations.find(i => i.provider === 'airtable');
+      
+      if (!airtableIntegration?.credentials) {
+        return res.status(400).json({ error: 'Airtable integration not configured' });
+      }
+      
+      const { AirtableService } = await import('./services/airtable');
+      const creds = airtableIntegration.credentials as any;
+      const airtableService = new AirtableService(creds.apiKey, creds.baseId);
+      
+      const contacts = await airtableService.getContacts();
+      res.json(contacts);
+      
+    } catch (error: any) {
+      console.error('Error fetching Airtable contacts:', error);
+      res.status(500).json({ error: 'Failed to fetch contacts' });
+    }
+  });
 
   app.post('/api/airtable/create-record', isAuthenticated, async (req: any, res) => {
     try {
-      const auth = extractAuth(req);
-    const userId = auth.userId;
+      const userId = req.user.claims.sub;
       const { meeting } = req.body;
       
       const integrations = await storage.getUserIntegrations(userId);
@@ -2591,8 +2004,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(400).json({ error: 'Airtable integration not configured' });
       }
       
-      const { createAirtableServiceForRequest } = await import('./services/airtable');
-      const airtableService = await createAirtableServiceForRequest(req);
+      const { AirtableService } = await import('./services/airtable');
+      const creds = airtableIntegration.credentials as any;
+      const airtableService = new AirtableService(creds.apiKey, creds.baseId);
       
       const record = await airtableService.createContact({
         name: meeting.title,
@@ -2605,382 +2019,6 @@ export async function registerRoutes(app: Express): Promise<Server> {
     } catch (error: any) {
       console.error('Error creating Airtable record:', error);
       res.status(500).json({ error: 'Failed to create record' });
-    }
-  });
-
-  // SYNC Module - Create Contact endpoint
-  app.post('/api/sync/create-contact', isAuthenticated, async (req: any, res) => {
-    try {
-      const auth = extractAuth(req);
-    const userId = auth.userId;
-      const { meetingId, meetingTitle, attendees } = req.body;
-
-      console.log('🆕 [CREATE CONTACT] User:', userId, 'Meeting:', meetingTitle);
-
-      if (!meetingTitle) {
-        return res.status(400).json({ message: "Meeting title is required" });
-      }
-
-      // Extract contact from meeting data with comprehensive field population
-      function extractContactFromMeeting(meetingData) {
-        console.log('=== EXTRACTING CONTACT FROM MEETING ===');
-        console.log('Meeting data received:', JSON.stringify(meetingData, null, 2));
-        
-        const { title, attendees, organizer, start, end, location, description } = meetingData;
-        
-        // Extract name with multiple patterns
-        let contactName = '';
-        if (title) {
-          console.log('Processing title:', title);
-          
-          // Try different name extraction patterns
-          const patterns = [
-            /^([A-Z][a-z]+)\s*\|/,           // "Tejas | RTLC"
-            /^([A-Z][a-z]+)\s*-/,            // "Tejas - Meeting"
-            /with\s+([A-Z][a-z]+)/i,         // "Meet with Tejas"
-            /^([A-Z][a-z]+)\s+[A-Z]/         // "Tejas RTLC"
-          ];
-          
-          for (const pattern of patterns) {
-            const match = title.match(pattern);
-            if (match) {
-              contactName = match[1];
-              console.log('Name extracted:', contactName);
-              break;
-            }
-          }
-        }
-        
-        // Create contact data with ALL fields explicitly
-        const contactData = {
-          'Name': contactName || 'Unnamed Contact',
-          'Company': 'Unknown Company',
-          'Email': attendees && attendees[0] ? attendees[0].email || '' : '',
-          'Phone': '',
-          'Last Contacted': start ? new Date(start).toISOString().split('T')[0] : new Date().toISOString().split('T')[0],
-          'Next Follow-up': start ? new Date(new Date(start).getTime() + 14*24*60*60*1000).toISOString().split('T')[0] : '',
-          'Relationship Type': 'Client',
-          'Contact Source': 'Event',
-          'Notes': `Meeting: ${title || 'Unknown'}\nDate: ${start ? new Date(start).toLocaleDateString() : 'Unknown'}`,
-          'Contact Status': 'Active'
-        };
-        
-        console.log('Contact data to create:', JSON.stringify(contactData, null, 2));
-        return contactData;
-      }
-
-      // Auto-determine relationship type from meeting title
-      const determineRelationshipType = (title: string): string => {
-        const lowerTitle = title.toLowerCase();
-        if (lowerTitle.includes('coaching') || lowerTitle.includes('rtlc')) return 'Client';
-        if (lowerTitle.includes('partner') || lowerTitle.includes('collaboration')) return 'Partner';
-        if (lowerTitle.includes('team') || lowerTitle.includes('internal')) return 'Alumni';
-        return 'Prospect';
-      };
-
-      // Use new extractContactFromMeeting function with full meeting data
-      const meetingData = {
-        title: meetingTitle,
-        attendees: attendees,
-        start: new Date().toISOString(),
-        end: new Date(Date.now() + 3600000).toISOString() // 1 hour later
-      };
-      
-      const extractedContactData = extractContactFromMeeting(meetingData);
-      const contactName = extractedContactData['Name'];
-      const relationshipType = determineRelationshipType(meetingTitle);
-
-      console.log('🏷️ [CREATE CONTACT] Extracted name:', contactName, 'Type:', relationshipType);
-
-      // Get Airtable service
-      const { createAirtableServiceForRequest } = await import('./services/airtable');
-      const airtableService = await createAirtableServiceForRequest(req);
-
-      if (!airtableService) {
-        return res.status(400).json({ message: "Airtable integration not found or not connected" });
-      }
-
-      // Extract email from attendees if available
-      let primaryEmail = '';
-      if (attendees && Array.isArray(attendees)) {
-        const attendeeEmails = attendees.filter((email: string) => 
-          email && typeof email === 'string' && email.includes('@')
-        );
-        primaryEmail = attendeeEmails[0] || '';
-      }
-
-      // Use extracted contact data but override with safe field values for Airtable
-      const today = new Date().toISOString().split('T')[0];
-      const contactData = {
-        Name: contactName || 'Unnamed Contact',
-        Company: extractedContactData['Company'] || 'Unknown Company',
-        Email: primaryEmail || extractedContactData['Email'] || '',
-        Phone: extractedContactData['Phone'] || '',
-        'Last Contacted': extractedContactData['Last Contacted'] || today,
-        'Next Follow-up': extractedContactData['Next Follow-up'] || '',
-        'Relationship Type': relationshipType || 'Client', // Use determined type
-        'Contact Source': 'Event', // Use safe existing option
-        'Contact Status': extractedContactData['Contact Status'] || 'Active',
-        Notes: extractedContactData['Notes'] || `Meeting: ${meetingTitle}\nLast Contact: ${today}\nImported from calendar sync`
-      };
-
-      // Clean up undefined/null values and empty strings (except for intentionally empty fields)
-      Object.keys(contactData).forEach(key => {
-        if (contactData[key] === undefined || contactData[key] === null) {
-          delete contactData[key];
-        }
-      });
-
-      console.log('📝 [CREATE CONTACT] Creating contact with data:', contactData);
-
-      // Create the contact using Airtable service with retry fallback
-      let createdContact;
-      try {
-        createdContact = await airtableService.createContact(contactData);
-        console.log('✅ [CREATE CONTACT] Contact created successfully:', createdContact.id);
-      } catch (initialError: any) {
-        console.log('⚠️ [CREATE CONTACT] Initial creation failed, trying with minimal fields:', initialError.message);
-        
-        // Retry with minimal required fields only
-        const minimalContactData = {
-          Name: contactName || 'Unnamed Contact',
-          Email: primaryEmail || '',
-          Notes: `Meeting: ${meetingTitle}\nImported from calendar sync`
-        };
-        
-        try {
-          createdContact = await airtableService.createContact(minimalContactData);
-          console.log('✅ [CREATE CONTACT] Contact created with minimal fields:', createdContact.id);
-        } catch (retryError: any) {
-          console.error('❌ [CREATE CONTACT] Both full and minimal creation failed:', retryError.message);
-          throw new Error(`Contact creation failed: ${retryError.message}`);
-        }
-      }
-
-      res.json({
-        success: true,
-        message: `Contact "${contactName}" created successfully`,
-        contact: {
-          id: createdContact.id,
-          name: contactName,
-          email: primaryEmail,
-          company: contactData.Company || 'Unknown',
-          relationshipType: contactData['Relationship Type'] || 'Prospect'
-        }
-      });
-
-    } catch (error: any) {
-      console.error('❌ [CREATE CONTACT] Final error:', error.message);
-      res.status(500).json({ 
-        message: error.message || "Failed to create contact" 
-      });
-    }
-  });
-
-  // SYNC Module - Meeting Details endpoint with extensive debugging
-  app.get('/api/sync/meeting-details/:meetingId', isAuthenticated, async (req: any, res) => {
-    try {
-      const auth = extractAuth(req);
-    const userId = auth.userId;
-      const { meetingId } = req.params;
-
-      console.log('=== MEETING DETAILS DEBUG ===');
-      console.log('Requested meetingId:', meetingId);
-
-      if (!meetingId) {
-        return res.status(400).json({ message: "Meeting ID is required" });
-      }
-
-      // Get meeting from calendar data (using the same logic as /api/meetings)
-      const integrations = await storage.getUserIntegrations(userId);
-      const outlookIntegration = integrations.find(int => int.provider === 'outlook');
-      
-      if (!outlookIntegration || outlookIntegration.status !== 'connected') {
-        return res.status(404).json({ message: "Calendar integration not found" });
-      }
-
-      const credentials = outlookIntegration.credentials as any;
-      if (!credentials?.feedUrl) {
-        return res.status(404).json({ message: "Calendar feed URL not configured" });
-      }
-
-      // Fetch calendar data
-      const response = await fetch(credentials.feedUrl, { 
-        timeout: 30000,
-        headers: {
-          'User-Agent': 'CreateAI-Calendar-Sync/1.0'
-        }
-      });
-      
-      if (!response.ok) {
-        throw new Error(`Calendar fetch failed: ${response.status}`);
-      }
-
-      const icalData = await response.text();
-      
-      // Parse iCal data to find the specific meeting
-      const events = icalData.split('BEGIN:VEVENT').slice(1);
-      let targetMeeting = null;
-      const allMeetings = [];
-
-      // Use simplified direct approach to get meetings 
-      const outlookService = { 
-        getMeetings: async (userId: string) => {
-          const calendarMeetings = [];
-          
-          for (const eventBlock of events) {
-            const lines = eventBlock.split('\n');
-            const event: any = {};
-            
-            for (const line of lines) {
-              const colonIndex = line.indexOf(':');
-              if (colonIndex > 0) {
-                const key = line.substring(0, colonIndex).trim();
-                const value = line.substring(colonIndex + 1).trim();
-                
-                if (key === 'UID') event.id = value;
-                if (key === 'SUMMARY') event.title = value;
-                if (key === 'DTSTART') event.startTime = value;
-                if (key === 'DTEND') event.endTime = value;
-                if (key === 'LOCATION') event.location = value;
-                if (key === 'DESCRIPTION') event.description = value;
-                if (key === 'ATTENDEE') {
-                  if (!event.attendees) event.attendees = [];
-                  event.attendees.push(value);
-                }
-              }
-            }
-
-            if (event.title) {
-              // Parse iCal date format and generate consistent ID
-              let formattedDate;
-              if (event.startTime) {
-                // Parse iCal format like "20250907T090000Z" to "20250907T090000"
-                formattedDate = event.startTime.replace(/[Z:]|\.\d+Z?$/g, '').substring(0, 15);
-              } else {
-                // Fallback to current timestamp
-                const now = new Date();
-                formattedDate = now.toISOString().replace(/[-:]/g, '').substring(0, 15);
-              }
-              const generatedId = `meeting-${formattedDate}`;
-              event.id = generatedId;
-              calendarMeetings.push(event);
-            }
-          }
-          return calendarMeetings;
-        }
-      };
-
-      const calendarMeetings = await outlookService.getMeetings(userId);
-      console.log('Total meetings found:', calendarMeetings.length);
-      console.log('First 3 meeting IDs:', calendarMeetings.slice(0, 3).map(m => ({ id: m.id, title: m.title })));
-      
-      // Try to find meeting with multiple strategies
-      let meeting = calendarMeetings.find(m => m.id === meetingId);
-      console.log('Direct ID match:', meeting ? meeting.title : 'NOT FOUND');
-      
-      if (!meeting) {
-        // Try parsing date-based lookup for IDs like meeting-20250907T090000
-        const dateMatch = meetingId.match(/^meeting-(\d{8}T\d{6})$/);
-        if (dateMatch) {
-          const targetDate = dateMatch[1];
-          meeting = calendarMeetings.find(m => m.id.includes(targetDate));
-          console.log('Date-based match:', meeting ? meeting.title : 'NOT FOUND');
-        }
-      }
-      
-      if (!meeting) {
-        meeting = calendarMeetings.find(m => m.title && m.title.includes(meetingId.replace('meeting-', '')));
-        console.log('Title includes match:', meeting ? meeting.title : 'NOT FOUND');
-      }
-      
-      if (!meeting) {
-        // Use the first meeting as fallback for testing
-        meeting = calendarMeetings[0];
-        console.log('Using fallback meeting:', meeting ? meeting.title : 'NO MEETINGS');
-      }
-
-      if (!meeting) {
-        console.log('❌ [MEETING DETAILS] No meetings found in calendar data');
-        return res.status(404).json({ success: false, error: 'Meeting not found' });
-      }
-
-      console.log('✅ [MEETING DETAILS] Meeting details retrieved successfully');
-      res.json({ success: true, meeting: meeting });
-
-    } catch (error: any) {
-      console.error('❌ [MEETING DETAILS] Error:', error.message);
-      res.status(500).json({ 
-        message: error.message || "Failed to retrieve meeting details" 
-      });
-    }
-  });
-
-  // ====================================
-  // NEW ENHANCED SYNC ENDPOINTS
-  // ====================================
-  
-  // 1) Ingest endpoint (Zapier → your app)
-  app.post('/api/sync/ingest', isAuthenticated, async (req: any, res) => {
-    try {
-      const result = await processMeeting(req, req.body);
-      log.info('sync.ingest.success', withCtx(req, { result }));
-      return res.status(200).json({ ok: true, result });
-    } catch (err: any) {
-      log.error('sync.ingest.error', withCtx(req, { err: err.message }));
-      return res.status(500).json({ ok: false, error: err.message });
-    }
-  });
-
-  // 2) Meeting details (enhanced) - alternative endpoint
-  app.get('/api/meetings/:id', isAuthenticated, async (req: any, res) => {
-    try {
-      // For now, return a simple payload so the modal renders
-      // Later can be enhanced to read from Airtable or DB
-      log.info('meeting.details.request', withCtx(req, { meetingId: req.params.id }));
-      return res.json({
-        id: req.params.id,
-        title: 'Meeting Details',
-        status: 'Processed',
-        description: 'Meeting details from enhanced SYNC system',
-        date: new Date().toISOString(),
-        attendees: [],
-        hasTranscript: false
-      });
-    } catch (err: any) {
-      log.error('meeting.details.error', withCtx(req, { err: err.message }));
-      return res.status(500).json({ error: err.message });
-    }
-  });
-
-  // 3) Reprocess endpoint (admin button can call this to retry)
-  app.post('/api/sync/reprocess/:transcriptId', isAuthenticated, async (req: any, res) => {
-    try {
-      // In a fuller build, fetch the original raw payload by transcriptId 
-      // and call processMeeting again
-      log.info('sync.reprocess.request', withCtx(req, { transcriptId: req.params.transcriptId }));
-      return res.json({ ok: true, reprocessed: req.params.transcriptId });
-    } catch (err: any) {
-      log.error('sync.reprocess.error', withCtx(req, { err: err.message }));
-      return res.status(500).json({ ok: false, error: err.message });
-    }
-  });
-
-  // 4) Status endpoint for monitoring (no auth required for health check)
-  app.get('/api/sync/status', async (req: any, res) => {
-    try {
-      log.info('sync.status.request', withCtx(req));
-      return res.json({
-        status: 'operational',
-        timestamp: new Date().toISOString(),
-        services: {
-          airtable: 'connected',
-          logger: 'active'
-        }
-      });
-    } catch (err: any) {
-      log.error('sync.status.error', withCtx(req, { err: err.message }));
-      return res.status(500).json({ error: err.message });
     }
   });
 
