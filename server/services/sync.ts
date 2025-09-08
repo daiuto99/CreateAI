@@ -1,4 +1,5 @@
 import { airtableSync } from './airtable-sync';
+import { createAirtableServiceForRequest } from './airtable';
 import { log, withCtx } from './logger';
 import type { InboundMeetingPayload, ContactInput, MeetingResult } from '../../shared/schema';
 

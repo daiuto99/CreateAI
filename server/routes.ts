@@ -1,14 +1,24 @@
 import type { Express } from "express";
 import { createServer, type Server } from "http";
 import { storage } from "./storage";
-// Basic auth middleware for Firebase sessions
-const isAuthenticated = (req: any, res: any, next: any) => {
-  if (req.session && req.session.user && req.session.user.claims) {
-    req.user = req.session.user;
-    return next();
+// Enhanced auth middleware compatible with multiple auth patterns
+import type { Request, Response, NextFunction } from 'express';
+
+function requireAuth(req: Request, res: Response, next: NextFunction) {
+  const authUser =
+    (req as any).user ||
+    (req as any).session?.user ||
+    ((req as any).userId ? { id: (req as any).userId } : null);
+
+  if (!authUser) {
+    return res.status(401).json({ message: 'Authentication required' });
   }
-  return res.status(401).json({ message: "Authentication required" });
-};
+  (req as any).authUser = authUser;
+  next();
+}
+
+// Legacy alias for backward compatibility
+const isAuthenticated = requireAuth;
 import { openaiService } from "./services/openai";
 import { 
   insertContentProjectSchema,
@@ -226,9 +236,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
         baseId: airtableIntegration.credentials.baseId
       });
       
-      // Import AirtableService
-      const { AirtableService } = await import('./services/airtable');
-      const airtableService = await AirtableService.createFromUserIntegration(storage, userId);
+      // Use request-scoped Airtable factory
+      const { createAirtableServiceForRequest } = await import('./services/airtable');
+      const airtableService = await createAirtableServiceForRequest(req);
       
       if (!airtableService) {
         return res.status(500).json({

@@ -451,3 +451,22 @@ export class AirtableService {
     return null;
   }
 }
+
+// ⬇️ ADD factory helper for request-scoped usage
+import type { Request } from 'express';
+import { storage } from '../storage';
+
+export async function createAirtableServiceForRequest(req: Request): Promise<AirtableService | null> {
+  // Try common spots your app uses
+  const user =
+    (req as any).user?.id ||
+    (req as any).userId ||
+    (req as any).session?.user?.id;
+
+  if (!user) {
+    throw new Error('[Airtable] No authenticated user on request');
+  }
+
+  // Reuse the existing static constructor
+  return await AirtableService.createFromUserIntegration(storage, user);
+}

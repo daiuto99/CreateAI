@@ -1,0 +1,128 @@
+Goal:
+
+Replace all remaining airtableService globals with a request-scoped factory.
+
+Make requireAuth accept req.userId | req.user | req.session.user.
+
+Keep /api/sync/status public (as you already changed), but ensure other SYNC routes auth fine.
+
+Apply these exact edits:
+
+1) server/services/airtable.ts — add a small factory helper
+
+If this file already exports a class/service, just add the function below and ensure the existing create logic is reused.
+
+// server/services/airtable.ts
+// ⬇️ ADD at the bottom (or export it near your service class)
+
+import type { Request } from 'express';
+
+// If you already export AirtableService, reuse its static constructor here.
+export async function createAirtableServiceForRequest(req: Request) {
+  // Try common spots your app uses
+  const user =
+    (req as any).user?.id ||
+    (req as any).userId ||
+    (req as any).session?.user?.id;
+
+  if (!user) {
+    throw new Error('[Airtable] No authenticated user on request');
+  }
+
+  // If you already have something like: AirtableService.createFromUserIntegration(userId)
+  if (typeof (globalThis as any).AirtableService?.createFromUserIntegration === 'function') {
+    return (globalThis as any).AirtableService.createFromUserIntegration(user);
+  }
+
+  // Otherwise, if you directly new-up with creds pulled per-user, call that here.
+  // Example fallback:
+  if (typeof (globalThis as any).AirtableService === 'function') {
+    return new (globalThis as any).AirtableService({ userId: user });
+  }
+
+  throw new Error('[Airtable] AirtableService not available/registered');
+}
+
+2) server/routes.ts — make requireAuth compatible with your session shape
+
+You already made /api/sync/status public—keep it that way. We’ll just make the middleware robust for the other routes.
+
+// server/routes.ts
+// FIND your auth middleware and replace with:
+
+import type { Request, Response, NextFunction } from 'express';
+
+function requireAuth(req: Request, res: Response, next: NextFunction) {
+  const authUser =
+    (req as any).user ||
+    (req as any).session?.user ||
+    ((req as any).userId ? { id: (req as any).userId } : null);
+
+  if (!authUser) {
+    return res.status(401).json({ message: 'Authentication required' });
+  }
+  (req as any).authUser = authUser;
+  next();
+}
+
+// Keep /api/sync/status PUBLIC (no middleware) if you prefer quick health-checks.
+
+3) server/services/sync.ts — purge leftover airtableService and use the factory
+
+Replace every usage of a bare airtableService variable.
+
+// server/services/sync.ts
+// AT TOP:
+import { createAirtableServiceForRequest } from './airtable'; // adjust relative path if needed
+
+// ...inside your route handlers or functions that run per-request:
+const airtable = await createAirtableServiceForRequest(req);
+
+// EXAMPLES (replace any remaining lines like these):
+// const { records } = await airtableService.transcripts.listCompleted();
+// ⬇️
+const { records } = await airtable.transcripts.listCompleted();
+
+// const contacts = await airtableService.contacts.listAll();
+// ⬇️
+const contacts = await airtable.contacts.listAll();
+
+// Any create/update:
+// await airtableService.contacts.create(payload)
+// ⬇️
+await airtable.contacts.create(payload);
+
+
+Also add a defensive try/catch around the spot logging
+❌ [SYNC] Failed to fetch transcripts from Airtable: airtableService is not defined
+so it becomes:
+
+try {
+  const airtable = await createAirtableServiceForRequest(req);
+  const { records } = await airtable.transcripts.listCompleted();
+  // ...use records
+} catch (err: any) {
+  console.error('❌ [SYNC] Failed to fetch transcripts from Airtable:', err?.message || err);
+  // keep going without crashing; return empty transcripts array if needed
+}
+
+4) (Optional) client/src/pages/sync.tsx — ensure you’re using the new helpers everywhere
+
+You already changed imports; just confirm there are no remaining imports from @/lib/queryClient in this file for apiRequest.
+
+// client/src/pages/sync.tsx
+// ✅ Should be:
+import { apiGet, apiPost } from '@/lib/api';
+
+// And mutations should look like:
+mutationFn: (payload: any) => apiPost('/api/sync/ingest', payload),
+
+5) Quick check for stragglers
+
+Run these searches (Replit search box or shell):
+
+airtableService (should return 0 hits after patch)
+
+apiRequest('/api/sync/ingest', { data: (should return 0 hits)
+
+import { apiRequest } from '@/lib/queryClient' (should return 0 hits in pages/components)
