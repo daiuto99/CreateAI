@@ -2841,74 +2841,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(404).json({ success: false, error: 'Meeting not found' });
       }
 
-      res.json({ success: true, meeting: meeting });
-      
-      if (targetMeeting.startTime && targetMeeting.endTime) {
-        const start = new Date(targetMeeting.startTime.replace(/(\d{4})(\d{2})(\d{2})T(\d{2})(\d{2})(\d{2})/, '$1-$2-$3T$4:$5:$6'));
-        const end = new Date(targetMeeting.endTime.replace(/(\d{4})(\d{2})(\d{2})T(\d{2})(\d{2})(\d{2})/, '$1-$2-$3T$4:$5:$6'));
-        const durationMs = end.getTime() - start.getTime();
-        const minutes = Math.round(durationMs / 60000);
-        duration = `${minutes} minutes`;
-      }
-
-      // Classify meeting type
-      const title = targetMeeting.title?.toLowerCase() || '';
-      if (title.includes('coaching') || title.includes('rtlc')) meetingType = 'Coaching Session';
-      else if (title.includes('sync') || title.includes('update')) meetingType = 'Sync Meeting';
-      else if (title.includes('partner') || title.includes('collaboration')) meetingType = 'Partnership';
-      else if (title.includes('demo') || title.includes('presentation')) meetingType = 'Demo/Presentation';
-
-      // Parse attendees
-      const attendeeList = targetMeeting.attendees ? 
-        targetMeeting.attendees.map((att: string) => {
-          const emailMatch = att.match(/mailto:([^;]+)/);
-          const nameMatch = att.match(/CN=([^;]+)/);
-          return {
-            email: emailMatch ? emailMatch[1] : att,
-            name: nameMatch ? nameMatch[1] : 'Unknown',
-            role: att.includes('ROLE=REQ-PARTICIPANT') ? 'Required' : 'Optional'
-          };
-        }) : [];
-
-      // Extract contact name suggestion
-      const extractContactName = (title: string): string => {
-        let cleanTitle = title.replace(/\b(meeting|call|session|sync|update|check\-?in)\b/gi, '').trim();
-        let match = cleanTitle.match(/^([^|]+)\s*\|/);
-        if (match) return match[1].trim();
-        match = cleanTitle.match(/meet\s+with\s+(.+)/i);
-        if (match) return match[1].trim();
-        match = cleanTitle.match(/^([^-]+)\s*-/);
-        if (match) return match[1].trim();
-        const words = cleanTitle.split(/\s+/).filter(w => w.length > 0);
-        if (words.length >= 1 && words[0].charAt(0) === words[0].charAt(0).toUpperCase()) {
-          return words.length >= 2 && words[1].charAt(0) === words[1].charAt(0).toUpperCase() 
-            ? `${words[0]} ${words[1]}` : words[0];
-        }
-        return cleanTitle || title;
-      };
-
-      const enhancedMeeting = {
-        id: targetMeeting.id,
-        title: targetMeeting.title,
-        date: targetMeeting.startTime,
-        endTime: targetMeeting.endTime,
-        duration: duration,
-        location: targetMeeting.location || 'Not specified',
-        description: targetMeeting.description || 'No description available',
-        attendees: attendeeList,
-        attendeeCount: attendeeList.length,
-        meetingType: meetingType,
-        suggestedContactName: extractContactName(targetMeeting.title || ''),
-        hasTranscript: false, // Will be determined by matching logic
-        hasAirtableMatch: false // Will be determined by matching logic
-      };
-
       console.log('✅ [MEETING DETAILS] Meeting details retrieved successfully');
-
-      res.json({
-        success: true,
-        meeting: enhancedMeeting
-      });
+      res.json({ success: true, meeting: meeting });
 
     } catch (error: any) {
       console.error('❌ [MEETING DETAILS] Error:', error.message);

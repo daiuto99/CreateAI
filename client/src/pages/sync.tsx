@@ -159,6 +159,7 @@ export default function Sync() {
   // Mutation for fetching meeting details (NEW SYNC FEATURE)
   const fetchMeetingDetails = useMutation({
     mutationFn: async (meetingId: string) => {
+      console.log('Requesting details for meeting:', meetingId);
       const response = await fetch(`/api/sync/meeting-details/${meetingId}`, {
         method: 'GET',
         headers: { 'Content-Type': 'application/json' }
