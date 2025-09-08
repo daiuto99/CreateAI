@@ -38,7 +38,7 @@ export default function Sync() {
     enabled: isAuthenticated,
     retry: false,
     staleTime: 0, // Force fresh data
-    cacheTime: 0, // Don't cache
+    gcTime: 0, // Don't cache
   });
 
   // Fetch Otter.ai transcripts with loading state
@@ -47,7 +47,7 @@ export default function Sync() {
     enabled: isAuthenticated,
     retry: false,
     staleTime: 0, // Force fresh data to trigger loading states
-    cacheTime: 0, // Don't cache for testing
+    gcTime: 0, // Don't cache for testing
   });
 
   // Fetch Airtable contacts with loading state  
@@ -56,7 +56,7 @@ export default function Sync() {
     enabled: isAuthenticated,
     retry: false,
     staleTime: 0, // Force fresh data to trigger loading states
-    cacheTime: 0, // Don't cache for testing
+    gcTime: 0, // Don't cache for testing
   });
 
   // Debug loading states
@@ -122,7 +122,79 @@ export default function Sync() {
     }
   });
 
-  // Mutation for creating contacts from meetings (NEW SYNC FEATURE)
+  // Enhanced SYNC status query
+  const { data: syncStatus = { status: 'unknown', services: {} } } = useQuery({
+    queryKey: ['/api/sync/status'],
+    enabled: isAuthenticated,
+    retry: false,
+    staleTime: 30000, // Check every 30 seconds
+  });
+
+  // Enhanced mutation for testing new ingest endpoint
+  const testIngestMutation = useMutation({
+    mutationFn: async (payload: any) => {
+      return apiRequest('/api/sync/ingest', { data: payload });
+    },
+    onSuccess: (data) => {
+      toast({
+        title: "Ingest Test Successful",
+        description: `Meeting processed: ${data.result.meetingRecordId}`,
+      });
+      // Refresh all data after successful ingest
+      queryClient.invalidateQueries();
+    },
+    onError: (error: any) => {
+      toast({
+        title: "Ingest Test Failed",
+        description: error.message || "Failed to process test meeting",
+        variant: "destructive"
+      });
+    }
+  });
+
+  // Enhanced mutation for reprocessing
+  const reprocessMutation = useMutation({
+    mutationFn: async (transcriptId: string) => {
+      return apiRequest(`/api/sync/reprocess/${transcriptId}`, { method: 'POST' });
+    },
+    onSuccess: (data) => {
+      toast({
+        title: "Reprocess Successful",
+        description: `Transcript ${data.reprocessed} has been reprocessed`,
+      });
+    },
+    onError: (error: any) => {
+      toast({
+        title: "Reprocess Failed",
+        description: error.message || "Failed to reprocess transcript",
+        variant: "destructive"
+      });
+    }
+  });
+
+  // Test payload for enhanced SYNC system
+  const testSyncPayload = {
+    source: 'otter',
+    externalMeetingId: `test-${Date.now()}`,
+    title: 'Enhanced SYNC Test Call',
+    startISO: new Date().toISOString(),
+    attendees: [
+      {
+        name: 'Alex Johnson',
+        email: 'alex.johnson@example.com',
+        company: 'TechCorp',
+        phone: '+1234567890'
+      }
+    ],
+    transcript: 'This is a test meeting for the enhanced SYNC system with comprehensive logging.',
+    notes: 'Testing the new Airtable integration with contact creation and meeting linking.',
+    raw: {
+      testId: `test-${Date.now()}`,
+      source: 'enhanced-sync-test'
+    }
+  };
+
+  // Mutation for creating contacts from meetings (LEGACY SYNC FEATURE)
   const createContactFromMeeting = useMutation({
     mutationFn: async (meeting: any) => {
       const response = await fetch('/api/sync/create-contact', {
@@ -232,6 +304,85 @@ export default function Sync() {
         />
         
         <div className="p-6">
+          {/* Enhanced SYNC System Status */}
+          <Card className="mb-6 border-blue-200 bg-blue-50/50">
+            <CardHeader>
+              <div className="flex items-center justify-between">
+                <div>
+                  <CardTitle className="text-blue-900 flex items-center">
+                    <i className="fas fa-sync-alt mr-2"></i>
+                    Enhanced SYNC System
+                  </CardTitle>
+                  <CardDescription className="text-blue-700">
+                    New Zapier → Airtable integration with comprehensive logging
+                  </CardDescription>
+                </div>
+                <Badge variant={syncStatus.status === 'operational' ? 'default' : 'secondary'}>
+                  {syncStatus.status || 'checking...'}
+                </Badge>
+              </div>
+            </CardHeader>
+            <CardContent>
+              <div className="space-y-3">
+                <div className="flex items-center justify-between text-sm">
+                  <span className="text-muted-foreground">Airtable Connection</span>
+                  <Badge variant="outline" className="text-xs">
+                    {syncStatus.services?.airtable || 'unknown'}
+                  </Badge>
+                </div>
+                <div className="flex items-center justify-between text-sm">
+                  <span className="text-muted-foreground">Logging Service</span>
+                  <Badge variant="outline" className="text-xs">
+                    {syncStatus.services?.logger || 'unknown'}
+                  </Badge>
+                </div>
+                
+                {/* Test Buttons */}
+                <div className="pt-3 border-t flex space-x-2">
+                  <Button 
+                    size="sm" 
+                    onClick={() => testIngestMutation.mutate(testSyncPayload)}
+                    disabled={testIngestMutation.isPending}
+                    className="flex-1"
+                    data-testid="button-test-ingest"
+                  >
+                    {testIngestMutation.isPending ? (
+                      <>
+                        <i className="fas fa-spinner fa-spin mr-2"></i>
+                        Testing...
+                      </>
+                    ) : (
+                      <>
+                        <i className="fas fa-flask mr-2"></i>
+                        Test Ingest
+                      </>
+                    )}
+                  </Button>
+                  <Button 
+                    size="sm" 
+                    variant="outline"
+                    onClick={() => reprocessMutation.mutate('test-transcript-id')}
+                    disabled={reprocessMutation.isPending}
+                    className="flex-1"
+                    data-testid="button-test-reprocess"
+                  >
+                    {reprocessMutation.isPending ? (
+                      <>
+                        <i className="fas fa-spinner fa-spin mr-2"></i>
+                        Processing...
+                      </>
+                    ) : (
+                      <>
+                        <i className="fas fa-redo mr-2"></i>
+                        Test Reprocess
+                      </>
+                    )}
+                  </Button>
+                </div>
+              </div>
+            </CardContent>
+          </Card>
+
           {/* Meeting History - MOVED TO TOP */}
           <Card className="mb-8">
             <CardHeader>
