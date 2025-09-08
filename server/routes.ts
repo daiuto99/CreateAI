@@ -1,8 +1,10 @@
 import type { Express } from "express";
 import { createServer, type Server } from "http";
 import { storage } from "./storage";
-// Import improved auth context
-import { extractAuth, requireAuthWithPublic } from './auth/context';
+// Import improved auth context and middleware
+import { extractAuth } from './auth/context';
+import { attachAuth } from './auth/middleware';
+import { createAirtableServiceForRequest } from './services/airtable';
 import type { Request, Response, NextFunction } from 'express';
 
 // Enhanced auth middleware that sets req.auth consistently
@@ -196,6 +198,9 @@ import { z } from "zod";
 
 export async function registerRoutes(app: Express): Promise<Server> {
   
+  // Add auth context attachment middleware
+  app.use(attachAuth);
+  
   // Add general request logging to see what endpoints are being called
   // Add correlation ID middleware
   app.use(requestId);
@@ -297,34 +302,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
   
-  // Add sync status endpoint
-  app.get('/api/sync/status', isAuthenticated, async (req: any, res) => {
-    console.log('\n🔍 === SYNC STATUS ENDPOINT CALLED ===');
-    
-    try {
-      const auth = extractAuth(req);
-      const userId = auth.userId;
-      if (!userId) {
-        return res.status(401).json({ message: 'User ID not found' });
-      }
-      const integrations = await storage.getUserIntegrations(userId);
-      const airtableIntegration = integrations.find(i => i.provider === 'airtable');
-      
-      const status = {
-        airtableConnected: !!airtableIntegration && airtableIntegration.status === 'connected',
-        airtableBaseId: airtableIntegration?.credentials?.baseId || null,
-        hasApiKey: !!airtableIntegration?.credentials?.apiKey,
-        endpoint: '/api/sync/meetings'
-      };
-      
-      console.log('📊 SYNC Status:', status);
-      
-      res.json(status);
-      
-    } catch (error: any) {
-      console.log('❌ SYNC status error:', error.message);
-      res.status(500).json({ success: false, error: error.message });
-    }
+  // PUBLIC sync status endpoint
+  app.get('/api/sync/status', (req, res) => {
+    const a = extractAuth(req);
+    res.json({ ok: true, userId: a.userId ?? null, dev: Boolean(a.claims?.dev) });
   });
   
   // Add debug endpoints for the new three-table structure

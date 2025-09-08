@@ -454,19 +454,18 @@ export class AirtableService {
 
 // ⬇️ ADD factory helper for request-scoped usage
 import type { Request } from 'express';
+import { extractAuth } from '../auth/context';
 import { storage } from '../storage';
 
-export async function createAirtableServiceForRequest(req: Request): Promise<AirtableService | null> {
-  // Try common spots your app uses
-  const user =
-    (req as any).user?.id ||
-    (req as any).userId ||
-    (req as any).session?.user?.id;
+export async function createAirtableServiceForRequest(req: Request) {
+  const a = extractAuth(req);
+  const userId = a.userId || (req.headers['x-user-id'] as string) || (req.query.userId as string) || (req as any).body?.userId || process.env.AUTH_DEV_USER_ID;
+  if (!userId) throw new Error('[Airtable] No authenticated user on request');
+  return AirtableService.createFromUserIntegration(storage, userId);
+}
 
-  if (!user) {
-    throw new Error('[Airtable] No authenticated user on request');
-  }
-
-  // Reuse the existing static constructor
-  return await AirtableService.createFromUserIntegration(storage, user);
+// For completed transcripts:
+export async function listCompletedTranscripts(base: any) {
+  const filterByFormula = "({Transcript Processing Status} = 'complete')";
+  return base('Transcripts').select({ filterByFormula, pageSize: 100 }).all();
 }

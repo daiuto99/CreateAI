@@ -1,13 +1,22 @@
 export type HttpMethod = 'GET' | 'POST' | 'PUT' | 'PATCH' | 'DELETE';
 
+function addDevHeaders(headers: Record<string, string> = {}) {
+  if (import.meta.env.DEV && import.meta.env.VITE_DEV_USER_ID) {
+    headers['x-user-id'] = import.meta.env.VITE_DEV_USER_ID;
+  }
+  return headers;
+}
+
 export async function apiRequest<T = any>(
   url: string,
   method: HttpMethod = 'GET',
   data?: unknown
 ): Promise<T> {
+  const headers = addDevHeaders(data ? { 'Content-Type': 'application/json' } : {});
+  
   const res = await fetch(url, {
     method,
-    headers: data ? { 'Content-Type': 'application/json' } : undefined,
+    headers,
     body: data ? JSON.stringify(data) : undefined,
     credentials: 'include', // <-- IMPORTANT for session cookies
   });
