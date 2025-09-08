@@ -1,19 +1,16 @@
 import type { Express } from "express";
 import { createServer, type Server } from "http";
 import { storage } from "./storage";
-// Enhanced auth middleware compatible with multiple auth patterns
+// Import improved auth context
+import { extractAuth, requireAuthWithPublic } from './auth/context';
 import type { Request, Response, NextFunction } from 'express';
 
+// Enhanced auth middleware that sets req.auth consistently
 function requireAuth(req: Request, res: Response, next: NextFunction) {
-  const authUser =
-    (req as any).user ||
-    (req as any).session?.user ||
-    ((req as any).userId ? { id: (req as any).userId } : null);
-
-  if (!authUser) {
+  const auth = extractAuth(req);
+  if (!auth.userId) {
     return res.status(401).json({ message: 'Authentication required' });
   }
-  (req as any).authUser = authUser;
   next();
 }
 
@@ -213,10 +210,14 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // Enhanced sync meetings endpoint - now queries Contacts and Transcripts separately
   app.get('/api/sync/meetings', isAuthenticated, async (req: any, res) => {
     console.log('\n🔍 === SYNC MEETINGS ENDPOINT CALLED ===');
-    console.log('👤 User ID:', req.user?.claims?.sub);
+    const auth = extractAuth(req);
+    console.log('👤 User ID:', auth.userId);
     
     try {
-      const userId = req.user.claims.sub;
+      const userId = auth.userId;
+      if (!userId) {
+        return res.status(401).json({ message: 'User ID not found' });
+      }
       const integrations = await storage.getUserIntegrations(userId);
       console.log('🔍 Available integrations:', integrations.map(i => i.provider));
       
@@ -301,7 +302,11 @@ export async function registerRoutes(app: Express): Promise<Server> {
     console.log('\n🔍 === SYNC STATUS ENDPOINT CALLED ===');
     
     try {
-      const userId = req.user.claims.sub;
+      const auth = extractAuth(req);
+      const userId = auth.userId;
+      if (!userId) {
+        return res.status(401).json({ message: 'User ID not found' });
+      }
       const integrations = await storage.getUserIntegrations(userId);
       const airtableIntegration = integrations.find(i => i.provider === 'airtable');
       
@@ -327,7 +332,11 @@ export async function registerRoutes(app: Express): Promise<Server> {
     console.log('\n🔍 === AIRTABLE CONTACTS DEBUG ===');
     
     try {
-      const userId = req.user.claims.sub;
+      const auth = extractAuth(req);
+      const userId = auth.userId;
+      if (!userId) {
+        return res.status(401).json({ message: 'User ID not found' });
+      }
       const { createAirtableServiceForRequest } = await import('./services/airtable');
       const airtableService = await createAirtableServiceForRequest(req);
       
@@ -357,7 +366,11 @@ export async function registerRoutes(app: Express): Promise<Server> {
     console.log('\n🔍 === AIRTABLE TRANSCRIPTS DEBUG ===');
     
     try {
-      const userId = req.user.claims.sub;
+      const auth = extractAuth(req);
+      const userId = auth.userId;
+      if (!userId) {
+        return res.status(401).json({ message: 'User ID not found' });
+      }
       const { createAirtableServiceForRequest } = await import('./services/airtable');
       const airtableService = await createAirtableServiceForRequest(req);
       
@@ -388,7 +401,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
     console.log('\n🔍 === RAW AIRTABLE DATA DEBUG ===');
     
     try {
-      const userId = req.user.claims.sub;
+      const auth = extractAuth(req);
+    const userId = auth.userId;
       const integrations = await storage.getUserIntegrations(userId);
       const airtableIntegration = integrations.find(i => i.provider === 'airtable');
       
@@ -562,7 +576,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.get('/api/auth/user', isAuthenticated, async (req: any, res) => {
     const startTime = Date.now();
     try {
-      const userId = req.user.claims.sub;
+      const auth = extractAuth(req);
+    const userId = auth.userId;
       console.log('🔍 [/api/auth/user] Fetching user data for userId:', userId);
       
       const user = await storage.getUser(userId);
@@ -621,7 +636,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // Organization routes
   app.post('/api/organizations', isAuthenticated, async (req: any, res) => {
     try {
-      const userId = req.user.claims.sub;
+      const auth = extractAuth(req);
+    const userId = auth.userId;
       const { name, billingPlan = 'starter' } = req.body;
       
       if (!name) {
@@ -673,7 +689,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.post('/api/content-projects', isAuthenticated, async (req: any, res) => {
     const startTime = Date.now();
     try {
-      const userId = req.user.claims.sub;
+      const auth = extractAuth(req);
+    const userId = auth.userId;
       console.log('📁 [/api/content-projects] POST - Creating project:', {
         userId,
         requestBody: req.body,
@@ -727,7 +744,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
     const startTime = Date.now();
     try {
       const { projectId } = req.params;
-      const userId = req.user.claims.sub;
+      const auth = extractAuth(req);
+    const userId = auth.userId;
       
       console.log('🔍 [/api/content-projects/:id] Fetching project details:', {
         projectId,
@@ -789,7 +807,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.post('/api/content-projects/:projectId/items', isAuthenticated, async (req: any, res) => {
     try {
       const { projectId } = req.params;
-      const userId = req.user.claims.sub;
+      const auth = extractAuth(req);
+    const userId = auth.userId;
       
       const itemData = insertContentItemSchema.parse({
         ...req.body,
@@ -889,7 +908,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // Integration routes
   app.get('/api/integrations', isAuthenticated, async (req: any, res) => {
     try {
-      const userId = req.user.claims.sub;
+      const auth = extractAuth(req);
+    const userId = auth.userId;
       const integrations = await storage.getUserIntegrations(userId);
       res.json(integrations);
     } catch (error) {
@@ -901,7 +921,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // Add disconnect/delete integration endpoint
   app.delete('/api/integrations/:provider', isAuthenticated, async (req: any, res) => {
     try {
-      const userId = req.user.claims.sub;
+      const auth = extractAuth(req);
+    const userId = auth.userId;
       const { provider } = req.params;
 
       if (!provider) {
@@ -936,7 +957,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
   app.post('/api/integrations', isAuthenticated, async (req: any, res) => {
     try {
-      const userId = req.user.claims.sub;
+      const auth = extractAuth(req);
+    const userId = auth.userId;
       const integrationData = insertUserIntegrationSchema.parse({
         ...req.body,
         userId
@@ -955,7 +977,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
   app.post('/api/integrations/test', isAuthenticated, async (req: any, res) => {
     try {
-      const userId = req.user.claims.sub;
+      const auth = extractAuth(req);
+    const userId = auth.userId;
       const { provider } = req.body;
 
       if (!provider) {
@@ -1201,7 +1224,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
     try {
       const userId = req.params.userId;
       
-      if (req.user.claims.sub !== userId) {
+      const auth = extractAuth(req);
+      if (auth.userId !== userId) {
         return res.status(403).json({ error: 'Access denied' });
       }
       
@@ -1233,7 +1257,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // Data fetching routes
   app.get('/api/meetings', isAuthenticated, async (req: any, res) => {
     try {
-      const userId = req.user.claims.sub;
+      const auth = extractAuth(req);
+    const userId = auth.userId;
       console.log('📅 Fetching meetings for user:', userId);
       
       // Environment debug
@@ -1788,7 +1813,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
   app.get('/api/airtable/contacts', isAuthenticated, async (req: any, res) => {
     try {
-      const userId = req.user.claims.sub;
+      const auth = extractAuth(req);
+    const userId = auth.userId;
       console.log('📋 Fetching contacts for user:', userId);
       
       const integrations = await storage.getUserIntegrations(userId);
@@ -1832,7 +1858,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.post('/api/airtable/create-record', isAuthenticated, async (req: any, res) => {
     try {
       const { meeting } = req.body;
-      const userId = req.user.claims.sub;
+      const auth = extractAuth(req);
+    const userId = auth.userId;
       
       // Simulate creating a record in Airtable by Zoho
       const airtableRecord = {
@@ -1902,7 +1929,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
     try {
       const { projectId } = req.params;
       const { type, prompt, settings } = req.body;
-      const userId = req.user.claims.sub;
+      const auth = extractAuth(req);
+    const userId = auth.userId;
       
       console.log('🤖 [/api/content/generate-outline] Generating outline:', {
         projectId,
@@ -1949,7 +1977,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
     try {
       const { projectId } = req.params;
       const { type, outline, settings } = req.body;
-      const userId = req.user.claims.sub;
+      const auth = extractAuth(req);
+    const userId = auth.userId;
       
       console.log('🤖 [/api/content/generate-content] Generating content:', {
         projectId,
@@ -2003,7 +2032,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
     try {
       const { projectId } = req.params;
       const { type, content, settings } = req.body;
-      const userId = req.user.claims.sub;
+      const auth = extractAuth(req);
+    const userId = auth.userId;
       
       console.log('🤖 [/api/content/generate-enhancement] Generating enhancement:', {
         projectId,
@@ -2080,7 +2110,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
     try {
       const { projectId } = req.params;
       const { type, content, audioFile, settings } = req.body;
-      const userId = req.user.claims.sub;
+      const auth = extractAuth(req);
+    const userId = auth.userId;
       
       console.log('🚀 [/api/content/publish] Publishing content:', {
         projectId,
@@ -2328,7 +2359,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
     const startTime = Date.now();
     try {
       const { meetingIds } = req.body;
-      const userId = req.user.claims.sub;
+      const auth = extractAuth(req);
+    const userId = auth.userId;
       
       // Debug the sync execute endpoint
       console.log('\n🔍 === SYNC EXECUTE ENDPOINT DEBUG ===');
@@ -2556,7 +2588,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
   app.post('/api/airtable/create-record', isAuthenticated, async (req: any, res) => {
     try {
-      const userId = req.user.claims.sub;
+      const auth = extractAuth(req);
+    const userId = auth.userId;
       const { meeting } = req.body;
       
       const integrations = await storage.getUserIntegrations(userId);
@@ -2586,7 +2619,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // SYNC Module - Create Contact endpoint
   app.post('/api/sync/create-contact', isAuthenticated, async (req: any, res) => {
     try {
-      const userId = req.user.claims.sub;
+      const auth = extractAuth(req);
+    const userId = auth.userId;
       const { meetingId, meetingTitle, attendees } = req.body;
 
       console.log('🆕 [CREATE CONTACT] User:', userId, 'Meeting:', meetingTitle);
@@ -2754,7 +2788,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // SYNC Module - Meeting Details endpoint with extensive debugging
   app.get('/api/sync/meeting-details/:meetingId', isAuthenticated, async (req: any, res) => {
     try {
-      const userId = req.user.claims.sub;
+      const auth = extractAuth(req);
+    const userId = auth.userId;
       const { meetingId } = req.params;
 
       console.log('=== MEETING DETAILS DEBUG ===');
