@@ -195,7 +195,7 @@ export class AirtableService {
   /**
    * Create a new meeting record in the first table
    */
-  async createMeetingRecord(meetingData: { title: string; date: string; attendees?: string[]; description?: string }): Promise<any> {
+  async createMeetingRecord(meetingData: { title: string; date: string; attendees?: string[]; description?: string; contactId?: string }): Promise<any> {
     try {
       console.log('➕ [AirtableService] Creating meeting record:', meetingData.title);
       
@@ -451,7 +451,7 @@ export class AirtableService {
   /**
    * Build meeting fields for creation based on available table fields
    */
-  private buildMeetingFields(meetingData: { title: string; date: string; attendees?: string[]; description?: string }, tableFields: any[]): Record<string, any> {
+  private buildMeetingFields(meetingData: { title: string; date: string; attendees?: string[]; description?: string; contactId?: string }, tableFields: any[]): Record<string, any> {
     const fields: Record<string, any> = {};
     
     console.log('🔧 [AirtableService] Building fields for meeting:', meetingData.title);
@@ -496,6 +496,15 @@ export class AirtableService {
       if (descField) {
         fields[descField] = meetingData.description;
         console.log(`✅ [AirtableService] Mapped description to field "${descField}"`);
+      }
+    }
+    
+    // Contact ID field (if provided)
+    if (meetingData.contactId) {
+      const contactField = this.findBestFieldMatch(fieldMap, ['contact', 'contact id', 'linked contact', 'related contact']);
+      if (contactField) {
+        fields[contactField] = meetingData.contactId;
+        console.log(`✅ [AirtableService] Mapped contact ID to field "${contactField}"`);
       }
     }
     

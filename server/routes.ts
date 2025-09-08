@@ -1997,6 +1997,12 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const userId = req.user.claims.sub;
       const { meeting } = req.body;
       
+      console.log('📝 [API] Creating Airtable record for meeting:', meeting?.title);
+      
+      if (!meeting || !meeting.title) {
+        return res.status(400).json({ error: 'Meeting data is required' });
+      }
+      
       const integrations = await storage.getUserIntegrations(userId);
       const airtableIntegration = integrations.find(i => i.provider === 'airtable');
       
@@ -2008,17 +2014,39 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const creds = airtableIntegration.credentials as any;
       const airtableService = new AirtableService(creds.apiKey, creds.baseId);
       
-      const record = await airtableService.createContact({
-        name: meeting.title,
-        email: meeting.attendees[0] || 'meeting@example.com',
-        description: `Meeting: ${meeting.title} on ${meeting.date}`
+      // Use the new createMeetingRecord method with proper meeting data
+      const record = await airtableService.createMeetingRecord({
+        title: meeting.title,
+        date: meeting.date || new Date().toISOString(),
+        attendees: meeting.attendees || [],
+        description: `Meeting sync from CreateAI - ${meeting.title} on ${meeting.date || 'unknown date'}`
       });
       
-      res.json({ success: true, record });
+      // Validate that the record was created with meaningful data
+      if (!record || !record.id) {
+        throw new Error('Record creation failed - no ID returned');
+      }
+      
+      // Check if the record has any actual field values
+      const hasFields = record.fields && Object.keys(record.fields).length > 0;
+      if (!hasFields) {
+        console.warn('⚠️ [API] Record created but has no field values:', record.id);
+      }
+      
+      console.log('✅ [API] Airtable record created successfully:', record.id);
+      res.json({ 
+        success: true, 
+        record,
+        message: `Meeting record created in Airtable with ID: ${record.id}` 
+      });
       
     } catch (error: any) {
-      console.error('Error creating Airtable record:', error);
-      res.status(500).json({ error: 'Failed to create record' });
+      console.error('🚨 [API] Error creating Airtable record:', error.message);
+      res.status(500).json({ 
+        error: 'Failed to create record', 
+        details: error.message,
+        suggestion: 'Please check your Airtable integration credentials and table structure' 
+      });
     }
   });
 
