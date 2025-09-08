@@ -1,17 +1,12 @@
 import { QueryClient, QueryFunction } from "@tanstack/react-query";
+import { apiRequest as baseApiRequest } from '@/lib/api';
 
-async function throwIfResNotOk(res: Response) {
-  if (!res.ok) {
-    const text = (await res.text()) || res.statusText;
-    throw new Error(`${res.status}: ${text}`);
-  }
-}
-
-export async function apiRequest(
-  method: string,
+// Legacy support - URL-first pattern
+export async function apiRequest<T = any>(
   url: string,
-  data?: unknown | undefined,
-): Promise<Response> {
+  options: { method?: string; data?: unknown } = {}
+): Promise<T> {
+  const { method = 'GET', data } = options;
   console.log('🌍 API Request:', {
     method,
     url,
@@ -19,80 +14,44 @@ export async function apiRequest(
     timestamp: new Date().toISOString()
   });
   
-  const res = await fetch(url, {
-    method,
-    headers: data ? { "Content-Type": "application/json" } : {},
-    body: data ? JSON.stringify(data) : undefined,
-    credentials: "include",
-  });
-  
-  console.log('🌍 API Response:', {
-    method,
-    url,
-    status: res.status,
-    statusText: res.statusText,
-    ok: res.ok,
-    timestamp: new Date().toISOString()
-  });
-  
-  // Log error details before throwing
-  if (!res.ok) {
-    try {
-      const errorText = await res.clone().text();
-      console.error('🌍 API Error Response Body:', errorText);
-      
-      // Store API error debug info
-      sessionStorage.setItem('debug-last-api-error', JSON.stringify({
-        timestamp: new Date().toISOString(),
-        method,
-        url,
-        status: res.status,
-        statusText: res.statusText,
-        errorBody: errorText,
-        requestData: data
-      }));
-    } catch (e) {
-      console.warn('Failed to read error response body:', e);
-    }
-  }
-
-  await throwIfResNotOk(res);
-  return res;
-}
-
-type UnauthorizedBehavior = "returnNull" | "throw";
-export const getQueryFn: <T>(options: {
-  on401: UnauthorizedBehavior;
-}) => QueryFunction<T> =
-  ({ on401: unauthorizedBehavior }) =>
-  async ({ queryKey }) => {
-    const res = await fetch(queryKey.join("/") as string, {
-      credentials: "include",
+  try {
+    const result = await baseApiRequest(url, method as any, data);
+    console.log('🌍 API Response:', {
+      method,
+      url,
+      status: 200,
+      statusText: 'OK',
+      ok: true,
+      timestamp: new Date().toISOString()
     });
-
-    if (unauthorizedBehavior === "returnNull" && res.status === 401) {
-      return null;
-    }
-
-    await throwIfResNotOk(res);
-    return await res.json();
-  };
-
-export function isUnauthorizedError(error: unknown): boolean {
-  return error instanceof Error && error.message.includes('401');
+    return result;
+  } catch (error: any) {
+    console.error('🌍 API Error:', error.message);
+    throw error;
+  }
 }
+
+// Legacy apiMutate for compatibility
+export const apiMutate = <T=any>(url: string, method: 'POST'|'PUT'|'PATCH'|'DELETE', data?: unknown) =>
+  baseApiRequest<T>(url, method, data);
+
+export const apiQuery = <T=any>(url: string) =>
+  baseApiRequest<T>(url, 'GET');
+
+// Query function for TanStack Query
+const defaultQueryFn: QueryFunction = async ({ queryKey }) => {
+  const url = Array.isArray(queryKey) ? queryKey[0] as string : queryKey as string;
+  return apiQuery(url);
+};
 
 export const queryClient = new QueryClient({
   defaultOptions: {
     queries: {
-      queryFn: getQueryFn({ on401: "throw" }),
-      refetchInterval: false,
-      refetchOnWindowFocus: false,
-      staleTime: Infinity,
-      retry: false,
-    },
-    mutations: {
-      retry: false,
+      queryFn: defaultQueryFn,
+      staleTime: 5 * 60 * 1000, // 5 minutes
+      retry: 1,
     },
   },
 });
+
+export default queryClient;

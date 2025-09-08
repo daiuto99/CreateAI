@@ -11,7 +11,7 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { useLocation } from "wouter";
-import { apiRequest } from "@/lib/queryClient";
+import { apiPost, apiGet } from "@/lib/api";
 
 export default function Sync() {
   const { toast } = useToast();
@@ -123,7 +123,7 @@ export default function Sync() {
   });
 
   // Enhanced SYNC status query
-  const { data: syncStatus = { status: 'unknown', services: {} } } = useQuery({
+  const { data: syncStatus = { status: 'unknown', services: {} } } = useQuery<{ status: string; services: { airtable?: string; logger?: string } }>({
     queryKey: ['/api/sync/status'],
     enabled: isAuthenticated,
     retry: false,
@@ -133,7 +133,7 @@ export default function Sync() {
   // Enhanced mutation for testing new ingest endpoint
   const testIngestMutation = useMutation({
     mutationFn: async (payload: any) => {
-      return apiRequest('/api/sync/ingest', { data: payload });
+      return apiPost('/api/sync/ingest', payload);
     },
     onSuccess: (data) => {
       toast({
@@ -155,7 +155,7 @@ export default function Sync() {
   // Enhanced mutation for reprocessing
   const reprocessMutation = useMutation({
     mutationFn: async (transcriptId: string) => {
-      return apiRequest(`/api/sync/reprocess/${transcriptId}`, { method: 'POST' });
+      return apiPost(`/api/sync/reprocess/${transcriptId}`);
     },
     onSuccess: (data) => {
       toast({

@@ -2907,8 +2907,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  // 4) Status endpoint for monitoring
-  app.get('/api/sync/status', isAuthenticated, async (req: any, res) => {
+  // 4) Status endpoint for monitoring (no auth required for health check)
+  app.get('/api/sync/status', async (req: any, res) => {
     try {
       log.info('sync.status.request', withCtx(req));
       return res.json({
