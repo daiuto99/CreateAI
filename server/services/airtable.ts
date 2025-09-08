@@ -193,6 +193,72 @@ export class AirtableService {
   }
 
   /**
+   * Create a new meeting record in the first table
+   */
+  async createMeetingRecord(meetingData: { title: string; date: string; attendees?: string[]; description?: string }): Promise<any> {
+    try {
+      console.log('➕ [AirtableService] Creating meeting record:', meetingData.title);
+      
+      // Get the first table name
+      const tablesResponse = await fetch(`https://api.airtable.com/v0/meta/bases/${this.baseId}/tables`, {
+        headers: {
+          'Authorization': `Bearer ${this.apiKey}`,
+          'Content-Type': 'application/json'
+        }
+      });
+
+      if (!tablesResponse.ok) {
+        throw new Error('Failed to fetch base schema');
+      }
+
+      const tablesData = await tablesResponse.json();
+      const firstTable = tablesData.tables?.[0];
+      
+      if (!firstTable) {
+        throw new Error('No tables found in base');
+      }
+
+      // Create the record
+      const recordData = {
+        records: [
+          {
+            fields: this.buildMeetingFields(meetingData, firstTable.fields)
+          }
+        ]
+      };
+
+      const response = await fetch(`${this.baseUrl}/${encodeURIComponent(firstTable.name)}`, {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${this.apiKey}`,
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify(recordData)
+      });
+
+      if (!response.ok) {
+        const errorData = await response.json() as AirtableError;
+        throw new Error(errorData.error?.message || `HTTP ${response.status}`);
+      }
+
+      const result = await response.json() as AirtableResponse;
+      const createdRecord = result.records[0];
+      
+      console.log('✅ [AirtableService] Meeting record created with ID:', createdRecord.id);
+      return {
+        id: createdRecord.id,
+        title: meetingData.title,
+        date: meetingData.date,
+        fields: createdRecord.fields
+      };
+
+    } catch (error: any) {
+      console.error('🚨 [AirtableService] Error creating meeting record:', error.message);
+      throw error;
+    }
+  }
+
+  /**
    * Create a new contact record in the first table
    */
   async createContact(contactData: { name: string; email: string; description?: string }): Promise<any> {
@@ -316,6 +382,9 @@ export class AirtableService {
   private buildContactFields(contactData: { name: string; email: string; description?: string }, tableFields: any[]): Record<string, any> {
     const fields: Record<string, any> = {};
     
+    console.log('🔧 [AirtableService] Building fields for contact:', contactData.name);
+    console.log('🔧 [AirtableService] Available table fields:', tableFields.map(f => f.name));
+    
     // Map data to the most appropriate fields
     const fieldMap = new Map(tableFields.map((f: any) => [f.name.toLowerCase(), f.name]));
     
@@ -323,12 +392,21 @@ export class AirtableService {
     const nameField = this.findBestFieldMatch(fieldMap, ['name', 'full name', 'contact name', 'title']);
     if (nameField) {
       fields[nameField] = contactData.name;
+      console.log(`✅ [AirtableService] Mapped name "${contactData.name}" to field "${nameField}"`);
+    } else {
+      // If no name field found, use the first text field as fallback
+      const firstTextField = tableFields.find(f => f.type === 'singleLineText' || f.type === 'multilineText');
+      if (firstTextField) {
+        fields[firstTextField.name] = contactData.name;
+        console.log(`⚠️ [AirtableService] Using fallback field "${firstTextField.name}" for name`);
+      }
     }
     
     // Email field
     const emailField = this.findBestFieldMatch(fieldMap, ['email', 'email address', 'contact email']);
     if (emailField) {
       fields[emailField] = contactData.email;
+      console.log(`✅ [AirtableService] Mapped email "${contactData.email}" to field "${emailField}"`);
     }
     
     // Description/Notes field
@@ -336,7 +414,15 @@ export class AirtableService {
       const notesField = this.findBestFieldMatch(fieldMap, ['notes', 'description', 'comments', 'details']);
       if (notesField) {
         fields[notesField] = contactData.description;
+        console.log(`✅ [AirtableService] Mapped description to field "${notesField}"`);
       }
+    }
+    
+    console.log('🔧 [AirtableService] Final fields to create:', fields);
+    
+    // Validate that we have at least one field mapped
+    if (Object.keys(fields).length === 0) {
+      throw new Error('No suitable fields found in Airtable table for contact data');
     }
     
     return fields;
@@ -360,6 +446,67 @@ export class AirtableService {
       console.error('🚨 [AirtableService] Error getting contacts for meetings:', error.message);
       return [];
     }
+  }
+
+  /**
+   * Build meeting fields for creation based on available table fields
+   */
+  private buildMeetingFields(meetingData: { title: string; date: string; attendees?: string[]; description?: string }, tableFields: any[]): Record<string, any> {
+    const fields: Record<string, any> = {};
+    
+    console.log('🔧 [AirtableService] Building fields for meeting:', meetingData.title);
+    console.log('🔧 [AirtableService] Available table fields:', tableFields.map(f => f.name));
+    
+    // Map data to the most appropriate fields
+    const fieldMap = new Map(tableFields.map((f: any) => [f.name.toLowerCase(), f.name]));
+    
+    // Title field
+    const titleField = this.findBestFieldMatch(fieldMap, ['title', 'name', 'meeting title', 'subject']);
+    if (titleField) {
+      fields[titleField] = meetingData.title;
+      console.log(`✅ [AirtableService] Mapped title "${meetingData.title}" to field "${titleField}"`);
+    } else {
+      // Use the first text field as fallback
+      const firstTextField = tableFields.find(f => f.type === 'singleLineText' || f.type === 'multilineText');
+      if (firstTextField) {
+        fields[firstTextField.name] = meetingData.title;
+        console.log(`⚠️ [AirtableService] Using fallback field "${firstTextField.name}" for title`);
+      }
+    }
+    
+    // Date field
+    const dateField = this.findBestFieldMatch(fieldMap, ['date', 'meeting date', 'created date', 'timestamp']);
+    if (dateField) {
+      fields[dateField] = meetingData.date;
+      console.log(`✅ [AirtableService] Mapped date "${meetingData.date}" to field "${dateField}"`);
+    }
+    
+    // Attendees field
+    if (meetingData.attendees && meetingData.attendees.length > 0) {
+      const attendeesField = this.findBestFieldMatch(fieldMap, ['attendees', 'participants', 'people', 'emails']);
+      if (attendeesField) {
+        fields[attendeesField] = meetingData.attendees.join(', ');
+        console.log(`✅ [AirtableService] Mapped attendees to field "${attendeesField}"`);
+      }
+    }
+    
+    // Description field
+    if (meetingData.description) {
+      const descField = this.findBestFieldMatch(fieldMap, ['description', 'notes', 'details', 'summary']);
+      if (descField) {
+        fields[descField] = meetingData.description;
+        console.log(`✅ [AirtableService] Mapped description to field "${descField}"`);
+      }
+    }
+    
+    console.log('🔧 [AirtableService] Final meeting fields to create:', fields);
+    
+    // Validate that we have at least one field mapped
+    if (Object.keys(fields).length === 0) {
+      throw new Error('No suitable fields found in Airtable table for meeting data');
+    }
+    
+    return fields;
   }
 
   /**
