@@ -280,10 +280,14 @@ export default function Sync() {
                   {meetings
                     .filter((meeting: any) => !dismissedMeetings.has(meeting.id))
                     .map((meeting: any) => (
-                    <div key={meeting.id} className="flex items-center justify-between p-4 border rounded-lg">
-                      <div className="flex-1">
+                    <div key={meeting.id} className="flex items-center justify-between p-4 border rounded-lg hover:bg-gray-50 dark:hover:bg-gray-800 transition-colors">
+                      <div 
+                        className="flex-1 cursor-pointer" 
+                        onClick={() => handleMeetingClick(meeting.id)}
+                        data-testid={`meeting-item-${meeting.id}`}
+                      >
                         <div className="flex items-center space-x-2 mb-2">
-                          <h4 className="font-medium">{meeting.title}</h4>
+                          <h4 className="font-medium hover:text-blue-600 dark:hover:text-blue-400">{meeting.title}</h4>
                           <div className="flex items-center space-x-1">
                             {/* Otter.AI Match Icon - BLUE only for real API data, spinner while loading */}
                             {transcriptsLoading ? (
@@ -566,6 +570,132 @@ export default function Sync() {
           </div>
         </div>
       </main>
+
+      {/* Meeting Details Modal */}
+      <Dialog open={isMeetingModalOpen} onOpenChange={setIsMeetingModalOpen}>
+        <DialogContent className="max-w-2xl max-h-[80vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle className="flex items-center space-x-2">
+              <i className="fas fa-calendar-alt text-blue-500"></i>
+              <span>{selectedMeeting?.title || 'Meeting Details'}</span>
+            </DialogTitle>
+            <DialogDescription>
+              {selectedMeeting?.id === 'fallback' ? 
+                'This meeting could not be found in the current list.' : 
+                'Detailed information about this meeting and its integration status.'
+              }
+            </DialogDescription>
+          </DialogHeader>
+          
+          {selectedMeeting && (
+            <div className="space-y-6">
+              {/* Meeting Info */}
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div className="space-y-3">
+                  <div>
+                    <label className="text-sm font-medium text-muted-foreground">Meeting ID</label>
+                    <p className="text-sm font-mono bg-gray-100 dark:bg-gray-800 px-2 py-1 rounded">{selectedMeeting.id}</p>
+                  </div>
+                  <div>
+                    <label className="text-sm font-medium text-muted-foreground">Date & Time</label>
+                    <p className="text-sm">{new Date(selectedMeeting.date).toLocaleString()}</p>
+                  </div>
+                  <div>
+                    <label className="text-sm font-medium text-muted-foreground">Duration</label>
+                    <p className="text-sm">{selectedMeeting.duration || 'Unknown'}</p>
+                  </div>
+                </div>
+                
+                <div className="space-y-3">
+                  <div>
+                    <label className="text-sm font-medium text-muted-foreground">Status</label>
+                    <Badge className="ml-2">{selectedMeeting.status || 'Unknown'}</Badge>
+                  </div>
+                  <div>
+                    <label className="text-sm font-medium text-muted-foreground">Integration Status</label>
+                    <div className="flex items-center space-x-2 mt-1">
+                      <div className="flex items-center space-x-1">
+                        <div className={`w-4 h-4 rounded-full ${
+                          selectedMeeting.hasOtterMatch ? 'bg-blue-500' : 'bg-gray-300'
+                        }`}>
+                          <i className="fas fa-microphone text-white text-xs p-0.5"></i>
+                        </div>
+                        <span className="text-sm">Otter.AI</span>
+                      </div>
+                      <div className="flex items-center space-x-1">
+                        <div className={`w-4 h-4 rounded-full ${
+                          selectedMeeting.hasAirtableMatch && !selectedMeeting.isAirtableFallback ? 'bg-green-500' : 'bg-gray-300'
+                        }`}>
+                          <i className="fas fa-database text-white text-xs p-0.5"></i>
+                        </div>
+                        <span className="text-sm">Airtable</span>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              {/* Attendees */}
+              {selectedMeeting.attendees && selectedMeeting.attendees.length > 0 && (
+                <div>
+                  <label className="text-sm font-medium text-muted-foreground">Attendees</label>
+                  <div className="mt-2 flex flex-wrap gap-2">
+                    {selectedMeeting.attendees.map((attendee: string, index: number) => (
+                      <Badge key={index} variant="outline">{attendee}</Badge>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              {/* Description */}
+              {selectedMeeting.description && (
+                <div>
+                  <label className="text-sm font-medium text-muted-foreground">Description</label>
+                  <p className="text-sm mt-2 p-3 bg-gray-50 dark:bg-gray-800 rounded">
+                    {selectedMeeting.description}
+                  </p>
+                </div>
+              )}
+
+              {/* Actions */}
+              <div className="flex items-center justify-between pt-4 border-t">
+                <div className="flex items-center space-x-2">
+                  {!selectedMeeting.hasAirtableMatch && selectedMeeting.id !== 'fallback' && (
+                    <Button 
+                      size="sm" 
+                      onClick={() => {
+                        createAirtableRecord.mutate(selectedMeeting);
+                        handleCloseModal();
+                      }}
+                      disabled={createAirtableRecord.isPending}
+                    >
+                      <i className="fas fa-plus mr-1"></i>
+                      Create Airtable Record
+                    </Button>
+                  )}
+                  {selectedMeeting.id !== 'fallback' && (
+                    <Button 
+                      size="sm" 
+                      variant="outline"
+                      onClick={() => {
+                        dismissMeeting.mutate(selectedMeeting.id);
+                        handleCloseModal();
+                      }}
+                      disabled={dismissMeeting.isPending}
+                    >
+                      <i className="fas fa-times mr-1"></i>
+                      Dismiss Meeting
+                    </Button>
+                  )}
+                </div>
+                <Button variant="outline" onClick={handleCloseModal}>
+                  Close
+                </Button>
+              </div>
+            </div>
+          )}
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }
