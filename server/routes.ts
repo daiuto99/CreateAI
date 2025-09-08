@@ -1425,8 +1425,19 @@ export async function registerRoutes(app: Express): Promise<Server> {
             
             console.log(`📧 Meeting "${event.title}" attendees:`, event.attendees);
             
+            // Generate consistent meeting ID format
+            let formattedDate;
+            if (event.startTime) {
+              // Parse iCal format like "20250907T090000Z" to "20250907T090000"
+              formattedDate = event.startTime.replace(/[Z:]|\.\d+Z?$/g, '').substring(0, 15);
+            } else {
+              // Fallback to current timestamp
+              const now = new Date();
+              formattedDate = now.toISOString().replace(/[-:]/g, '').substring(0, 15);
+            }
+
             meetings.push({
-              id: `meeting-${event.startTime || Date.now()}`,
+              id: `meeting-${formattedDate}`,
               title: event.title,
               date: meetingDate,
               duration: '1h',
@@ -2841,8 +2852,17 @@ export async function registerRoutes(app: Express): Promise<Server> {
             }
 
             if (event.title) {
-              // Generate the same ID format as /api/meetings
-              const generatedId = `meeting-${event.startTime || Date.now()}`;
+              // Parse iCal date format and generate consistent ID
+              let formattedDate;
+              if (event.startTime) {
+                // Parse iCal format like "20250907T090000Z" to "20250907T090000"
+                formattedDate = event.startTime.replace(/[Z:]|\.\d+Z?$/g, '').substring(0, 15);
+              } else {
+                // Fallback to current timestamp
+                const now = new Date();
+                formattedDate = now.toISOString().replace(/[-:]/g, '').substring(0, 15);
+              }
+              const generatedId = `meeting-${formattedDate}`;
               event.id = generatedId;
               calendarMeetings.push(event);
             }
@@ -2860,7 +2880,17 @@ export async function registerRoutes(app: Express): Promise<Server> {
       console.log('Direct ID match:', meeting ? meeting.title : 'NOT FOUND');
       
       if (!meeting) {
-        meeting = calendarMeetings.find(m => m.title && m.title.includes(meetingId));
+        // Try parsing date-based lookup for IDs like meeting-20250907T090000
+        const dateMatch = meetingId.match(/^meeting-(\d{8}T\d{6})$/);
+        if (dateMatch) {
+          const targetDate = dateMatch[1];
+          meeting = calendarMeetings.find(m => m.id.includes(targetDate));
+          console.log('Date-based match:', meeting ? meeting.title : 'NOT FOUND');
+        }
+      }
+      
+      if (!meeting) {
+        meeting = calendarMeetings.find(m => m.title && m.title.includes(meetingId.replace('meeting-', '')));
         console.log('Title includes match:', meeting ? meeting.title : 'NOT FOUND');
       }
       
