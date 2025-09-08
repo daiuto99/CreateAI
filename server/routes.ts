@@ -2669,10 +2669,29 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
       console.log('📝 [CREATE CONTACT] Creating contact with data:', contactData);
 
-      // Create the contact using Airtable service
-      const createdContact = await airtableService.createContact(contactData);
-
-      console.log('✅ [CREATE CONTACT] Contact created successfully:', createdContact.id);
+      // Create the contact using Airtable service with retry fallback
+      let createdContact;
+      try {
+        createdContact = await airtableService.createContact(contactData);
+        console.log('✅ [CREATE CONTACT] Contact created successfully:', createdContact.id);
+      } catch (initialError: any) {
+        console.log('⚠️ [CREATE CONTACT] Initial creation failed, trying with minimal fields:', initialError.message);
+        
+        // Retry with minimal required fields only
+        const minimalContactData = {
+          Name: contactName || 'Unnamed Contact',
+          Email: primaryEmail || '',
+          Notes: `Meeting: ${meetingTitle}\nImported from calendar sync`
+        };
+        
+        try {
+          createdContact = await airtableService.createContact(minimalContactData);
+          console.log('✅ [CREATE CONTACT] Contact created with minimal fields:', createdContact.id);
+        } catch (retryError: any) {
+          console.error('❌ [CREATE CONTACT] Both full and minimal creation failed:', retryError.message);
+          throw new Error(`Contact creation failed: ${retryError.message}`);
+        }
+      }
 
       res.json({
         success: true,
@@ -2681,13 +2700,13 @@ export async function registerRoutes(app: Express): Promise<Server> {
           id: createdContact.id,
           name: contactName,
           email: primaryEmail,
-          company: 'Unknown Company',
-          relationshipType: relationshipType
+          company: contactData.Company || 'Unknown',
+          relationshipType: contactData['Relationship Type'] || 'Prospect'
         }
       });
 
     } catch (error: any) {
-      console.error('❌ [CREATE CONTACT] Error:', error.message);
+      console.error('❌ [CREATE CONTACT] Final error:', error.message);
       res.status(500).json({ 
         message: error.message || "Failed to create contact" 
       });
@@ -2842,13 +2861,14 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
       if (!targetMeeting) {
         console.log('❌ [MEETING DETAILS] No meetings found in calendar data');
-        // Return a basic fallback response instead of failing
+        // Return a fallback response with the meeting ID as title for better UX
+        const fallbackTitle = meetingId.replace('meeting-', '').replace(/[T\d]/g, ' ').trim() || 'Meeting Details';
         return res.json({
           success: true,
           meeting: {
             id: meetingId,
-            title: 'Meeting Details',
-            description: 'Limited data available - calendar integration may need refresh',
+            title: fallbackTitle,
+            description: 'Meeting data temporarily unavailable. Calendar sync may be in progress.',
             date: new Date().toISOString(),
             duration: 'Unknown',
             location: 'Not specified',
@@ -2857,8 +2877,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
             attendees: [],
             hasTranscript: false,
             hasAirtableMatch: false,
-            suggestedContactName: 'Unknown Contact',
-            error: 'Meeting not found in calendar data'
+            suggestedContactName: fallbackTitle || 'Meeting Contact',
+            error: 'Meeting details not found - data may be syncing'
           }
         });
       }
