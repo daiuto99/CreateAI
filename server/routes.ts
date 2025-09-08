@@ -2733,13 +2733,14 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  // SYNC Module - Meeting Details endpoint
+  // SYNC Module - Meeting Details endpoint with extensive debugging
   app.get('/api/sync/meeting-details/:meetingId', isAuthenticated, async (req: any, res) => {
     try {
       const userId = req.user.claims.sub;
       const { meetingId } = req.params;
 
-      console.log('🔍 [MEETING DETAILS] User:', userId, 'Meeting ID:', meetingId);
+      console.log('=== MEETING DETAILS DEBUG ===');
+      console.log('Requested meetingId:', meetingId);
 
       if (!meetingId) {
         return res.status(400).json({ message: "Meeting ID is required" });
@@ -2777,135 +2778,70 @@ export async function registerRoutes(app: Express): Promise<Server> {
       let targetMeeting = null;
       const allMeetings = [];
 
-      for (const eventBlock of events) {
-        const lines = eventBlock.split('\n');
-        const event: any = {};
-        
-        for (const line of lines) {
-          const colonIndex = line.indexOf(':');
-          if (colonIndex > 0) {
-            const key = line.substring(0, colonIndex).trim();
-            const value = line.substring(colonIndex + 1).trim();
-            
-            if (key === 'UID') event.id = value;
-            if (key === 'SUMMARY') event.title = value;
-            if (key === 'DTSTART') event.startTime = value;
-            if (key === 'DTEND') event.endTime = value;
-            if (key === 'LOCATION') event.location = value;
-            if (key === 'DESCRIPTION') event.description = value;
-            if (key === 'ATTENDEE') {
-              if (!event.attendees) event.attendees = [];
-              event.attendees.push(value);
-            }
-          }
-        }
-
-        // Generate the same ID format as /api/meetings
-        const generatedId = `meeting-${event.startTime || Date.now()}`;
-        event.generatedId = generatedId;
-        allMeetings.push(event);
-
-        // Create multiple possible ID formats to match against
-        const possibleIds = [
-          event.id, // Original UID
-          `meeting-${event.startTime}`, // Full datetime
-          `meeting-${event.startTime?.replace(/[^\d]/g, '')}`, // Numbers only
-          `meeting-${event.startTime?.replace(/[^\dT]/g, '')}` // Numbers + T
-        ];
-        
-        // Match by meeting ID - try multiple matching strategies
-        if (possibleIds.includes(meetingId) ||
-            event.id === meetingId ||
-            meetingId.includes(event.id) ||
-            event.id?.includes(meetingId)) {
-          targetMeeting = event;
-          console.log('✅ [MEETING DETAILS] Found exact match for:', meetingId, 'with event:', event.title);
-          break;
-        }
-        
-        // Store for potential title-based matching
-        event.possibleIds = possibleIds;
-      }
-
-      // Fallback: Try multiple matching strategies
-      if (!targetMeeting) {
-        console.log('⚠️ [MEETING DETAILS] No exact match found, trying fallback methods...');
-        console.log('🔍 [MEETING DETAILS] Requested meeting ID:', meetingId);
-        console.log('🔍 [MEETING DETAILS] Available meetings sample:', allMeetings.slice(0, 5).map(m => ({ 
-          ids: m.possibleIds, 
-          title: m.title 
-        })));
-        
-        // Strategy 1: Find by any partial ID match
-        const cleanRequestId = meetingId.replace('meeting-', '');
-        targetMeeting = allMeetings.find(event => 
-          event.possibleIds?.some(id => 
-            id?.includes(cleanRequestId) || cleanRequestId.includes(id?.replace('meeting-', '') || '')
-          )
-        );
-        
-        if (targetMeeting) {
-          console.log('✅ [MEETING DETAILS] Found partial ID match:', targetMeeting.title);
-        } else {
-          // Strategy 2: Find by datetime pattern match
-          const datePattern = meetingId.match(/\d{8}T\d{6}/);
-          if (datePattern) {
-            targetMeeting = allMeetings.find(event => 
-              event.startTime?.includes(datePattern[0]) ||
-              event.title?.toLowerCase().includes('coaching') ||
-              event.title?.toLowerCase().includes('session')
-            );
-          }
+      // Use simplified direct approach to get meetings 
+      const outlookService = { 
+        getMeetings: async (userId: string) => {
+          const calendarMeetings = [];
           
-          if (targetMeeting) {
-            console.log('✅ [MEETING DETAILS] Found datetime/keyword match:', targetMeeting.title);
-          } else {
-            // Strategy 3: Find by title keywords (coaching, session, etc.)
-            targetMeeting = allMeetings.find(event => {
-              const title = event.title?.toLowerCase() || '';
-              return title.includes('coaching') || title.includes('session') || title.includes('rtlc');
-            });
+          for (const eventBlock of events) {
+            const lines = eventBlock.split('\n');
+            const event: any = {};
             
-            if (targetMeeting) {
-              console.log('✅ [MEETING DETAILS] Found keyword match:', targetMeeting.title);
-            } else {
-              // Final fallback: use any meeting as demo
-              if (allMeetings.length > 0) {
-                targetMeeting = allMeetings[0];
-                console.log('📋 [MEETING DETAILS] Using first available meeting as fallback:', targetMeeting.title);
+            for (const line of lines) {
+              const colonIndex = line.indexOf(':');
+              if (colonIndex > 0) {
+                const key = line.substring(0, colonIndex).trim();
+                const value = line.substring(colonIndex + 1).trim();
+                
+                if (key === 'UID') event.id = value;
+                if (key === 'SUMMARY') event.title = value;
+                if (key === 'DTSTART') event.startTime = value;
+                if (key === 'DTEND') event.endTime = value;
+                if (key === 'LOCATION') event.location = value;
+                if (key === 'DESCRIPTION') event.description = value;
+                if (key === 'ATTENDEE') {
+                  if (!event.attendees) event.attendees = [];
+                  event.attendees.push(value);
+                }
               }
             }
+
+            if (event.title) {
+              // Generate the same ID format as /api/meetings
+              const generatedId = `meeting-${event.startTime || Date.now()}`;
+              event.id = generatedId;
+              calendarMeetings.push(event);
+            }
           }
+          return calendarMeetings;
         }
+      };
+
+      const calendarMeetings = await outlookService.getMeetings(userId);
+      console.log('Total meetings found:', calendarMeetings.length);
+      console.log('First 3 meeting IDs:', calendarMeetings.slice(0, 3).map(m => ({ id: m.id, title: m.title })));
+      
+      // Try to find meeting with multiple strategies
+      let meeting = calendarMeetings.find(m => m.id === meetingId);
+      console.log('Direct ID match:', meeting ? meeting.title : 'NOT FOUND');
+      
+      if (!meeting) {
+        meeting = calendarMeetings.find(m => m.title && m.title.includes(meetingId));
+        console.log('Title includes match:', meeting ? meeting.title : 'NOT FOUND');
+      }
+      
+      if (!meeting) {
+        // Use the first meeting as fallback for testing
+        meeting = calendarMeetings[0];
+        console.log('Using fallback meeting:', meeting ? meeting.title : 'NO MEETINGS');
       }
 
-      if (!targetMeeting) {
+      if (!meeting) {
         console.log('❌ [MEETING DETAILS] No meetings found in calendar data');
-        // Return a fallback response with the meeting ID as title for better UX
-        const fallbackTitle = meetingId.replace('meeting-', '').replace(/[T\d]/g, ' ').trim() || 'Meeting Details';
-        return res.json({
-          success: true,
-          meeting: {
-            id: meetingId,
-            title: fallbackTitle,
-            description: 'Meeting data temporarily unavailable. Calendar sync may be in progress.',
-            date: new Date().toISOString(),
-            duration: 'Unknown',
-            location: 'Not specified',
-            meetingType: 'Standard',
-            attendeeCount: 0,
-            attendees: [],
-            hasTranscript: false,
-            hasAirtableMatch: false,
-            suggestedContactName: fallbackTitle || 'Meeting Contact',
-            error: 'Meeting details not found - data may be syncing'
-          }
-        });
+        return res.status(404).json({ success: false, error: 'Meeting not found' });
       }
 
-      // Calculate duration and enhanced details
-      let duration = 'Unknown';
-      let meetingType = 'Standard';
+      res.json({ success: true, meeting: meeting });
       
       if (targetMeeting.startTime && targetMeeting.endTime) {
         const start = new Date(targetMeeting.startTime.replace(/(\d{4})(\d{2})(\d{2})T(\d{2})(\d{2})(\d{2})/, '$1-$2-$3T$4:$5:$6'));
