@@ -9,20 +9,22 @@ export type AuthContext = {
 
 // Extract a consistent auth context from whatever the app has available
 export function extractAuth(req: Request): AuthContext {
+  const sessionUser = (req as any).session?.user;
   const u: any =
     (req as any).user ||
     (req as any).authUser ||
-    (req as any).session?.user ||
+    sessionUser ||
     ((req as any).userId ? { id: (req as any).userId } : null);
 
   const claims =
+    sessionUser?.claims ||
     u?.claims ||
     (req as any).session?.claims ||
-    (req as any).session?.user?.claims ||
     {};
 
-  const userId = u?.uid || u?.id || (req as any).userId;
-  const email = u?.email;
+  // Handle Firebase auth structure: session.user.claims.sub
+  const userId = claims.sub || u?.uid || u?.id || (req as any).userId;
+  const email = claims.email || u?.email;
 
   const isAdmin =
     !!(claims.admin || claims.isAdmin || claims.role === 'admin' || u?.role === 'admin');

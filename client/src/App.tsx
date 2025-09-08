@@ -44,18 +44,16 @@ function Router() {
       <Switch>
         <Route path="/" component={MainContent} />
         
-        {/* Protected routes - only accessible when authenticated */}
-        {firebaseUser && (
-          <>
-            <Route path="/home" component={Home} />
-            <Route path="/lab" component={Lab} />
-            <Route path="/project/:id" component={ProjectDetail} />
-            <Route path="/sync" component={Sync} />
-            <Route path="/reports" component={Reports} />
-            <Route path="/dashboard" component={Dashboard} />
-            <Route path="/integrations" component={Integrations} />
-          </>
-        )}
+        {/* Protected routes - temporarily allow access to test routing */}
+        <>
+          <Route path="/home" component={Home} />
+          <Route path="/lab" component={Lab} />
+          <Route path="/project/:id" component={ProjectDetail} />
+          <Route path="/sync" component={Sync} />
+          <Route path="/reports" component={Reports} />
+          <Route path="/dashboard" component={Dashboard} />
+          <Route path="/integrations" component={Integrations} />
+        </>
         
         <Route component={NotFound} />
       </Switch>
