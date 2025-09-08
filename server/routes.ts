@@ -2577,43 +2577,53 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(400).json({ message: "Meeting title is required" });
       }
 
-      // Extract contact name from meeting title patterns
-      const extractContactName = (title: string): string => {
-        // Remove common meeting words first
-        let cleanTitle = title.replace(/\b(meeting|call|session|sync|update|check\-?in)\b/gi, '').trim();
+      // Extract contact from meeting data with comprehensive field population
+      function extractContactFromMeeting(meetingData) {
+        console.log('=== EXTRACTING CONTACT FROM MEETING ===');
+        console.log('Meeting data received:', JSON.stringify(meetingData, null, 2));
         
-        // Pattern 1: "Name | something" -> "Name"
-        let match = cleanTitle.match(/^([^|]+)\s*\|/);
-        if (match) {
-          return match[1].trim();
-        }
+        const { title, attendees, organizer, start, end, location, description } = meetingData;
         
-        // Pattern 2: "Meet with Name" -> "Name"
-        match = cleanTitle.match(/meet\s+with\s+(.+)/i);
-        if (match) {
-          return match[1].trim();
-        }
-        
-        // Pattern 3: "Name - something" -> "Name"
-        match = cleanTitle.match(/^([^-]+)\s*-/);
-        if (match) {
-          return match[1].trim();
-        }
-        
-        // Pattern 4: Just take first 1-2 words (likely a name)
-        const words = cleanTitle.split(/\s+/).filter(w => w.length > 0);
-        if (words.length >= 1) {
-          // If first word looks like a name (capitalized), use it
-          if (words[0].charAt(0) === words[0].charAt(0).toUpperCase()) {
-            return words.length >= 2 && words[1].charAt(0) === words[1].charAt(0).toUpperCase() 
-              ? `${words[0]} ${words[1]}` // First and last name
-              : words[0]; // Just first name
+        // Extract name with multiple patterns
+        let contactName = '';
+        if (title) {
+          console.log('Processing title:', title);
+          
+          // Try different name extraction patterns
+          const patterns = [
+            /^([A-Z][a-z]+)\s*\|/,           // "Tejas | RTLC"
+            /^([A-Z][a-z]+)\s*-/,            // "Tejas - Meeting"
+            /with\s+([A-Z][a-z]+)/i,         // "Meet with Tejas"
+            /^([A-Z][a-z]+)\s+[A-Z]/         // "Tejas RTLC"
+          ];
+          
+          for (const pattern of patterns) {
+            const match = title.match(pattern);
+            if (match) {
+              contactName = match[1];
+              console.log('Name extracted:', contactName);
+              break;
+            }
           }
         }
         
-        // Fallback: use whole cleaned title
-        return cleanTitle || title;
-      };
+        // Create contact data with ALL fields explicitly
+        const contactData = {
+          'Name': contactName || 'Unnamed Contact',
+          'Company': 'Unknown Company',
+          'Email': attendees && attendees[0] ? attendees[0].email || '' : '',
+          'Phone': '',
+          'Last Contacted': start ? new Date(start).toISOString().split('T')[0] : new Date().toISOString().split('T')[0],
+          'Next Follow-up': start ? new Date(new Date(start).getTime() + 14*24*60*60*1000).toISOString().split('T')[0] : '',
+          'Relationship Type': 'Client',
+          'Contact Source': 'Event',
+          'Notes': `Meeting: ${title || 'Unknown'}\nDate: ${start ? new Date(start).toLocaleDateString() : 'Unknown'}`,
+          'Contact Status': 'Active'
+        };
+        
+        console.log('Contact data to create:', JSON.stringify(contactData, null, 2));
+        return contactData;
+      }
 
       // Auto-determine relationship type from meeting title
       const determineRelationshipType = (title: string): string => {
@@ -2624,7 +2634,16 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return 'Prospect';
       };
 
-      const contactName = extractContactName(meetingTitle);
+      // Use new extractContactFromMeeting function with full meeting data
+      const meetingData = {
+        title: meetingTitle,
+        attendees: attendees,
+        start: new Date().toISOString(),
+        end: new Date(Date.now() + 3600000).toISOString() // 1 hour later
+      };
+      
+      const extractedContactData = extractContactFromMeeting(meetingData);
+      const contactName = extractedContactData['Name'];
       const relationshipType = determineRelationshipType(meetingTitle);
 
       console.log('🏷️ [CREATE CONTACT] Extracted name:', contactName, 'Type:', relationshipType);
@@ -2646,18 +2665,19 @@ export async function registerRoutes(app: Express): Promise<Server> {
         primaryEmail = attendeeEmails[0] || '';
       }
 
-      // Create contact data with safe field values to avoid permission errors
+      // Use extracted contact data but override with safe field values for Airtable
       const today = new Date().toISOString().split('T')[0];
       const contactData = {
         Name: contactName || 'Unnamed Contact',
-        Company: 'Unknown Company',
-        Email: primaryEmail || '',
-        Phone: '', // Empty phone field is safe
-        'Last Contacted': today,
-        'Relationship Type': 'Prospect', // Use safe basic option
-        'Contact Source': 'Referral', // Use existing option instead of 'Meeting Import'
-        'Contact Status': 'Active', // Basic status
-        Notes: `Meeting: ${meetingTitle}\nLast Contact: ${today}\nImported from calendar sync`
+        Company: extractedContactData['Company'] || 'Unknown Company',
+        Email: primaryEmail || extractedContactData['Email'] || '',
+        Phone: extractedContactData['Phone'] || '',
+        'Last Contacted': extractedContactData['Last Contacted'] || today,
+        'Next Follow-up': extractedContactData['Next Follow-up'] || '',
+        'Relationship Type': relationshipType || 'Client', // Use determined type
+        'Contact Source': 'Event', // Use safe existing option
+        'Contact Status': extractedContactData['Contact Status'] || 'Active',
+        Notes: extractedContactData['Notes'] || `Meeting: ${meetingTitle}\nLast Contact: ${today}\nImported from calendar sync`
       };
 
       // Clean up undefined/null values and empty strings (except for intentionally empty fields)
