@@ -12,6 +12,7 @@ import { useToast } from '@/hooks/use-toast';
 // Import service logos
 import openaiLogo from '@assets/openai_1756919666153.png';
 import freshdeskLogo from '@assets/generated_images/Freshdesk_professional_logo_icon_91284b50.png';
+import airtableLogo from '@assets/airtable-logo.jpeg';
 import wordpressLogo from '@assets/wordPress_1756919666154.png';
 import transistorLogo from '@assets/transister_1756919666154.jpg';
 import elevenlabsLogo from '@assets/elevenlabs_1756919666154.png';
@@ -59,7 +60,7 @@ const serviceConfigs: Record<string, ServiceConfig> = {
   airtable: {
     name: 'Airtable',
     description: 'Sync meeting intelligence and contact management with your Airtable bases',
-    logo: freshdeskLogo, // TODO: Replace with Airtable logo
+    logo: airtableLogo,
     helpText: 'In Airtable, go to your account → Generate API key. Also provide your base ID from the URL (e.g., "appXXXXXXXXXX").',
     fields: [
       { key: 'apiKey', label: 'API Key', type: 'password', placeholder: 'Your Airtable API key', required: true },
