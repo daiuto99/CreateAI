@@ -16,6 +16,37 @@ import { relations } from "drizzle-orm";
 import { createInsertSchema } from "drizzle-zod";
 import { z } from "zod";
 
+// SYNC System Types
+export type SyncSource = 'otter' | 'manual';
+
+export interface InboundMeetingPayload {
+  source: SyncSource;                 // 'otter' recommended
+  externalMeetingId: string;          // unique from Otter/Zap
+  title?: string;
+  startISO?: string;
+  endISO?: string;
+  attendees?: Array<{ name?: string; email?: string; phone?: string; company?: string }>;
+  transcript?: string;                // meeting summary/full text
+  notes?: string;                     // optional
+  raw?: unknown;                      // full Zap payload (for Needs Review)
+}
+
+export interface ContactInput {
+  name?: string;
+  email?: string;
+  phone?: string;
+  company?: string;
+  status?: 'Active' | 'Prospect' | 'Unknown' | 'Needs Review';
+}
+
+export interface MeetingResult {
+  meetingRecordId: string;
+  contactRecordId?: string;
+  transcriptRecordId?: string;
+  created: boolean;
+  linked: boolean;
+}
+
 // Session storage table.
 // (IMPORTANT) This table is mandatory for Replit Auth, don't drop it.
 export const sessions = pgTable(
