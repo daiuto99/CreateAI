@@ -44,6 +44,11 @@ const defaultQueryFn: QueryFunction = async ({ queryKey }) => {
   return apiQuery(url);
 };
 
+// Utility function to check for unauthorized errors
+export function isUnauthorizedError(error: unknown): boolean {
+  return error instanceof Error && error.message.includes('401');
+}
+
 export const queryClient = new QueryClient({
   defaultOptions: {
     queries: {
