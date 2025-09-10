@@ -4,3 +4,7 @@ dist
 server/public
 vite.config.ts.*
 *.tar.gz
+# Ignore auto-generated log summaries
+logs/
+summaries/
+.log_offset
