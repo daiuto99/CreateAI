@@ -1,0 +1,783 @@
+LaunchBox Dashboard - SYNC Module Enhancement
+Otter.ai API Limitation Fix & Meeting Enrichment Workflow
+
+Objective
+Enhance the existing SYNC module to eliminate Otter.ai API limitations (3-meeting restriction) by replacing direct API integration with external Zapier automation, and improve the meeting workflow from basic approval to comprehensive enrichment.
+Current State: SYNC module uses Otter.ai API directly (limited to 3 meetings) → Airtable
+Target State: External Zapier (Otter.ai → Airtable) → Enhanced LaunchBox Enrichment Interface
+
+Architecture Enhancement
+Data Flow (Updated)
+External Zapier: Otter.ai Meeting Completed → Airtable Record Creation (automated)
+LaunchBox: Airtable Polling → Enhanced Enrichment Interface → Airtable Updates
+Changes Required
+
+Remove: Direct Otter.ai API integration
+Enhance: Meeting enrichment interface with additional fields
+Add: Advanced meeting categorization and outcome tracking
+Improve: Voice update processing for richer Airtable updates
+
+
+Database Schema Enhancements
+Update Airtable Sync Tracking
+sql-- Enhance existing airtable_sync_logs table
+ALTER TABLE airtable_sync_logs ADD COLUMN enrichment_data JSONB DEFAULT '{}';
+ALTER TABLE airtable_sync_logs ADD COLUMN meeting_metadata JSONB DEFAULT '{}';
+
+-- Add index for enrichment tracking
+CREATE INDEX idx_airtable_enrichment_status ON airtable_sync_logs(status, operation_type);
+Add Meeting Enrichment Preferences
+sql-- Add user preferences for meeting enrichment
+ALTER TABLE users ADD COLUMN meeting_enrichment_preferences JSONB DEFAULT '{
+  "auto_categorize": true,
+  "require_outcome": true,
+  "default_meeting_type": null,
+  "notification_preferences": {
+    "immediate": true,
+    "daily_digest": false
+  }
+}';
+
+Enhanced Airtable Data Model
+Expected Meeting Fields (from Zapier)
+typescriptinterface EnhancedAirtableMeeting {
+  // Core fields (managed by Zapier - unchanged)
+  record_id: string;
+  otter_conversation_id: string;
+  title: string;
+  started_at: Date;
+  ended_at: Date;
+  duration_minutes: number;
+  summary_gist: string;
+  summary_outline: string;
+  action_items: string;
+  transcript_url?: string;
+  audio_url?: string;
+  contact: string;
+  processing_status: 'received' | 'complete' | 'needs_review' | 'enriched';
+  source: 'otter' | 'manual';
+  
+  // Enhanced enrichment fields (managed by LaunchBox)
+  meeting_type?: 'Discovery' | 'Demo' | 'Follow-up' | 'Closing' | 'Support' | 'Internal' | 'Training';
+  outcome?: 'Positive' | 'Neutral' | 'Negative' | 'Next Steps' | 'Closed' | 'No Show';
+  priority?: 'Low' | 'Medium' | 'High' | 'Urgent';
+  deal_stage_impact?: 'Advanced' | 'No Change' | 'Regressed';
+  next_steps?: string;
+  follow_up_date?: Date;
+  key_decisions?: string;
+  pain_points_discovered?: string;
+  competitor_mentioned?: string;
+  budget_discussed?: boolean;
+  timeline_discussed?: boolean;
+  decision_makers_identified?: string[];
+  
+  // Enrichment metadata
+  enriched_by?: string;
+  enriched_at?: Date;
+  enrichment_confidence?: number; // 0-1 scale
+  ai_suggestions?: string; // AI-generated insights
+  
+  // System fields
+  created_at: Date;
+  updated_at: Date;
+}
+
+Enhanced Service Layer
+Remove Otter.ai Direct Integration
+typescript// Remove these existing services/files:
+// apps/api/src/services/otter/otter.service.ts
+// apps/api/src/integrations/otter.integration.ts
+// Any direct Otter.ai API calls
+Enhanced Airtable Service
+typescript// apps/api/src/services/airtable/airtable.service.ts
+interface EnhancedAirtableService extends AirtableService {
+  // Enhanced meeting operations
+  getMeetingsPendingEnrichment(
+    orgId: string, 
+    filters?: MeetingFilters
+  ): Promise<EnhancedAirtableMeeting[]>;
+  
+  enrichMeetingAdvanced(
+    recordId: string, 
+    enrichmentData: AdvancedEnrichmentData
+  ): Promise<void>;
+  
+  generateMeetingInsights(meetingData: AirtableMeeting): Promise<MeetingInsights>;
+  
+  // Batch operations
+  bulkEnrichMeetings(
+    enrichments: Array<{ recordId: string; data: AdvancedEnrichmentData }>
+  ): Promise<BulkEnrichmentResult>;
+  
+  // Analytics and insights
+  getMeetingAnalytics(orgId: string, dateRange?: DateRange): Promise<MeetingAnalytics>;
+  getContactEngagementScore(contactId: string): Promise<EngagementScore>;
+}
+
+class EnhancedAirtableServiceImpl implements EnhancedAirtableService {
+  async getMeetingsPendingEnrichment(
+    orgId: string, 
+    filters: MeetingFilters = {}
+  ): Promise<EnhancedAirtableMeeting[]> {
+    let formula = `AND({Processing Status} = 'complete', {Created} >= DATEADD(TODAY(), -30, 'days'))`;
+    
+    // Add filters
+    if (filters.contactId) {
+      formula += `, {Contact} = '${filters.contactId}'`;
+    }
+    
+    if (filters.meetingType) {
+      formula += `, {Meeting Type} = '${filters.meetingType}'`;
+    }
+    
+    if (filters.priority) {
+      formula += `, {Priority} = '${filters.priority}'`;
+    }
+
+    const response = await this.httpClient.get(
+      `https://api.airtable.com/v0/${this.baseId}/Meetings`,
+      {
+        headers: { Authorization: `Bearer ${this.apiKey}` },
+        params: {
+          filterByFormula: formula,
+          maxRecords: filters.limit || 50,
+          sort: [
+            { field: 'Priority', direction: 'desc' },
+            { field: 'Created', direction: 'desc' }
+          ]
+        }
+      }
+    );
+
+    return response.data.records.map(this.transformEnhancedMeetingRecord);
+  }
+
+  async enrichMeetingAdvanced(
+    recordId: string, 
+    enrichmentData: AdvancedEnrichmentData
+  ): Promise<void> {
+    // Generate AI insights if enabled
+    const aiInsights = await this.generateAIInsights(enrichmentData);
+    
+    const updateFields: Record<string, any> = {
+      'Processing Status': 'enriched',
+      'Enriched At': new Date().toISOString(),
+      'Enriched By': enrichmentData.userId,
+      'Enrichment Confidence': enrichmentData.confidence || 0.9
+    };
+
+    // Core enrichment fields
+    if (enrichmentData.meetingType) updateFields['Meeting Type'] = enrichmentData.meetingType;
+    if (enrichmentData.outcome) updateFields['Outcome'] = enrichmentData.outcome;
+    if (enrichmentData.priority) updateFields['Priority'] = enrichmentData.priority;
+    if (enrichmentData.nextSteps) updateFields['Next Steps'] = enrichmentData.nextSteps;
+    if (enrichmentData.followUpDate) updateFields['Follow Up Date'] = enrichmentData.followUpDate;
+    
+    // Advanced fields
+    if (enrichmentData.keyDecisions) updateFields['Key Decisions'] = enrichmentData.keyDecisions;
+    if (enrichmentData.painPoints) updateFields['Pain Points Discovered'] = enrichmentData.painPoints;
+    if (enrichmentData.competitorMentioned) updateFields['Competitor Mentioned'] = enrichmentData.competitorMentioned;
+    if (enrichmentData.budgetDiscussed !== undefined) updateFields['Budget Discussed'] = enrichmentData.budgetDiscussed;
+    if (enrichmentData.timelineDiscussed !== undefined) updateFields['Timeline Discussed'] = enrichmentData.timelineDiscussed;
+    if (enrichmentData.decisionMakers?.length) updateFields['Decision Makers Identified'] = enrichmentData.decisionMakers;
+    if (enrichmentData.dealStageImpact) updateFields['Deal Stage Impact'] = enrichmentData.dealStageImpact;
+    
+    // AI insights
+    if (aiInsights) updateFields['AI Suggestions'] = aiInsights;
+
+    await this.httpClient.patch(
+      `https://api.airtable.com/v0/${this.baseId}/Meetings/${recordId}`,
+      { fields: updateFields },
+      { headers: { Authorization: `Bearer ${this.apiKey}` } }
+    );
+
+    // Update contact engagement score
+    if (enrichmentData.contactId) {
+      await this.updateContactEngagement(enrichmentData.contactId, enrichmentData);
+    }
+
+    // Log enrichment for analytics
+    await this.logEnrichmentActivity(recordId, enrichmentData);
+  }
+
+  async generateMeetingInsights(meetingData: AirtableMeeting): Promise<MeetingInsights> {
+    // Analyze meeting content for insights
+    const insights = await this.aiService.analyzeMeeting({
+      summary: meetingData.summary_gist,
+      actionItems: meetingData.action_items,
+      duration: meetingData.duration_minutes,
+      title: meetingData.title
+    });
+
+    return {
+      suggestedMeetingType: insights.meetingType,
+      suggestedOutcome: insights.outcome,
+      extractedPainPoints: insights.painPoints,
+      identifiedDecisionMakers: insights.decisionMakers,
+      nextStepsSuggestions: insights.nextSteps,
+      competitorReferences: insights.competitors,
+      budgetIndicators: insights.budgetMentions,
+      urgencyIndicators: insights.urgencyLevel
+    };
+  }
+
+  async bulkEnrichMeetings(
+    enrichments: Array<{ recordId: string; data: AdvancedEnrichmentData }>
+  ): Promise<BulkEnrichmentResult> {
+    const results: BulkEnrichmentResult = {
+      successful: [],
+      failed: [],
+      totalProcessed: enrichments.length
+    };
+
+    // Process in batches of 10 (Airtable API limit)
+    const batches = this.chunkArray(enrichments, 10);
+    
+    for (const batch of batches) {
+      try {
+        const updateRecords = batch.map(({ recordId, data }) => ({
+          id: recordId,
+          fields: this.transformEnrichmentToAirtableFields(data)
+        }));
+
+        await this.httpClient.patch(
+          `https://api.airtable.com/v0/${this.baseId}/Meetings`,
+          { records: updateRecords },
+          { headers: { Authorization: `Bearer ${this.apiKey}` } }
+        );
+
+        results.successful.push(...batch.map(b => b.recordId));
+      } catch (error) {
+        results.failed.push(...batch.map(b => ({ recordId: b.recordId, error: error.message })));
+      }
+    }
+
+    return results;
+  }
+}
+
+Enhanced API Endpoints
+Advanced Meeting Enrichment
+typescript// Enhanced meeting endpoints
+GET /api/sync/meetings/pending
+Query: ?limit=50&contact_id=rec123&meeting_type=Discovery&priority=High
+Response: {
+  meetings: Array<{
+    airtable_record_id: string;
+    otter_conversation_id: string;
+    title: string;
+    started_at: string;
+    duration_minutes: number;
+    summary_gist: string;
+    action_items: string;
+    matched_contact: ContactInfo;
+    ai_insights?: MeetingInsights;
+    urgency_score: number; // 0-1
+    enrichment_suggestions: EnrichmentSuggestions;
+  }>;
+  analytics: {
+    total_pending: number;
+    high_priority: number;
+    avg_processing_time: number;
+  };
+}
+
+// Advanced enrichment endpoint
+POST /api/sync/meetings/:recordId/enrich-advanced
+Body: {
+  contact_id?: string;
+  meeting_type: 'Discovery' | 'Demo' | 'Follow-up' | 'Closing' | 'Support' | 'Internal' | 'Training';
+  outcome: 'Positive' | 'Neutral' | 'Negative' | 'Next Steps' | 'Closed' | 'No Show';
+  priority?: 'Low' | 'Medium' | 'High' | 'Urgent';
+  deal_stage_impact?: 'Advanced' | 'No Change' | 'Regressed';
+  next_steps?: string;
+  follow_up_date?: string;
+  key_decisions?: string;
+  pain_points_discovered?: string;
+  competitor_mentioned?: string;
+  budget_discussed?: boolean;
+  timeline_discussed?: boolean;
+  decision_makers_identified?: string[];
+  confidence?: number; // User confidence in enrichment accuracy
+}
+Response: {
+  success: boolean;
+  airtable_record_id: string;
+  updated_fields: string[];
+  ai_insights?: string;
+  engagement_score_updated?: boolean;
+}
+
+// Bulk enrichment endpoint
+POST /api/sync/meetings/bulk-enrich
+Body: {
+  enrichments: Array<{
+    record_id: string;
+    enrichment_data: AdvancedEnrichmentData;
+  }>;
+}
+Response: {
+  results: {
+    successful: string[];
+    failed: Array<{ record_id: string; error: string }>;
+    total_processed: number;
+  };
+}
+
+// Meeting insights endpoint
+GET /api/sync/meetings/:recordId/insights
+Response: {
+  ai_insights: MeetingInsights;
+  engagement_trends: EngagementData;
+  similar_meetings: SimilarMeeting[];
+  recommended_actions: RecommendedAction[];
+}
+
+// Meeting analytics endpoint
+GET /api/sync/analytics/meetings
+Query: ?date_range=30d&contact_id=rec123&meeting_type=Discovery
+Response: {
+  summary: {
+    total_meetings: number;
+    enrichment_rate: number;
+    avg_enrichment_time: number;
+    outcome_distribution: Record<string, number>;
+  };
+  trends: {
+    meetings_per_week: number[];
+    outcome_trends: TimeSeriesData[];
+    priority_distribution: Record<string, number>;
+  };
+  insights: {
+    top_pain_points: string[];
+    most_mentioned_competitors: string[];
+    average_deal_progression: number;
+  };
+}
+
+Enhanced Frontend Components
+Advanced Meeting Enrichment Panel
+typescript// apps/web/src/components/sync/AdvancedMeetingEnrichmentPanel.tsx
+interface AdvancedMeetingEnrichmentPanelProps {
+  meeting: EnhancedPendingMeeting;
+  onEnrich: (data: AdvancedEnrichmentData) => void;
+  onCancel: () => void;
+  isLoading: boolean;
+}
+
+export function AdvancedMeetingEnrichmentPanel({ 
+  meeting, 
+  onEnrich, 
+  onCancel, 
+  isLoading 
+}: AdvancedMeetingEnrichmentPanelProps) {
+  const [enrichmentData, setEnrichmentData] = useState<AdvancedEnrichmentData>({
+    meeting_type: '',
+    outcome: '',
+    priority: 'Medium',
+    confidence: 0.9
+  });
+
+  const [showAdvancedFields, setShowAdvancedFields] = useState(false);
+  const [aiInsights, setAiInsights] = useState<MeetingInsights | null>(null);
+
+  // Load AI insights on mount
+  useEffect(() => {
+    if (meeting.ai_insights) {
+      setAiInsights(meeting.ai_insights);
+    }
+  }, [meeting]);
+
+  const handleSubmit = () => {
+    onEnrich(enrichmentData);
+  };
+
+  return (
+    <Card className="p-6 space-y-6">
+      <CardHeader>
+        <div className="flex items-center justify-between">
+          <div>
+            <CardTitle className="flex items-center gap-2">
+              {meeting.title}
+              {meeting.urgency_score > 0.7 && (
+                <Badge variant="destructive">High Priority</Badge>
+              )}
+            </CardTitle>
+            <div className="text-sm text-muted-foreground">
+              {format(new Date(meeting.started_at), 'PPpp')} • {meeting.duration_minutes} mins
+            </div>
+          </div>
+          
+          {aiInsights && (
+            <Button 
+              variant="outline" 
+              size="sm"
+              onClick={() => setShowAdvancedFields(!showAdvancedFields)}
+            >
+              <Sparkles className="w-4 h-4 mr-2" />
+              AI Insights
+            </Button>
+          )}
+        </div>
+      </CardHeader>
+
+      <CardContent className="space-y-4">
+        {/* AI Insights Panel */}
+        {showAdvancedFields && aiInsights && (
+          <Card className="p-4 bg-blue-50 border-blue-200">
+            <h4 className="font-medium mb-2 flex items-center gap-2">
+              <Brain className="w-4 h-4" />
+              AI Suggestions
+            </h4>
+            <div className="space-y-2 text-sm">
+              {aiInsights.suggestedMeetingType && (
+                <div>
+                  <strong>Suggested Type:</strong> {aiInsights.suggestedMeetingType}
+                </div>
+              )}
+              {aiInsights.extractedPainPoints?.length > 0 && (
+                <div>
+                  <strong>Pain Points:</strong> {aiInsights.extractedPainPoints.join(', ')}
+                </div>
+              )}
+              {aiInsights.nextStepsSuggestions && (
+                <div>
+                  <strong>Suggested Next Steps:</strong> {aiInsights.nextStepsSuggestions}
+                </div>
+              )}
+            </div>
+          </Card>
+        )}
+
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+          {/* Contact Selection */}
+          <div>
+            <Label>Contact</Label>
+            <ContactSearchCombobox
+              value={enrichmentData.contact_id}
+              onChange={(contactId) => setEnrichmentData(prev => ({ ...prev, contact_id: contactId }))}
+              defaultContact={meeting.matched_contact}
+            />
+          </div>
+
+          {/* Priority */}
+          <div>
+            <Label>Priority</Label>
+            <Select 
+              value={enrichmentData.priority} 
+              onValueChange={(priority) => setEnrichmentData(prev => ({ ...prev, priority }))}
+            >
+              <SelectTrigger>
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="Low">Low</SelectItem>
+                <SelectItem value="Medium">Medium</SelectItem>
+                <SelectItem value="High">High</SelectItem>
+                <SelectItem value="Urgent">Urgent</SelectItem>
+              </SelectContent>
+            </Select>
+          </div>
+
+          {/* Meeting Type */}
+          <div>
+            <Label>Meeting Type</Label>
+            <Select 
+              value={enrichmentData.meeting_type} 
+              onValueChange={(meeting_type) => setEnrichmentData(prev => ({ ...prev, meeting_type }))}
+            >
+              <SelectTrigger>
+                <SelectValue placeholder="Select type" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="Discovery">Discovery</SelectItem>
+                <SelectItem value="Demo">Demo</SelectItem>
+                <SelectItem value="Follow-up">Follow-up</SelectItem>
+                <SelectItem value="Closing">Closing</SelectItem>
+                <SelectItem value="Support">Support</SelectItem>
+                <SelectItem value="Internal">Internal</SelectItem>
+                <SelectItem value="Training">Training</SelectItem>
+              </SelectContent>
+            </Select>
+          </div>
+
+          {/* Outcome */}
+          <div>
+            <Label>Outcome</Label>
+            <Select 
+              value={enrichmentData.outcome} 
+              onValueChange={(outcome) => setEnrichmentData(prev => ({ ...prev, outcome }))}
+            >
+              <SelectTrigger>
+                <SelectValue placeholder="Select outcome" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="Positive">Positive</SelectItem>
+                <SelectItem value="Neutral">Neutral</SelectItem>
+                <SelectItem value="Negative">Negative</SelectItem>
+                <SelectItem value="Next Steps">Next Steps</SelectItem>
+                <SelectItem value="Closed">Closed</SelectItem>
+                <SelectItem value="No Show">No Show</SelectItem>
+              </SelectContent>
+            </Select>
+          </div>
+        </div>
+
+        {/* Advanced Fields Toggle */}
+        <div className="flex items-center space-x-2">
+          <Switch
+            checked={showAdvancedFields}
+            onCheckedChange={setShowAdvancedFields}
+          />
+          <Label>Show advanced fields</Label>
+        </div>
+
+        {/* Advanced Fields */}
+        {showAdvancedFields && (
+          <div className="space-y-4 pt-4 border-t">
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              {/* Deal Stage Impact */}
+              <div>
+                <Label>Deal Stage Impact</Label>
+                <Select 
+                  value={enrichmentData.deal_stage_impact} 
+                  onValueChange={(deal_stage_impact) => setEnrichmentData(prev => ({ ...prev, deal_stage_impact }))}
+                >
+                  <SelectTrigger>
+                    <SelectValue placeholder="Select impact" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="Advanced">Advanced</SelectItem>
+                    <SelectItem value="No Change">No Change</SelectItem>
+                    <SelectItem value="Regressed">Regressed</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+
+              {/* Follow-up Date */}
+              <div>
+                <Label>Follow-up Date</Label>
+                <Input
+                  type="date"
+                  value={enrichmentData.follow_up_date}
+                  onChange={(e) => setEnrichmentData(prev => ({ 
+                    ...prev, 
+                    follow_up_date: e.target.value 
+                  }))}
+                />
+              </div>
+            </div>
+
+            {/* Budget & Timeline Discussed */}
+            <div className="flex gap-4">
+              <div className="flex items-center space-x-2">
+                <Checkbox
+                  checked={enrichmentData.budget_discussed}
+                  onCheckedChange={(budget_discussed) => 
+                    setEnrichmentData(prev => ({ ...prev, budget_discussed }))
+                  }
+                />
+                <Label>Budget Discussed</Label>
+              </div>
+              
+              <div className="flex items-center space-x-2">
+                <Checkbox
+                  checked={enrichmentData.timeline_discussed}
+                  onCheckedChange={(timeline_discussed) => 
+                    setEnrichmentData(prev => ({ ...prev, timeline_discussed }))
+                  }
+                />
+                <Label>Timeline Discussed</Label>
+              </div>
+            </div>
+
+            {/* Key Decisions */}
+            <div>
+              <Label>Key Decisions Made</Label>
+              <Textarea
+                value={enrichmentData.key_decisions}
+                onChange={(e) => setEnrichmentData(prev => ({ 
+                  ...prev, 
+                  key_decisions: e.target.value 
+                }))}
+                placeholder="What key decisions were made in this meeting?"
+                rows={2}
+              />
+            </div>
+
+            {/* Pain Points */}
+            <div>
+              <Label>Pain Points Discovered</Label>
+              <Textarea
+                value={enrichmentData.pain_points_discovered}
+                onChange={(e) => setEnrichmentData(prev => ({ 
+                  ...prev, 
+                  pain_points_discovered: e.target.value 
+                }))}
+                placeholder="What pain points or challenges were discussed?"
+                rows={2}
+              />
+            </div>
+
+            {/* Competitor Mentioned */}
+            <div>
+              <Label>Competitors Mentioned</Label>
+              <Input
+                value={enrichmentData.competitor_mentioned}
+                onChange={(e) => setEnrichmentData(prev => ({ 
+                  ...prev, 
+                  competitor_mentioned: e.target.value 
+                }))}
+                placeholder="Any competitors mentioned by name?"
+              />
+            </div>
+          </div>
+        )}
+
+        {/* Next Steps */}
+        <div>
+          <Label>Next Steps</Label>
+          <Textarea
+            value={enrichmentData.next_steps}
+            onChange={(e) => setEnrichmentData(prev => ({ 
+              ...prev, 
+              next_steps: e.target.value 
+            }))}
+            placeholder="What are the concrete next steps?"
+            rows={3}
+          />
+        </div>
+
+        {/* Confidence Slider */}
+        <div>
+          <Label>Enrichment Confidence</Label>
+          <div className="px-2">
+            <Slider
+              value={[enrichmentData.confidence * 100]}
+              onValueChange={([value]) => setEnrichmentData(prev => ({ 
+                ...prev, 
+                confidence: value / 100 
+              }))}
+              max={100}
+              step={5}
+              className="w-full"
+            />
+            <div className="text-sm text-muted-foreground mt-1">
+              {Math.round(enrichmentData.confidence * 100)}% confident in this enrichment
+            </div>
+          </div>
+        </div>
+      </CardContent>
+
+      <CardFooter className="flex justify-between">
+        <Button variant="outline" onClick={onCancel} disabled={isLoading}>
+          Cancel
+        </Button>
+        <div className="flex gap-2">
+          <Button variant="outline" onClick={() => setShowAdvancedFields(!showAdvancedFields)}>
+            {showAdvancedFields ? 'Simple View' : 'Advanced View'}
+          </Button>
+          <Button onClick={handleSubmit} disabled={isLoading}>
+            {isLoading ? 'Enriching...' : 'Enrich & Complete'}
+          </Button>
+        </div>
+      </CardFooter>
+    </Card>
+  );
+}
+
+Remove Otter.ai Integration
+Files to Remove/Update
+typescript// Remove these files:
+// apps/api/src/services/otter/
+// apps/api/src/integrations/otter.integration.ts
+// Any Otter.ai API route handlers
+
+// Update environment variables - remove:
+// OTTER_API_KEY=
+// OTTER_WEBHOOK_SECRET=
+
+// Update integration health checks - remove Otter.ai monitoring
+Update Integration Health Dashboard
+typescript// Remove Otter.ai from health checks
+const INTEGRATION_HEALTH_CHECKS = {
+  // Remove: otter: { ... }
+  airtable: {
+    endpoint: 'https://api.airtable.com/v0/meta/bases',
+    timeout: 5000,
+    criticalThreshold: 95
+  },
+  elevenlabs: { ... },
+  wordpress: { ... }
+  // ... other integrations
+};
+
+Testing Enhancements
+Integration Tests for Enhanced Workflow
+typescriptdescribe('Enhanced Meeting Enrichment', () => {
+  it('should enrich meeting with advanced fields', async () => {
+    const advancedEnrichment = {
+      meeting_type: 'Discovery',
+      outcome: 'Positive',
+      priority: 'High',
+      deal_stage_impact: 'Advanced',
+      key_decisions: 'Approved budget for Q1',
+      pain_points_discovered: 'Manual processes causing delays',
+      budget_discussed: true,
+      timeline_discussed: true,
+      confidence: 0.95
+    };
+
+    await airtableService.enrichMeetingAdvanced('rec123', advancedEnrichment);
+    
+    const enriched = await airtableService.getMeetingById('rec123');
+    expect(enriched.processing_status).toBe('enriched');
+    expect(enriched.priority).toBe('High');
+    expect(enriched.budget_discussed).toBe(true);
+  });
+
+  it('should generate AI insights for meeting', async () => {
+    const meeting = await createTestMeeting();
+    const insights = await airtableService.generateMeetingInsights(meeting);
+    
+    expect(insights).toHaveProperty('suggestedMeetingType');
+    expect(insights).toHaveProperty('extractedPainPoints');
+    expect(insights).toHaveProperty('nextStepsSuggestions');
+  });
+
+  it('should handle bulk enrichment operations', async () => {
+    const enrichments = [
+      { recordId: 'rec1', data: { meeting_type: 'Demo', outcome: 'Positive' } },
+      { recordId: 'rec2', data: { meeting_type: 'Follow-up', outcome: 'Neutral' } }
+    ];
+
+    const result = await airtableService.bulkEnrichMeetings(enrichments);
+    
+    expect(result.successful).toHaveLength(2);
+    expect(result.failed).toHaveLength(0);
+  });
+});
+
+Migration Steps
+Phase 1: Remove Otter.ai Integration
+
+ Remove Otter.ai service files and API routes
+ Remove Otter.ai environment variables
+ Update integration health checks
+ Remove Otter.ai from frontend components
+
+Phase 2: Enhance Enrichment Interface
+
+ Add advanced enrichment fields to Airtable service
+ Implement enhanced meeting enrichment panel
+ Add AI insights generation
+ Add bulk enrichment capabilities
+
+Phase 3: Deploy and Test
+
+ Test enhanced workflow with real Zapier data
+ Validate advanced enrichment fields work correctly
+ Monitor performance with larger datasets
+ Train users on enhanced interface
+
+This enhancement eliminates the Otter.ai API limitation while significantly improving the meeting enrichment workflow with advanced categorization, AI insights, and bulk processing capabilities.

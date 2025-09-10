@@ -1,0 +1,126 @@
+# Replit Agent Prompt: Fix Otter.AI Integration with Smart Fallback
+
+## Problem
+The real Otter.AI API integration is preventing meetings from showing up. The system needs to gracefully fallback to working test data when the real API fails or returns no results.
+
+## Required Fix
+
+### 1. Add Fallback Logic to /api/meetings Route
+Modify the existing `/api/meetings` route to implement smart fallback:
+
+**Primary Behavior:**
+- First, try to fetch real data from Otter.AI API
+- If API call fails, succeeds but returns empty results, or takes too long, fallback to test data
+- Always ensure meetings are displayed to the user
+
+**Fallback Conditions:**
+- Otter.AI API returns 401/403 (authentication issues)
+- API returns empty array or no speeches
+- API call times out (>5 seconds)
+- Network errors or API unavailable
+- Any other API-related errors
+
+### 2. Enhanced Logging for Debugging
+Add comprehensive logging to show:
+- Whether real Otter API was attempted
+- API response status and data count
+- When fallback data is being used
+- Specific reasons for fallback (API error, empty response, etc.)
+- Final transcript count being used for matching
+
+### 3. Smart Fallback Data
+Use realistic fallback data that matches your actual calendar meetings:
+
+```typescript
+const fallbackTranscripts = [
+  { id: 'transcript-1', title: 'Nicole RTLC Coaching Session', date: new Date('2025-09-04T14:00:00Z'), duration: '45m' },
+  { id: 'transcript-2', title: 'Ashley RTLC Coaching Session', date: new Date('2025-09-04T10:00:00Z'), duration: '30m' },
+  { id: 'transcript-3', title: 'Dante RTLC Coaching Session', date: new Date('2025-09-04T16:00:00Z'), duration: '37m' },
+  { id: 'transcript-4', title: 'Brian Albans RTLC Coaching Session', date: new Date('2025-09-04T11:00:00Z'), duration: '41m' },
+  { id: 'transcript-5', title: 'Leo/Mark Launch Box Chat', date: new Date('2025-08-29T15:00:00Z'), duration: '60m' }
+];
+```
+
+### 4. Status Indicators
+Update the sync status to show:
+- "Real API" when using actual Otter.AI data
+- "Fallback Data" when using test data due to API issues
+- Clear reason for fallback in console logs
+
+## Implementation Logic
+
+```typescript
+// In /api/meetings route, replace Otter integration section with:
+
+console.log('🎤 [SYNC] Attempting Otter.AI API connection...');
+let transcripts = [];
+let usingFallback = false;
+let fallbackReason = '';
+
+if (syncStatus.otter.connected) {
+  try {
+    // Try real Otter.AI API with timeout
+    const otterService = await OtterService.createFromUserIntegration(storage, userId);
+    if (otterService) {
+      const thirtyDaysAgo = new Date();
+      thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
+      const today = new Date();
+      
+      // API call with timeout
+      const apiTranscripts = await Promise.race([
+        otterService.getSpeeches(thirtyDaysAgo, today),
+        new Promise((_, reject) => setTimeout(() => reject(new Error('API timeout')), 5000))
+      ]);
+      
+      if (apiTranscripts && apiTranscripts.length > 0) {
+        transcripts = apiTranscripts;
+        console.log('✅ [SYNC] Using real Otter.AI data:', transcripts.length, 'transcripts');
+      } else {
+        usingFallback = true;
+        fallbackReason = 'API returned no transcripts';
+      }
+    } else {
+      usingFallback = true;
+      fallbackReason = 'Failed to initialize Otter service';
+    }
+  } catch (error) {
+    usingFallback = true;
+    fallbackReason = `API error: ${error.message}`;
+    console.warn('⚠️ [SYNC] Otter API failed:', error.message);
+  }
+}
+
+// Use fallback data if needed
+if (usingFallback || !syncStatus.otter.connected) {
+  transcripts = fallbackTranscripts;
+  console.log('🔄 [SYNC] Using fallback transcript data:', transcripts.length, 'transcripts');
+  console.log('📝 [SYNC] Fallback reason:', fallbackReason || 'Otter not connected');
+}
+```
+
+## Expected Outcome
+
+After this fix:
+- Meetings will always appear, regardless of Otter.AI API status
+- Console logs will clearly show whether real or fallback data is being used
+- Users get a working experience while API issues are resolved
+- System gracefully handles all API failure scenarios
+- Confidence scoring and matching continue to work with either data source
+
+## Testing Requirements
+
+- Test with Otter.AI integration connected and disconnected
+- Test with invalid API keys
+- Test with API timeouts
+- Verify fallback data displays correctly
+- Confirm matching logic works with both real and fallback data
+
+## Important Notes
+
+- Always prioritize showing meetings to the user
+- Maintain all existing confidence scoring and error handling
+- Keep backward compatibility with current frontend
+- Provide clear logging for debugging API issues
+- Ensure smooth user experience regardless of API status
+
+This fix ensures your SYNC function remains reliable and always displays meetings while working toward full API integration.

@@ -1,0 +1,106 @@
+# Replit Agent Prompt: Implement Real Otter.AI Integration
+
+## Task
+Replace the simulated Otter.AI transcript data with real API integration to fetch actual meeting transcripts and summaries from Otter.AI.
+
+## Current State
+The SYNC function currently uses hard-coded transcript data. We need to connect to the actual Otter.AI API to fetch real meeting data using the user's stored API credentials.
+
+## Implementation Requirements
+
+### 1. Create Otter.AI Service File
+Create a new file `server/services/otter.ts` with the following functionality:
+
+**API Integration Features:**
+- Connect to Otter.AI REST API using user's stored API key
+- Fetch speeches/meetings from specified date ranges
+- Retrieve meeting summaries (not full transcripts as requested)
+- Handle API authentication and rate limiting
+- Implement proper error handling for API failures
+
+**Core Methods Needed:**
+- `getSpeeches(startDate, endDate)` - Fetch meetings in date range
+- `getSpeechSummary(speechId)` - Get summary for specific meeting
+- `createFromUserIntegration(storage, userId)` - Initialize service with user's API key
+
+### 2. Update Routes Integration
+Modify the existing `/api/meetings` route to:
+- Use real Otter.AI service instead of hard-coded data
+- Fetch actual transcripts from the last 30 days
+- Use real meeting summaries for matching
+- Maintain the enhanced confidence scoring system
+- Keep all existing error handling and logging
+
+### 3. Enhanced Matching Logic
+Update the meeting-to-transcript matching to use:
+- Real Otter.AI meeting titles and dates
+- Actual participant/attendee information when available
+- Meeting duration and timing for better accuracy
+- Summary content for improved confidence scoring
+
+### 4. API Error Handling
+Implement comprehensive error handling for:
+- Invalid API keys (401 errors)
+- Rate limiting (429 errors)
+- Network timeouts and connection issues
+- Empty response handling
+- API service outages
+
+## Technical Specifications
+
+### Otter.AI API Details
+- Base URL: `https://otter.ai/forward/api/v1`
+- Authentication: Bearer token using user's API key
+- Key endpoints: `/speeches` for listing meetings, `/speeches/{id}/summary` for summaries
+- Rate limits: Respect API rate limiting with proper backoff
+
+### Integration Points
+- Replace the hard-coded transcripts array in `/api/meetings` route
+- Use the existing user integration system to get API credentials
+- Maintain backward compatibility with current frontend expectations
+- Keep the confidence scoring and matching algorithms we just implemented
+
+### Data Transformation
+Transform Otter.AI API responses to match current frontend expectations:
+```typescript
+interface ExpectedTranscript {
+  id: string;
+  title: string;
+  date: Date;
+  duration: string;
+  summary?: string;
+  confidence?: number;
+}
+```
+
+## Implementation Steps
+
+1. **Create Otter Service**: Build `server/services/otter.ts` with real API integration
+2. **Update Routes**: Modify `/api/meetings` to use real Otter service
+3. **Test Integration**: Ensure API calls work with user's stored credentials
+4. **Error Handling**: Add comprehensive error handling for API failures
+5. **Fallback Logic**: If Otter API fails, gracefully degrade to showing calendar-only data
+
+## Important Notes
+- Use meeting summaries, not full transcripts as specifically requested
+- Maintain all existing confidence scoring and matching logic
+- Keep the enhanced error handling and logging we just implemented
+- Ensure backward compatibility with current frontend
+- Handle cases where users don't have Otter.AI integration configured
+
+## Expected Outcome
+After implementation:
+- SYNC page will show real Otter.AI meetings when integration is connected
+- Meeting matching will use actual transcript data instead of simulated data
+- Users will see real meeting summaries when sync operations complete
+- All existing error handling and confidence scoring will continue working
+- System will gracefully handle API failures and show appropriate error messages
+
+## Testing Requirements
+- Test with valid Otter.AI API key
+- Test with invalid/expired API key
+- Test with network timeouts
+- Test when no meetings are found
+- Verify confidence scoring still works with real data
+
+Implement this real Otter.AI integration while maintaining all the enhanced error handling and confidence scoring we just added.

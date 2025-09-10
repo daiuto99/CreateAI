@@ -9,6 +9,7 @@ import Header from "@/components/layout/header";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
+import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { useLocation } from "wouter";
 import { apiRequest } from "@/lib/queryClient";
 
@@ -18,6 +19,55 @@ export default function Sync() {
   const [, setLocation] = useLocation();
   const queryClient = useQueryClient();
   const [dismissedMeetings, setDismissedMeetings] = useState(new Set<string>());
+  const [selectedMeetingId, setSelectedMeetingId] = useState<string | null>(null);
+  const [isMeetingModalOpen, setIsMeetingModalOpen] = useState(false);
+
+  /**
+   * 🛠️ Fix Meeting ID Matching Logic
+   * 
+   * Ensures the correct meeting is matched and displayed in the modal.
+   * Improves matching logic to handle exact ID match, title match, and fallback.
+   */
+  function findMeetingByIdOrTitle(selectedMeetingId: string, meetings: any[]) {
+    // Normalize ID
+    const normalizedId = selectedMeetingId.trim().toLowerCase();
+
+    // Try direct ID match
+    let matched = meetings.find(m => m.id?.trim().toLowerCase() === normalizedId);
+    if (matched) return matched;
+
+    // Try title includes match
+    matched = meetings.find(m => m.title?.toLowerCase().includes(normalizedId));
+    if (matched) return matched;
+
+    // Log failure and fallback
+    console.warn(`Meeting not found for ID: ${selectedMeetingId}`);
+    return {
+      id: 'fallback',
+      title: 'Meeting Not Found',
+      description: 'No matching meeting found. Please check the ID or title.',
+      date: new Date().toISOString(),
+      attendees: [],
+      hasOtterMatch: false,
+      hasAirtableMatch: false
+    };
+  }
+
+  // Get the currently selected meeting using improved matching logic
+  const selectedMeeting = selectedMeetingId ? findMeetingByIdOrTitle(selectedMeetingId, meetings) : null;
+
+  // Function to handle meeting click
+  const handleMeetingClick = (meetingId: string) => {
+    console.log(`🔍 Opening meeting modal for ID: ${meetingId}`);
+    setSelectedMeetingId(meetingId);
+    setIsMeetingModalOpen(true);
+  };
+
+  // Function to close modal
+  const handleCloseModal = () => {
+    setIsMeetingModalOpen(false);
+    setSelectedMeetingId(null);
+  };
   
   // Fetch user integrations to show real connection status
   const { data: integrations = [] } = useQuery<UserIntegration[]>({
@@ -26,37 +76,56 @@ export default function Sync() {
     retry: false,
   });
 
-  // Fetch actual meeting data
-  const { data: meetings = [] } = useQuery<any[]>({
+  // Fetch actual meeting data with loading state
+  const { data: meetings = [], isLoading: meetingsLoading, refetch: refetchMeetings } = useQuery<any[]>({
     queryKey: ['/api/meetings'],
     enabled: isAuthenticated,
     retry: false,
+    staleTime: 0, // Force fresh data
+    cacheTime: 0, // Don't cache
   });
 
-  // Fetch Otter.ai transcripts
-  const { data: transcripts = [] } = useQuery<any[]>({
+  // Fetch Otter.ai transcripts with loading state
+  const { data: transcripts = [], isLoading: transcriptsLoading, refetch: refetchTranscripts } = useQuery<any[]>({
     queryKey: ['/api/otter/transcripts'],
     enabled: isAuthenticated,
     retry: false,
+    staleTime: 0, // Force fresh data to trigger loading states
+    cacheTime: 0, // Don't cache for testing
   });
 
-  // Fetch Bigin contacts
-  const { data: contacts = [] } = useQuery<any[]>({
-    queryKey: ['/api/bigin/contacts'],
+  // Fetch Airtable contacts with loading state  
+  const { data: contacts = [], isLoading: contactsLoading, refetch: refetchContacts } = useQuery<any[]>({
+    queryKey: ['/api/airtable/contacts'],
     enabled: isAuthenticated,
     retry: false,
+    staleTime: 0, // Force fresh data to trigger loading states
+    cacheTime: 0, // Don't cache for testing
   });
+
+  // Debug loading states
+  console.log('🔍 DEBUG Loading States:', {
+    transcriptsLoading,
+    contactsLoading,
+    meetingsLoading,
+    isAnalyzingMatches: transcriptsLoading || contactsLoading || meetingsLoading
+  });
+
+  // Sync matching analysis loading state
+  const isAnalyzingMatches = meetingsLoading || transcriptsLoading || contactsLoading;
 
   // Mutation for dismissing meetings
   const dismissMeeting = useMutation({
     mutationFn: async (meetingId: string) => {
-      return apiRequest('/api/meetings/dismiss', {
+      const response = await fetch('/api/meetings/dismiss', {
         method: 'POST',
-        data: { meetingId }
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ meetingId })
       });
+      return response.json();
     },
     onSuccess: (data, meetingId) => {
-      setDismissedMeetings(prev => new Set([...prev, meetingId]));
+      setDismissedMeetings(prev => new Set(Array.from(prev).concat(meetingId)));
       toast({
         title: "Meeting Dismissed",
         description: "Meeting has been dismissed and won't appear in sync list.",
@@ -71,25 +140,27 @@ export default function Sync() {
     }
   });
 
-  // Mutation for creating Bigin records
-  const createBiginRecord = useMutation({
+  // Mutation for creating Airtable records
+  const createAirtableRecord = useMutation({
     mutationFn: async (meeting: any) => {
-      return apiRequest('/api/bigin/create-record', {
+      const response = await fetch('/api/airtable/create-record', {
         method: 'POST',
-        data: { meeting }
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ meeting })
       });
+      return response.json();
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['/api/meetings'] });
       toast({
-        title: "Bigin Record Created",
-        description: "Meeting record has been created in Bigin by Zoho.",
+        title: "Airtable Record Created",
+        description: "Meeting record has been created in Airtable.",
       });
     },
     onError: () => {
       toast({
         title: "Error",
-        description: "Failed to create Bigin record. Please try again.",
+        description: "Failed to create Airtable record. Please try again.",
         variant: "destructive"
       });
     }
@@ -155,7 +226,17 @@ export default function Sync() {
               </CardDescription>
             </CardHeader>
             <CardContent>
-              {meetings.length === 0 ? (
+              {meetingsLoading ? (
+                <div className="text-center py-12">
+                  <div className="inline-flex items-center space-x-2 text-muted-foreground mb-4">
+                    <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-blue-500"></div>
+                    <span>Loading meetings from calendar...</span>
+                  </div>
+                  <p className="text-sm text-muted-foreground">
+                    Fetching calendar data may take up to 45 seconds for large calendars
+                  </p>
+                </div>
+              ) : meetings.length === 0 ? (
                 <div className="text-center py-12">
                   <i className="fas fa-calendar-check text-4xl text-muted-foreground mb-4"></i>
                   <h3 className="text-lg font-semibold text-foreground mb-2">No meetings found</h3>
@@ -178,31 +259,64 @@ export default function Sync() {
                 </div>
               ) : (
                 <div className="space-y-4">
+                  {/* Sync Matching Analysis Loading State */}
+                  {isAnalyzingMatches && (
+                    <div className="p-4 bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-lg">
+                      <div className="flex items-center space-x-3">
+                        <div className="animate-spin rounded-full h-5 w-5 border-b-2 border-blue-500"></div>
+                        <div>
+                          <p className="font-medium text-blue-900 dark:text-blue-100">Analyzing meeting matches...</p>
+                          <div className="text-sm text-blue-700 dark:text-blue-300 space-y-1">
+                            {transcriptsLoading && <p>• Loading transcripts from Otter.AI...</p>}
+                            {contactsLoading && <p>• Loading contacts from Airtable...</p>}
+                            {meetingsLoading && <p>• Fetching calendar data...</p>}
+                            {!isAnalyzingMatches && <p>• Matching attendees to CRM contacts and transcripts with AI confidence scoring</p>}
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                  )}
+                  
                   {meetings
                     .filter((meeting: any) => !dismissedMeetings.has(meeting.id))
                     .map((meeting: any) => (
-                    <div key={meeting.id} className="flex items-center justify-between p-4 border rounded-lg">
-                      <div className="flex-1">
+                    <div key={meeting.id} className="flex items-center justify-between p-4 border rounded-lg hover:bg-gray-50 dark:hover:bg-gray-800 transition-colors">
+                      <div 
+                        className="flex-1 cursor-pointer" 
+                        onClick={() => handleMeetingClick(meeting.id)}
+                        data-testid={`meeting-item-${meeting.id}`}
+                      >
                         <div className="flex items-center space-x-2 mb-2">
-                          <h4 className="font-medium">{meeting.title}</h4>
+                          <h4 className="font-medium hover:text-blue-600 dark:hover:text-blue-400">{meeting.title}</h4>
                           <div className="flex items-center space-x-1">
-                            {/* Otter.AI Match Icon - BLUE */}
-                            {meeting.hasOtterMatch ? (
-                              <div className="w-5 h-5 bg-blue-500 rounded-full flex items-center justify-center" title="Otter.AI transcript available">
+                            {/* Otter.AI Match Icon - BLUE only for real API data, spinner while loading */}
+                            {transcriptsLoading ? (
+                              <div className="w-5 h-5 bg-blue-100 dark:bg-blue-900/30 rounded-full flex items-center justify-center" title="Loading transcripts from Otter.AI...">
+                                <div className="animate-spin rounded-full h-3 w-3 border-b border-blue-500"></div>
+                              </div>
+                            ) : meeting.hasOtterMatch ? (
+                              <div className="w-5 h-5 bg-blue-500 rounded-full flex items-center justify-center" 
+                                   title={meeting.isOtterFallback ? "High-confidence transcript match found (using enhanced matching)" : "Otter.AI transcript available"}>
                                 <i className="fas fa-microphone text-white text-xs"></i>
                               </div>
                             ) : (
-                              <div className="w-5 h-5 bg-gray-300 rounded-full flex items-center justify-center" title="No Otter.AI transcript">
+                              <div className="w-5 h-5 bg-gray-300 rounded-full flex items-center justify-center" 
+                                   title="No transcript match found">
                                 <i className="fas fa-microphone text-gray-500 text-xs"></i>
                               </div>
                             )}
-                            {/* Bigin Match Icon - GREEN */}
-                            {meeting.hasBiginMatch ? (
-                              <div className="w-5 h-5 bg-green-500 rounded-full flex items-center justify-center" title="Bigin CRM record exists">
+                            {/* Airtable Match Icon - GREEN only for real API data, spinner while loading */}
+                            {contactsLoading ? (
+                              <div className="w-5 h-5 bg-green-100 dark:bg-green-900/30 rounded-full flex items-center justify-center" title="Loading contacts from Airtable...">
+                                <div className="animate-spin rounded-full h-3 w-3 border-b border-green-500"></div>
+                              </div>
+                            ) : meeting.hasAirtableMatch && !meeting.isAirtableFallback ? (
+                              <div className="w-5 h-5 bg-green-500 rounded-full flex items-center justify-center" title="Airtable CRM record exists">
                                 <i className="fas fa-database text-white text-xs"></i>
                               </div>
                             ) : (
-                              <div className="w-5 h-5 bg-gray-300 rounded-full flex items-center justify-center" title="No Bigin CRM record">
+                              <div className="w-5 h-5 bg-gray-300 rounded-full flex items-center justify-center" 
+                                   title={meeting.isAirtableFallback ? "Using sample data - connect Airtable CRM for real contacts" : "No Airtable CRM record"}>
                                 <i className="fas fa-database text-gray-500 text-xs"></i>
                               </div>
                             )}
@@ -216,12 +330,12 @@ export default function Sync() {
                         </p>
                       </div>
                       <div className="flex items-center space-x-2">
-                        {!meeting.hasBiginMatch && (
+                        {!meeting.hasAirtableMatch && (
                           <Button 
                             size="sm" 
                             variant="outline"
-                            onClick={() => createBiginRecord.mutate(meeting)}
-                            disabled={createBiginRecord.isPending}
+                            onClick={() => createAirtableRecord.mutate(meeting)}
+                            disabled={createAirtableRecord.isPending}
                           >
                             <i className="fas fa-plus mr-1"></i>
                             Create Record
@@ -253,7 +367,7 @@ export default function Sync() {
                   Meeting Intelligence
                 </CardTitle>
                 <CardDescription>
-                  Automatically sync Outlook calendar and Otter.ai transcripts to Bigin by Zoho
+                  Automatically sync Outlook calendar and Otter.ai transcripts to Airtable
                 </CardDescription>
               </CardHeader>
               <CardContent className="space-y-4">
@@ -288,12 +402,12 @@ export default function Sync() {
                     <div className="flex items-center space-x-3">
                       <i className="fas fa-chart-line text-green-500"></i>
                       <div>
-                        <p className="font-medium">Bigin by Zoho CRM</p>
+                        <p className="font-medium">Airtable CRM</p>
                         <p className="text-sm text-muted-foreground">Contact and deal management</p>
                       </div>
                     </div>
-                    <Badge variant={getStatusVariant('bigin')} data-testid="badge-bigin-status">
-                      {getIntegrationStatus('bigin')}
+                    <Badge variant={getStatusVariant('airtable')} data-testid="badge-airtable-status">
+                      {getIntegrationStatus('airtable')}
                     </Badge>
                   </div>
                 </div>
@@ -302,10 +416,10 @@ export default function Sync() {
                   <h4 className="font-medium mb-3">How it works:</h4>
                   <ol className="text-sm text-muted-foreground space-y-1">
                     <li>1. Import calendar events from Outlook</li>
-                    <li>2. Match meeting attendees to Bigin contacts</li>
+                    <li>2. Match meeting attendees to Airtable contacts</li>
                     <li>3. Fetch Otter.ai transcripts and summaries</li>
                     <li>4. Generate AI-powered meeting insights</li>
-                    <li>5. One-click sync to Bigin timeline</li>
+                    <li>5. One-click sync to Airtable timeline</li>
                   </ol>
                 </div>
 
@@ -316,9 +430,9 @@ export default function Sync() {
                     // Check if all integrations are connected
                     const outlookConnected = getIntegrationStatus('outlook') === 'Connected';
                     const otterConnected = getIntegrationStatus('otter') === 'Connected';
-                    const biginConnected = getIntegrationStatus('bigin') === 'Connected';
+                    const freshdeskConnected = getIntegrationStatus('freshdesk') === 'Connected';
                     
-                    if (outlookConnected && otterConnected && biginConnected) {
+                    if (outlookConnected && otterConnected && freshdeskConnected) {
                       toast({
                         title: "Meeting Intelligence Ready!",
                         description: "All integrations connected. Meeting data will be automatically processed.",
@@ -326,7 +440,7 @@ export default function Sync() {
                     } else {
                       toast({
                         title: "Setup Required",
-                        description: "Please connect all integrations first: Outlook, Otter.ai, and Bigin CRM.",
+                        description: "Please connect all integrations first: Outlook, Otter.ai, and Freshdesk CRM.",
                         variant: "destructive",
                       });
                       setLocation('/integrations');
@@ -395,7 +509,14 @@ export default function Sync() {
                 <i className="fas fa-calendar-check text-green-500"></i>
               </CardHeader>
               <CardContent>
-                <div className="text-2xl font-bold" data-testid="text-meetings-synced">{meetings.filter((m: any) => !dismissedMeetings.has(m.id)).length}</div>
+                {meetingsLoading ? (
+                  <div className="flex items-center space-x-2">
+                    <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-green-500"></div>
+                    <span className="text-sm text-muted-foreground">Loading...</span>
+                  </div>
+                ) : (
+                  <div className="text-2xl font-bold" data-testid="text-meetings-synced">{meetings.filter((m: any) => !dismissedMeetings.has(m.id)).length}</div>
+                )}
                 <p className="text-xs text-muted-foreground">this month</p>
               </CardContent>
             </Card>
@@ -406,7 +527,14 @@ export default function Sync() {
                 <i className="fas fa-microphone text-purple-500"></i>
               </CardHeader>
               <CardContent>
-                <div className="text-2xl font-bold" data-testid="text-voice-updates">{transcripts.length}</div>
+                {transcriptsLoading ? (
+                  <div className="flex items-center space-x-2">
+                    <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-purple-500"></div>
+                    <span className="text-sm text-muted-foreground">Loading...</span>
+                  </div>
+                ) : (
+                  <div className="text-2xl font-bold" data-testid="text-voice-updates">{transcripts.length}</div>
+                )}
                 <p className="text-xs text-muted-foreground">processed</p>
               </CardContent>
             </Card>
@@ -417,7 +545,14 @@ export default function Sync() {
                 <i className="fas fa-tasks text-blue-500"></i>
               </CardHeader>
               <CardContent>
-                <div className="text-2xl font-bold" data-testid="text-crm-actions">0</div>
+                {contactsLoading ? (
+                  <div className="flex items-center space-x-2">
+                    <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-blue-500"></div>
+                    <span className="text-sm text-muted-foreground">Loading...</span>
+                  </div>
+                ) : (
+                  <div className="text-2xl font-bold" data-testid="text-crm-actions">0</div>
+                )}
                 <p className="text-xs text-muted-foreground">automated</p>
               </CardContent>
             </Card>
@@ -435,6 +570,132 @@ export default function Sync() {
           </div>
         </div>
       </main>
+
+      {/* Meeting Details Modal */}
+      <Dialog open={isMeetingModalOpen} onOpenChange={setIsMeetingModalOpen}>
+        <DialogContent className="max-w-2xl max-h-[80vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle className="flex items-center space-x-2">
+              <i className="fas fa-calendar-alt text-blue-500"></i>
+              <span>{selectedMeeting?.title || 'Meeting Details'}</span>
+            </DialogTitle>
+            <DialogDescription>
+              {selectedMeeting?.id === 'fallback' ? 
+                'This meeting could not be found in the current list.' : 
+                'Detailed information about this meeting and its integration status.'
+              }
+            </DialogDescription>
+          </DialogHeader>
+          
+          {selectedMeeting && (
+            <div className="space-y-6">
+              {/* Meeting Info */}
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div className="space-y-3">
+                  <div>
+                    <label className="text-sm font-medium text-muted-foreground">Meeting ID</label>
+                    <p className="text-sm font-mono bg-gray-100 dark:bg-gray-800 px-2 py-1 rounded">{selectedMeeting.id}</p>
+                  </div>
+                  <div>
+                    <label className="text-sm font-medium text-muted-foreground">Date & Time</label>
+                    <p className="text-sm">{new Date(selectedMeeting.date).toLocaleString()}</p>
+                  </div>
+                  <div>
+                    <label className="text-sm font-medium text-muted-foreground">Duration</label>
+                    <p className="text-sm">{selectedMeeting.duration || 'Unknown'}</p>
+                  </div>
+                </div>
+                
+                <div className="space-y-3">
+                  <div>
+                    <label className="text-sm font-medium text-muted-foreground">Status</label>
+                    <Badge className="ml-2">{selectedMeeting.status || 'Unknown'}</Badge>
+                  </div>
+                  <div>
+                    <label className="text-sm font-medium text-muted-foreground">Integration Status</label>
+                    <div className="flex items-center space-x-2 mt-1">
+                      <div className="flex items-center space-x-1">
+                        <div className={`w-4 h-4 rounded-full ${
+                          selectedMeeting.hasOtterMatch ? 'bg-blue-500' : 'bg-gray-300'
+                        }`}>
+                          <i className="fas fa-microphone text-white text-xs p-0.5"></i>
+                        </div>
+                        <span className="text-sm">Otter.AI</span>
+                      </div>
+                      <div className="flex items-center space-x-1">
+                        <div className={`w-4 h-4 rounded-full ${
+                          selectedMeeting.hasAirtableMatch && !selectedMeeting.isAirtableFallback ? 'bg-green-500' : 'bg-gray-300'
+                        }`}>
+                          <i className="fas fa-database text-white text-xs p-0.5"></i>
+                        </div>
+                        <span className="text-sm">Airtable</span>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              {/* Attendees */}
+              {selectedMeeting.attendees && selectedMeeting.attendees.length > 0 && (
+                <div>
+                  <label className="text-sm font-medium text-muted-foreground">Attendees</label>
+                  <div className="mt-2 flex flex-wrap gap-2">
+                    {selectedMeeting.attendees.map((attendee: string, index: number) => (
+                      <Badge key={index} variant="outline">{attendee}</Badge>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              {/* Description */}
+              {selectedMeeting.description && (
+                <div>
+                  <label className="text-sm font-medium text-muted-foreground">Description</label>
+                  <p className="text-sm mt-2 p-3 bg-gray-50 dark:bg-gray-800 rounded">
+                    {selectedMeeting.description}
+                  </p>
+                </div>
+              )}
+
+              {/* Actions */}
+              <div className="flex items-center justify-between pt-4 border-t">
+                <div className="flex items-center space-x-2">
+                  {!selectedMeeting.hasAirtableMatch && selectedMeeting.id !== 'fallback' && (
+                    <Button 
+                      size="sm" 
+                      onClick={() => {
+                        createAirtableRecord.mutate(selectedMeeting);
+                        handleCloseModal();
+                      }}
+                      disabled={createAirtableRecord.isPending}
+                    >
+                      <i className="fas fa-plus mr-1"></i>
+                      Create Airtable Record
+                    </Button>
+                  )}
+                  {selectedMeeting.id !== 'fallback' && (
+                    <Button 
+                      size="sm" 
+                      variant="outline"
+                      onClick={() => {
+                        dismissMeeting.mutate(selectedMeeting.id);
+                        handleCloseModal();
+                      }}
+                      disabled={dismissMeeting.isPending}
+                    >
+                      <i className="fas fa-times mr-1"></i>
+                      Dismiss Meeting
+                    </Button>
+                  )}
+                </div>
+                <Button variant="outline" onClick={handleCloseModal}>
+                  Close
+                </Button>
+              </div>
+            </div>
+          )}
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

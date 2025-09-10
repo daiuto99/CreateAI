@@ -11,7 +11,8 @@ import { useToast } from '@/hooks/use-toast';
 
 // Import service logos
 import openaiLogo from '@assets/openai_1756919666153.png';
-import biginLogo from '@assets/bigin_1756937799014.png';
+import freshdeskLogo from '@assets/generated_images/Freshdesk_professional_logo_icon_91284b50.png';
+import airtableLogo from '@assets/airtable-logo.jpeg';
 import wordpressLogo from '@assets/wordPress_1756919666154.png';
 import transistorLogo from '@assets/transister_1756919666154.jpg';
 import elevenlabsLogo from '@assets/elevenlabs_1756919666154.png';
@@ -22,10 +23,11 @@ import outlookLogo from '@assets/generated_images/Microsoft_Outlook_professional
 interface Integration {
   id: string;
   provider: string;
-  status: 'connected' | 'error' | 'expired' | 'disabled' | 'setup_required';
+  status: 'connected' | 'error' | 'needs_oauth' | 'expired' | 'disabled' | 'setup_required';
   credentials?: any;
   settings?: any;
   lastSync?: string;
+  last_validated?: string;
   createdAt: string;
   updatedAt: string;
 }
@@ -55,14 +57,14 @@ const serviceConfigs: Record<string, ServiceConfig> = {
       { key: 'apiKey', label: 'API Key', type: 'password', placeholder: 'sk-...', required: true }
     ]
   },
-  bigin: {
-    name: 'Bigin by Zoho',
-    description: 'Sync meeting intelligence and voice updates into your CRM',
-    logo: biginLogo,
-    helpText: 'Go to Bigin Settings → Developer Space → Server-based Applications → Create app. Copy the Client ID and Client Secret from your created application.',
+  airtable: {
+    name: 'Airtable',
+    description: 'Sync meeting intelligence and contact management with your Airtable bases',
+    logo: airtableLogo,
+    helpText: 'In Airtable, go to your account → Generate API key. Also provide your base ID from the URL (e.g., "appXXXXXXXXXX").',
     fields: [
-      { key: 'clientId', label: 'Client ID', type: 'text', placeholder: '1000.74UPTQQD6M8RZUGC3LZ1467PODC...', required: true },
-      { key: 'clientSecret', label: 'Client Secret', type: 'password', placeholder: '6153dcaa9a3c249eab5ae23c2d20a396bc1...', required: true }
+      { key: 'apiKey', label: 'API Key', type: 'password', placeholder: 'Your Airtable API key', required: true },
+      { key: 'baseId', label: 'Base ID', type: 'text', placeholder: 'appXXXXXXXXXX (from Airtable URL)', required: true }
     ]
   },
   wordpress: {
@@ -131,6 +133,58 @@ export default function Integrations() {
   const [formData, setFormData] = useState<Record<string, string>>({});
   const [isModalOpen, setIsModalOpen] = useState(false);
 
+  // Handle OAuth callback success/error messages
+  useEffect(() => {
+    const urlParams = new URLSearchParams(window.location.search);
+    const success = urlParams.get('success');
+    const error = urlParams.get('error');
+    const details = urlParams.get('details');
+
+    if (success === 'freshdesk_connected') {
+      toast({
+        title: 'Freshdesk Connected!',
+        description: 'Your Freshdesk integration has been successfully connected.'
+      });
+      // Clear URL parameters
+      window.history.replaceState({}, document.title, window.location.pathname);
+      // Refresh integrations list
+      queryClient.invalidateQueries({ queryKey: ['/api/integrations'] });
+    } else if (error) {
+      let errorMessage = 'Integration connection failed';
+      switch (error) {
+        case 'oauth_failed':
+          errorMessage = `OAuth authorization failed: ${details || 'Unknown error'}`;
+          break;
+        case 'invalid_callback':
+          errorMessage = 'Invalid OAuth callback - missing authorization code';
+          break;
+        case 'invalid_state':
+          errorMessage = 'Security validation failed - please try again';
+          break;
+        case 'missing_credentials':
+          errorMessage = 'API credentials not found - please configure Freshdesk first';
+          break;
+        case 'token_exchange_failed':
+          errorMessage = `Token exchange failed: ${details || 'Unknown error'}`;
+          break;
+        case 'callback_failed':
+          errorMessage = `OAuth process failed: ${details || 'Unknown error'}`;
+          break;
+        default:
+          errorMessage = details || error;
+      }
+      
+      toast({
+        title: 'OAuth Connection Failed',
+        description: errorMessage,
+        variant: 'destructive'
+      });
+      
+      // Clear URL parameters
+      window.history.replaceState({}, document.title, window.location.pathname);
+    }
+  }, [toast, queryClient]);
+
   const { data: integrations = [], isLoading } = useQuery<Integration[]>({
     queryKey: ['/api/integrations'],
   });
@@ -196,6 +250,7 @@ export default function Integrations() {
     },
   });
 
+
   const getIntegrationByProvider = (provider: string) => {
     return integrations.find(integration => integration.provider === provider);
   };
@@ -203,16 +258,30 @@ export default function Integrations() {
   const getStatusColor = (status: string) => {
     switch (status) {
       case 'connected': return 'bg-green-100 text-green-800';
+      case 'needs_oauth': return 'bg-yellow-100 text-yellow-800';
       case 'error': return 'bg-red-100 text-red-800';
-      case 'expired': return 'bg-yellow-100 text-yellow-800';
+      case 'expired': return 'bg-orange-100 text-orange-800';
       case 'disabled': return 'bg-gray-100 text-gray-800';
       default: return 'bg-blue-100 text-blue-800';
     }
   };
 
-  const getStatusText = (status: string) => {
+  const getStatusText = (status: string, lastValidated?: string) => {
+    const getTimeAgo = (dateStr?: string) => {
+      if (!dateStr) return '';
+      const diff = Date.now() - new Date(dateStr).getTime();
+      const days = Math.floor(diff / (1000 * 60 * 60 * 24));
+      const hours = Math.floor(diff / (1000 * 60 * 60));
+      if (days > 0) return ` (${days}d ago)`;
+      if (hours > 0) return ` (${hours}h ago)`;
+      return ' (Recent)';
+    };
+
+    const timeAgo = getTimeAgo(lastValidated);
+    
     switch (status) {
-      case 'connected': return 'Connected';
+      case 'connected': return `Connected${timeAgo}`;
+      case 'needs_oauth': return 'Needs Authorization';
       case 'error': return 'Connection Error';
       case 'expired': return 'Credentials Expired';
       case 'disabled': return 'Disabled';
@@ -220,6 +289,8 @@ export default function Integrations() {
       default: return 'Setup Required';
     }
   };
+
+  // Connection handling for integrations
 
   const handleConnect = (provider: string) => {
     setSelectedService(provider);
@@ -236,6 +307,7 @@ export default function Integrations() {
       credentials: formData,
     });
   };
+
 
   if (isLoading) {
     return (
@@ -311,7 +383,7 @@ export default function Integrations() {
                   </div>
                   {integration && (
                     <Badge className={getStatusColor(integration.status)}>
-                      {getStatusText(integration.status)}
+                      {getStatusText(integration.status, integration.last_validated)}
                     </Badge>
                   )}
                 </div>
@@ -320,10 +392,10 @@ export default function Integrations() {
                 {isConnected ? (
                   <div className="space-y-3">
                     <div className="flex items-center justify-between text-sm">
-                      <span className="text-gray-600">Last synced:</span>
+                      <span className="text-gray-600">Last validated:</span>
                       <span className="font-medium">
-                        {integration?.lastSync 
-                          ? new Date(integration.lastSync).toLocaleDateString()
+                        {integration?.last_validated 
+                          ? new Date(integration.last_validated).toLocaleDateString()
                           : 'Never'
                         }
                       </span>
@@ -343,6 +415,34 @@ export default function Integrations() {
                         Disconnect
                       </Button>
                     </div>
+                  </div>
+                ) : integration?.status === 'needs_oauth' || !integration ? (
+                  <div className="space-y-3">
+                    <p className="text-sm text-muted-foreground">
+                      Configuration required to access {config.name} API.
+                    </p>
+                    <Button 
+                      onClick={() => handleConnect(provider)}
+                      className="w-full"
+                      data-testid={`button-connect-${provider}`}
+                    >
+                      Connect {config.name}
+                    </Button>
+                  </div>
+                ) : integration?.status === 'error' ? (
+                  <div className="space-y-3">
+                    <div className="p-3 bg-red-50 border border-red-200 rounded-md">
+                      <p className="text-sm text-red-800">
+                        Connection failed. Please check your credentials and try connecting again.
+                      </p>
+                    </div>
+                    <Button 
+                      onClick={() => handleConnect(provider)}
+                      className="w-full"
+                      data-testid={`button-reconnect-${provider}`}
+                    >
+                      Reconnect {config.name}
+                    </Button>
                   </div>
                 ) : (
                   <Button 

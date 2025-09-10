@@ -1,0 +1,238 @@
+# Replit Agent Prompt: Fix Bigin Contact Search for Mark Murphy
+
+## Problem
+The system is not finding "Mark Murphy" in Bigin CRM when searching for "Mark" from the meeting title "Leo/Mark - Launch Box Chat". The contact search is too strict and not matching partial names correctly.
+
+## Required Fix
+
+### 1. Enhanced Contact Search Logic
+In `server/services/bigin.ts`, update the `searchContacts` method to use broader search criteria:
+
+```typescript
+async searchContacts(query: string): Promise<BiginContact[]> {
+  try {
+    console.log('🔍 Searching Bigin contacts for:', query);
+
+    const searchUrl = `${this.baseUrl}/Contacts/search`;
+    
+    // ENHANCED: Multiple search strategies for better matching
+    const searchCriteria = [
+      `(Full_Name:starts_with:${query})`,  // Exact start match
+      `(Full_Name:contains:${query})`,     // Contains anywhere
+      `(Email:starts_with:${query})`,      // Email prefix
+      `(Email:contains:${query})`          // Email contains
+    ].join(' or ');
+    
+    const finalCriteria = `(${searchCriteria})`;
+    
+    console.log('🔍 Search criteria:', finalCriteria);
+
+    const response = await this.makeAuthenticatedRequest(searchUrl, {
+      method: 'GET',
+      params: {
+        criteria: finalCriteria,
+        per_page: 50  // Increased from 20 to get more results
+      }
+    });
+
+    if (!response.ok) {
+      await this.handleApiError(response);
+      return [];
+    }
+
+    const data = await response.json();
+    console.log('📊 Bigin contact search response:', {
+      query,
+      contactCount: data.data?.length || 0,
+      foundContacts: data.data?.map((c: any) => c.Full_Name || c.Name) || []
+    });
+
+    if (!data.data || !Array.isArray(data.data)) {
+      console.log('⚠️ No contacts found for query:', query);
+      return [];
+    }
+
+    // Transform and SORT by relevance
+    const contacts: BiginContact[] = data.data.map((contact: any) => ({
+      id: contact.id,
+      name: contact.Full_Name || contact.Name || 'Unknown',
+      email: contact.Email || '',
+      company: contact.Account_Name?.Account_Name || '',
+      phone: contact.Phone || contact.Mobile || ''
+    }));
+
+    // SORT by name relevance (exact matches first, then partial)
+    contacts.sort((a, b) => {
+      const aExact = a.name.toLowerCase().startsWith(query.toLowerCase()) ? 1 : 0;
+      const bExact = b.name.toLowerCase().startsWith(query.toLowerCase()) ? 1 : 0;
+      return bExact - aExact; // Exact matches first
+    });
+
+    console.log('✅ Found', contacts.length, 'Bigin contacts for query:', query);
+    console.log('📋 Contact names:', contacts.map(c => c.name));
+
+    return contacts;
+
+  } catch (error: any) {
+    console.error('🚨 Error searching Bigin contacts:', {
+      query,
+      error: error?.message,
+      code: error?.code
+    });
+    return [];
+  }
+}
+```
+
+### 2. Alternative Search Strategy
+Also add a backup method to try different search variations:
+
+```typescript
+// Add this new method to BiginService class
+async findContactByVariations(name: string): Promise<BiginContact[]> {
+  console.log('🔍 Trying contact search variations for:', name);
+  
+  const searchVariations = [
+    name,                           // "Mark"
+    `${name}*`,                    // "Mark*" (wildcard)
+    name.toLowerCase(),            // "mark"
+    name.charAt(0).toUpperCase() + name.slice(1).toLowerCase()  // "Mark"
+  ];
+  
+  const allResults: BiginContact[] = [];
+  
+  for (const variation of searchVariations) {
+    try {
+      console.log(`  🔍 Trying variation: "${variation}"`);
+      const results = await this.searchContacts(variation);
+      allResults.push(...results);
+      
+      if (results.length > 0) {
+        console.log(`  ✅ Found ${results.length} contacts with variation: "${variation}"`);
+      }
+    } catch (error) {
+      console.log(`  ⚠️ Search failed for variation: "${variation}"`);
+    }
+  }
+  
+  // Remove duplicates by ID
+  const uniqueResults = allResults.filter((contact, index, self) => 
+    index === self.findIndex(c => c.id === contact.id)
+  );
+  
+  console.log('📊 Total unique contacts found:', uniqueResults.length);
+  return uniqueResults;
+}
+```
+
+### 3. Update Routes to Use Enhanced Search
+In `server/routes.ts`, update the Bigin contact fetching section to use the improved search:
+
+```typescript
+// In the /api/meetings route, replace the Bigin contact search section with:
+if (biginIntegration?.status === 'connected') {
+  console.log('🔗 [SYNC] Bigin integration connected, attempting real API...');
+  
+  try {
+    const biginService = await BiginService.createFromUserIntegration(storage, userId);
+    
+    if (biginService) {
+      console.log('📅 [SYNC] API Call: Enhanced contact search for meetings...');
+      
+      // ENHANCED: Extract better search terms
+      const searchTerms = new Set<string>();
+      
+      for (const meeting of meetings) {
+        // Extract names from meeting titles with better parsing
+        const titleParts = meeting.title.split(/[\s\-|/,]+/).filter(word => 
+          word.length > 2 && 
+          !['the', 'and', 'with', 'meeting', 'call', 'chat', 'session', 'box'].includes(word.toLowerCase())
+        );
+        
+        titleParts.forEach(part => {
+          searchTerms.add(part);
+          // Also try first word combinations
+          if (part.length > 3) {
+            searchTerms.add(part.substring(0, 4)); // First 4 chars
+          }
+        });
+        
+        // Extract from attendee emails
+        if (meeting.attendees) {
+          meeting.attendees.forEach((email: string) => {
+            const emailPrefix = email.split('@')[0];
+            if (emailPrefix.length > 2) {
+              searchTerms.add(emailPrefix);
+            }
+          });
+        }
+      }
+      
+      console.log('🔍 [SYNC] Enhanced search terms:', Array.from(searchTerms));
+      
+      // Search with enhanced logic
+      const allContacts: any[] = [];
+      const maxSearches = 8; // Increased from 5
+      
+      for (const term of Array.from(searchTerms).slice(0, maxSearches)) {
+        try {
+          console.log(`🔍 [SYNC] Searching for: "${term}"`);
+          const termContacts = await biginService.findContactByVariations(term);
+          allContacts.push(...termContacts);
+          
+          if (termContacts.length > 0) {
+            console.log(`✅ [SYNC] Found ${termContacts.length} contacts for "${term}"`);
+          }
+        } catch (searchError: any) {
+          console.warn(`⚠️ [SYNC] Search failed for "${term}":`, searchError.message);
+        }
+      }
+      
+      // Remove duplicates by ID
+      contacts = allContacts.filter((contact, index, self) => 
+        index === self.findIndex(c => c.id === contact.id)
+      );
+      
+      if (contacts.length > 0) {
+        console.log('✅ [SYNC] SUCCESS: Enhanced search found', contacts.length, 'unique contacts');
+        console.log('📋 [SYNC] Found contact names:', contacts.map((c: any) => c.name));
+        
+        // SPECIFIC CHECK: Did we find Mark Murphy?
+        const markMurphy = contacts.find((c: any) => 
+          c.name.toLowerCase().includes('mark') && c.name.toLowerCase().includes('murphy')
+        );
+        if (markMurphy) {
+          console.log('🎯 [SYNC] SUCCESS: Found Mark Murphy!', markMurphy);
+        }
+      } else {
+        usingContactFallback = true;
+        contactFallbackReason = 'Enhanced search returned no contacts';
+        console.log('⚠️ [SYNC] Enhanced search returned empty results');
+      }
+    } else {
+      usingContactFallback = true;
+      contactFallbackReason = 'Failed to initialize Bigin service';
+    }
+  } catch (error: any) {
+    usingContactFallback = true;
+    contactFallbackReason = `Enhanced search error: ${error.message}`;
+    console.error('🚨 [SYNC] Enhanced Bigin search failed:', error);
+  }
+} else {
+  usingContactFallback = true;
+  contactFallbackReason = 'Bigin integration not connected';
+}
+```
+
+## Expected Outcome
+
+After this fix:
+- The system will find "Mark Murphy" when searching for "Mark"
+- "Leo/Mark - Launch Box Chat" meeting will show a green circle
+- Enhanced search will work for partial name matches
+- Better logging will show exactly what contacts are found
+- The search will try multiple variations to ensure matches
+
+## Testing
+
+The enhanced search should find "Mark Murphy" from your Bigin CRM and correctly match it to the "Leo/Mark - Launch Box Chat" meeting, resulting in a green circle for that meeting.

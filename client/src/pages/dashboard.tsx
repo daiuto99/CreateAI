@@ -241,11 +241,11 @@ export default function Dashboard() {
                     <i className="fas fa-address-book text-4xl text-muted-foreground mb-4"></i>
                     <h3 className="text-lg font-semibold text-foreground mb-2">No CRM data available</h3>
                     <p className="text-muted-foreground text-center mb-4">
-                      Connect your Bigin by Zoho integration to see pipeline metrics and activity data.
+                      Connect your Freshdesk integration to see pipeline metrics and activity data.
                     </p>
-                    <Button variant="outline" data-testid="button-connect-bigin">
+                    <Button variant="outline" data-testid="button-connect-freshdesk">
                       <i className="fas fa-chart-line mr-2"></i>
-                      Connect Bigin by Zoho
+                      Connect Freshdesk
                     </Button>
                   </div>
                 </CardContent>
