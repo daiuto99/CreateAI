@@ -1,35 +1,77 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-# Detect how Replit runs your app (uses .replit run command first).
-detect_cmd() {
-  if [ -f .replit ]; then
-    CMD=$(grep -E '^run *= *"' .replit | sed -E 's/^[^"]*"([^"]*)".*$/\1/' || true)
-    if [ -n "${CMD:-}" ]; then echo "$CMD"; return; fi
+# -----------------------------
+# Config
+# -----------------------------
+APP_CMD="${APP_CMD:-npm run dev}"      # your normal start command
+LOG_DIR="${LOG_DIR:-logs}"
+LOG_FILE="${LOG_FILE:-$LOG_DIR/app.log}"
+WATCHER="${WATCHER:-summarizer_watcher.py}"
+PORT="${PORT:-5000}"
+
+mkdir -p "$LOG_DIR"
+
+# -----------------------------
+# Helpers
+# -----------------------------
+free_port() {
+  echo "→ Ensuring port $PORT is free…"
+
+  # 1) If fuser exists, use it (common in many distros)
+  if command -v fuser >/dev/null 2>&1; then
+    fuser -k "${PORT}/tcp" >/dev/null 2>&1 || true
   fi
-  if [ -f package.json ] && grep -q '"start"' package.json; then echo "npm run start"; return; fi
-  if [ -f server.js ]; then echo "node server.js"; return; fi
-  if [ -f index.js ]; then echo "node index.js"; return; fi
-  if [ -f main.py ]; then echo "python main.py"; return; fi
-  if [ -f app.py ]; then echo "python app.py"; return; fi
-  echo "ERROR: Could not detect how to run your app. Set APP_CMD or edit this script." >&2
-  exit 1
+
+  # 2) Try lsof if available
+  if command -v lsof >/dev/null 2>&1; then
+    PIDS="$(lsof -t -i:${PORT} || true)"
+    if [[ -n "${PIDS}" ]]; then
+      echo "→ Killing PIDs on :$PORT: ${PIDS}"
+      kill -9 ${PIDS} || true
+    fi
+  fi
+
+  # 3) Fallback: kill any foreground dev server processes we know about
+  #    This avoids killing Replit's language servers.
+  if command -v pkill >/dev/null 2>&1; then
+    pkill -f "tsx server/index.ts" >/dev/null 2>&1 || true
+    pkill -f "node .*server/index.ts" >/dev/null 2>&1 || true
+  else
+    # Busybox killall fallback if pkill absent
+    killall -q tsx 2>/dev/null || true
+    killall -q node 2>/dev/null || true
+  fi
 }
 
-APP_CMD="${APP_CMD:-$(detect_cmd)}"
-echo "→ Starting app with: $APP_CMD"
+cleanup() {
+  # Stop background processes gracefully
+  [[ -n "${APP_PID:-}" ]] && kill "${APP_PID}" 2>/dev/null || true
+  [[ -n "${WATCHER_PID:-}" ]] && kill "${WATCHER_PID}" 2>/dev/null || true
+}
+trap cleanup EXIT
 
-mkdir -p logs summaries
-touch logs/app.log
+# -----------------------------
+# Main
+# -----------------------------
+free_port
 
-# Start your app and tee ALL output to logs/app.log
-( bash -lc "$APP_CMD 2>&1 | tee -a logs/app.log" ) &
+echo "→ Starting app with: ${APP_CMD}"
+# Start app, tee to log
+# (Remove the next line if you prefer to append instead of overwrite each run)
+: > "$LOG_FILE"
+set -m
+bash -lc "$APP_CMD" 2>&1 | tee -a "$LOG_FILE" &
 APP_PID=$!
 
-# Start the near-real-time watcher
-python summarizer_watcher.py &
-WATCH_PID=$!
+# Start watcher
+if [[ -f "$WATCHER" ]]; then
+  echo "→ Starting log watcher: $WATCHER"
+  python "$WATCHER" &
+  WATCHER_PID=$!
+else
+  echo "⚠️  Watcher '$WATCHER' not found — skipping."
+fi
 
-cleanup() { kill $APP_PID $WATCH_PID 2>/dev/null || true; }
-trap cleanup EXIT
-wait $APP_PID
+# Wait for the app to exit; watcher will be cleaned up via trap
+wait "$APP_PID" || true
