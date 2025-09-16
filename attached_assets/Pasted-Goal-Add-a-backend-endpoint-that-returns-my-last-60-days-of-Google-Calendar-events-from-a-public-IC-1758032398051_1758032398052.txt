@@ -1,0 +1,71 @@
+Goal: Add a backend endpoint that returns my last 60 days of Google Calendar events from a public ICS URL.
+
+Context: TypeScript Express app. We already have health route and good logging. The ICS URL will be provided via process.env.GCAL_ICS_URL. I want a clean module + API route.
+
+Do exactly this (make edits and show me diffs):
+
+Install deps
+
+Add: node-ical@^0.17.2 and luxon@^3 (use built-in fetch; do NOT add axios).
+
+Ensure types are fine (no any leaks).
+
+Create server/calendar/googleIcs.ts
+
+Export export interface CalendarEvent { id: string; title: string; start: string; end: string; attendees: string[] }
+
+Export export async function fetchGoogleIcs(url: string, daysBack = 60): Promise<CalendarEvent[]>
+
+Behavior:
+
+Fetch the ICS text from url.
+
+Parse with node-ical and collect VEVENTs.
+
+Time window: from now - daysBack days (UTC) to now + 1 day.
+
+Handle single and recurring events:
+
+For non-recurring, include if any overlap with the window.
+
+For recurring, expand only within the window (respect EXDATE and overrides).
+
+Normalize each included instance to:
+
+id: use UID if present; otherwise a stable hash of SUMMARY + DTSTART.
+
+title: from SUMMARY (fallback empty string).
+
+start & end: ISO 8601 UTC strings (use Luxon to normalize).
+
+attendees: array of emails from ATTENDEE and ORGANIZER fields (strip MAILTO:; lowercase; unique).
+
+Sort results by start descending.
+
+Log one line: calendar: fetched <raw> raw, returned <filtered> after window
+
+Add route GET /api/calendar/events
+
+In server/index.ts (or server/routes.ts if that’s where routes live), add:
+
+If process.env.GCAL_ICS_URL is missing: respond 501 { message: "ICS not configured" }.
+
+Else call fetchGoogleIcs(process.env.GCAL_ICS_URL, 60), return { count, events }.
+
+Log: calendar: responding with <count> events.
+
+Acceptance criteria
+
+curl -s https://<my-repl-url>/api/calendar/events returns JSON with { count, events: [...] }.
+
+Each event has fields { id, title, start, end, attendees[] } with ISO UTC times.
+
+Recurring events appear once per occurrence in the 60-day window.
+
+Console shows: calendar: fetched X raw, returned Y after window and calendar: responding with Y events.
+
+No TypeScript any or unhandled promise warnings.
+
+Tell me what changed
+
+List files edited/created and show a short sample response (first event).
