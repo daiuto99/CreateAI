@@ -122,7 +122,18 @@ export default function Sync() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ meetingId })
       });
-      return response.json();
+      
+      if (!response.ok) {
+        throw new Error(`Failed to dismiss meeting: ${response.status}`);
+      }
+      
+      const data = await response.json();
+      
+      if (!data.success) {
+        throw new Error(data.message || 'Failed to dismiss meeting');
+      }
+      
+      return data;
     },
     onSuccess: (data, meetingId) => {
       setDismissedMeetings(prev => new Set(Array.from(prev).concat(meetingId)));
@@ -131,7 +142,8 @@ export default function Sync() {
         description: "Meeting has been dismissed and won't appear in sync list.",
       });
     },
-    onError: () => {
+    onError: (error) => {
+      console.error('Dismiss meeting error:', error);
       toast({
         title: "Error",
         description: "Failed to dismiss meeting. Please try again.",

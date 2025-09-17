@@ -55,6 +55,24 @@ export async function registerRoutes(app: Express) {
     res.json([]);
   });
 
+  // Dismiss meeting endpoint
+  app.post("/api/meetings/dismiss", (req, res) => {
+    try {
+      const { meetingId } = req.body;
+      
+      if (!meetingId) {
+        return res.status(400).json({ success: false, message: "meetingId is required" });
+      }
+      
+      // In a real app, you would store dismissed meetings in a database
+      // For now, we'll just return success
+      res.json({ success: true, message: "Meeting dismissed successfully" });
+    } catch (error: any) {
+      console.error("dismiss meeting error:", error?.message || error);
+      res.status(500).json({ success: false, message: "Failed to dismiss meeting" });
+    }
+  });
+
   const server = http.createServer(app);
   return server;
 }
