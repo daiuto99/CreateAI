@@ -1,51 +1,63 @@
 # Automated Log Summary
 
-**Reason:** error • **Lines:** 3 • **Time (UTC):** 2025-09-17T14:32:58.504947Z
+**Reason:** error • **Lines:** 1 • **Time (UTC):** 2025-09-17T14:35:08.880150Z
 
-<!-- fingerprint:03684209351a -->
+<!-- fingerprint:c61afa6cdf0d -->
 
 ```markdown
-# Diagnostic Report
+# Diagnostic Report for calendar: error ical.parseICS is not a function
 
-## 1) Top Problems & Likely Root Causes
-- No explicit error or failures shown aside from a single `[ERROR ×1]` line with no further details; likely a harmless startup message or minor log formatting issue.
-- No health check failures; the `/healthz` endpoint is active and registered.
-- Routes appear registered correctly, but no confirmation these endpoints respond successfully under load.
-- Possible hidden or missing logs due to log level filtering or capture setup; the error context is missing.
-- No evidence of port conflicts, but no check for binding errors on port 5000 shown.
+## 1) Top Problems with Likely Root Causes
+- **Problem 1:** `ical.parseICS` is called but does not exist.
+  - Root cause: The `ical` library version used does not support `parseICS`, or there is a typo in the method name.
+- **Problem 2:** Incorrect import or outdated `ical` library usage.
+  - Root cause: The code expects a method `parseICS` that may be named differently or is deprecated.
+- **Problem 3:** Missing or incorrect installation of the `ical` library, causing runtime errors.
 
 ## 2) Exact, Minimal Fixes
-- Unknown file: Add explicit error detail logging on startup to capture and clarify the `[ERROR ×1]` entry, e.g.:
+- Check the installed `ical` package version in `package.json`.
+- Replace the method call to the correct method provided by the `ical` library.
+- Typical correct usage (in source file related to calendar processing, e.g., `calendar.js`):
 
-```js
-// Example (Node.js + Express) in server.js or index.js
-app.use((err, req, res, next) => {
-  console.error('Express Error:', err);
-  next(err);
-});
+```javascript
+// Old incorrect call
+// const events = ical.parseICS(data);
+
+// Minimal fix: Replace with correct method (commonly, ical.parse is used)
+const events = ical.parse(data);
 ```
 
-- If no error handler present, add above middleware near line 50 (approx.).
+- If unsure, change:
 
-- Add a startup log line to confirm no port binding errors, e.g.:
-
-```js
-server.listen(5000, () => console.log('Server started on port 5000'));
-server.on('error', (err) => console.error('Server failed to start:', err));
+```javascript
+ical.parseICS(...)
 ```
 
-## 3) Missing Env Vars / Secrets / Config
-- No config/env variables referenced or missing in logs; check that `PORT=5000` or equivalent is set.
-- Verify environment variables for API keys or database connection strings if endpoints depend on them, e.g., calendar API keys for `/api/calendar/events`.
+to
 
-## 4) Plain-English AI Prompts to Paste into Replit’s AI
-- "Help me add detailed error logging middleware to my Express server."
-- "How do I verify that Express server routes are responding correctly?"
-- "What environment variables are required for an Express app serving calendar events?"
-- "How to log server startup errors and confirm port binding in Node.js?"
-- "Explain how to test the health endpoint `/healthz` programmatically."
-- "Suggest minimal code changes to improve Express error visibility during launch."
+```javascript
+ical.parse(...)
+```
+
+- Confirm the import statement matches the library's documentation:
+
+```javascript
+const ical = require('ical');
+```
+
+## 3) Missing Env Vars/Secrets/Config
+- No environment variables or secrets indicated as missing in the logs.
+- Verify if any calendar API keys or URLs are needed for fetching ICS data (check config files).
+
+## 4) Plain-English Prompts for Replit’s AI
+1. "What is the correct method to parse ICS calendars using the 'ical' npm library?"
+2. "How to fix 'ical.parseICS is not a function' error in Node.js?"
+3. "Show example usage of the 'ical' library to read and parse ICS calendar files."
+4. "How to verify and upgrade npm packages for compatibility?"
+5. "How to check and fix wrong import statements for 'ical' package in JavaScript?"
+6. "What are common breaking changes in 'ical' npm package between versions?"
 
 ## 5) Rollback Plan
-If further deployment introduces errors, revert to the previous commit or image before adding new logging enhancements and verify previous stable port bindings, route registrations, and environment variable setups.
+- Revert the code calling `ical.parseICS` to the previous commit before this function was introduced.
+- Pin or rollback the `ical` package version in `package.json` to the last known working version and reinstall dependencies.
 ```
