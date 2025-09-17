@@ -1,60 +1,59 @@
 # Automated Log Summary
 
-**Reason:** error • **Lines:** 5 • **Time (UTC):** 2025-09-17T15:45:48.162122Z
+**Reason:** error • **Lines:** 3 • **Time (UTC):** 2025-09-17T15:46:00.431153Z
 
-<!-- fingerprint:ebe51cef736c -->
+<!-- fingerprint:45a578a17ae0 -->
 
 ```markdown
-# Surgical Report: Express Server Startup Logs
+# Surgical Report
 
-### 1) Top Problems & Likely Root Causes
-- **Problem:** No output after boot log, possibly server hangs or exits immediately  
-  **Root cause:** Server code (`server/index.ts`) may be missing a final `app.listen(PORT)` call or error handling.
-- **Problem:** No explicit errors but limited log output  
-  **Root cause:** Insufficient logging setup in the app; missing middleware or startup confirmation logs.
-- **Problem:** Environment variables may be incomplete or not loaded properly  
-  **Root cause:** `.env` or config file might be missing or not integrated completely.
-- **Problem:** Using `tsx` to run TypeScript directly may cause unnoticed runtime issues without build step  
-  **Root cause:** No compilation step to catch errors before running.
-- **Problem:** Possible port conflict if another service uses PORT=5000  
-  **Root cause:** No fallback or error handling for port already in use.
+### 1) Top 3–5 Problems & Likely Root Causes
+- **No explicit error messages present** besides the "ERROR ×1" label without detail.
+- The logs indicate the server started and registered all expected routes correctly; therefore, no route registration or port binding errors.
+- Possible silent runtime errors or missing debug/error details in logs.
+- Missing or insufficient logging detail to diagnose errors or failures.
+- Potential missing environment variables or secrets indirectly causing runtime errors later.
 
 ### 2) Exact, Minimal Fixes
-- **File:** `server/index.ts`  
-  Add at the end to ensure server starts listening:
-  ```typescript
-  app.listen(process.env.PORT || 5000, () => {
-    console.log(`Server listening on port ${process.env.PORT || 5000}`);
+- **Improve error logging:**  
+  Add or enhance error log output on server start and request handling.  
+  _File_: likely `server.js` or `app.js` (main Express server file).  
+  _Code to add (around line where server starts or in error handling middleware):_
+  ```js
+  app.use((err, req, res, next) => {
+    console.error('Unhandled error:', err);
+    res.status(500).send('Internal Server Error');
   });
   ```
-- **File:** `server/index.ts`  
-  Add basic error handling around boot:
-  ```typescript
-  process.on('uncaughtException', (err) => {
-    console.error('Uncaught Exception:', err);
-    process.exit(1);
+- **Ensure explicit error logs on startup:**  
+  In the server start callback, log startup errors explicitly:
+  ```js
+  app.listen(PORT, (err) => {
+    if (err) {
+      console.error('Server startup error:', err);
+      process.exit(1);
+    }
+    console.log(`✅ Server running on port ${PORT}`);
   });
   ```
-- Ensure `.env` loading in `server/index.ts` or entry file:
-  ```typescript
-  import dotenv from 'dotenv';
-  dotenv.config();
-  ```
-- Add fallback for PORT in `.env` or add default in code.
 
-### 3) Missing Env Vars/Secrets/Config
-- `PORT` variable (default to 5000 to avoid issues)
-- `NODE_ENV` is set but check for `.env` file presence with other needed vars (e.g., DB connection strings, API keys)
-- Possibly missing `.env` file or require `.env` loading code.
+### 3) Missing env vars/secrets/config
+- Unknown from provided logs, but common suspects:
+  - `PORT=5000` (seems present)
+  - API keys for services related to `/api/otter/transcripts`, `/api/airtable/contacts`, `/api/calendar/events`
+  - Database connection strings or integration secrets for `/api/integrations`, `/api/meetings`
+- Verify presence of all required keys in `.env` or deployment configuration.
 
-### 4) Suggested Replit AI Prompts
-1. "How do I ensure my Express.js TypeScript server listens on a port correctly?"
-2. "What is the minimal setup to handle uncaught exceptions in Node.js?"
-3. "How to load environment variables from a `.env` file in TypeScript with dotenv?"
-4. "What are common reasons for a Node.js Express server to not respond after booting?"
-5. "How to troubleshoot port conflicts in Node.js applications?"
-6. "How to add basic startup logs for an Express server in TypeScript?"
+### 4) Recommended plain-English AI prompts for Replit
+- "Analyze my Express.js server startup code and suggest improvements for error logging."
+- "How do I add error handling middleware in an Express app?"
+- "What environment variables are typically needed for integrations like Otter.ai, Airtable, and Google Calendar?"
+- "Suggest ways to improve startup logs for a Node.js Express server."
+- "Explain how to debug silent Express server errors with no visible logs."
+- "How do I gracefully handle server startup failures in Node.js?"
 
 ### 5) Rollback Plan
-Revert to last known working commit where `server/index.ts` included an explicit `app.listen()` call and environment variable loading was confirmed, ensuring the server boots and logs correctly on port 5000.
+- Revert to last known working commit before recent changes.
+- Restart server with enhanced logging enabled to capture detailed error context.
+
 ```
