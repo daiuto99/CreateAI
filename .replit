@@ -40,4 +40,4 @@ args = "APP_CMD='npm run dev' bash run_with_logging.sh"
 waitForPort = 5000
 
 [agent]
-integrations = []
+integrations = ["javascript_log_in_with_replit:1.0.0"]

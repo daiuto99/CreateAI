@@ -1,6 +1,7 @@
 import 'dotenv/config';
 import express, { type Request, Response, NextFunction } from "express";
 import { registerRoutes } from "./routes";
+import { fetchGoogleIcs } from "./calendar/googleIcs";
 import { setupVite, serveStatic, log } from "./vite";
 import { registerAdminLogs } from "./adminLogs";   // admin endpoint for fetching from GitHub
 import fs from "fs";
@@ -66,6 +67,20 @@ app.use((req, res, next) => {
       res.type("text/plain").send(txt);
     } catch {
       res.status(404).type("text/plain").send("No summary yet.");
+    }
+  });
+  app.get("/api/calendar/events", async (_req, res) => {
+    try {
+      const url = process.env.GCAL_ICS_URL;
+      if (!url) {
+        return res.status(501).json({ message: "ICS not configured" });
+      }
+      const events = await fetchGoogleIcs(url, 60);
+      console.log(`calendar: responding with ${events.length} events`);
+      res.json({ count: events.length, events });
+    } catch (err: any) {
+      console.error("calendar: error", err?.message || err);
+      res.status(502).json({ message: "Calendar fetch failed" });
     }
   });
 
