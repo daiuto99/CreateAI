@@ -1,50 +1,53 @@
 # Automated Log Summary
 
-**Reason:** error • **Lines:** 1 • **Time (UTC):** 2025-09-17T14:37:09.189262Z
+**Reason:** error • **Lines:** 1 • **Time (UTC):** 2025-09-17T14:37:26.399501Z
 
-<!-- fingerprint:2137215d7c43 -->
+<!-- fingerprint:c61afa6cdf0d -->
 
 ```markdown
-# Diagnostic Report: Calendar API Failure
+# Diagnostic Report: calendar module error
 
-## 1) Top Problems & Likely Root Causes
-- **502 Bad Gateway on GET /api/calendar/events**  
-  Likely causes:  
-  - Downstream calendar service unreachable or returning error.  
-  - Incorrect API endpoint URL or headers in backend call.  
-  - Missing or invalid access token/credentials for calendar API.  
-- **Error handling insufficient - generic "Calendar fetch failed" message without details**  
-- **Possible network or configuration error between server and calendar API**  
+### 1) Top Problems & Likely Root Causes
+- **Problem:** `ical.parseICS is not a function`  
+  **Root Cause:** The `ical` package changed its API or is incorrectly imported, and `parseICS` does not exist or is misreferenced.
+- **Problem:** Outdated or incompatible `ical` package version causing missing functions.
+- **Problem:** Incorrect use or naming of the function from the `ical` library (e.g., should use `parseICS` from another import or use a different method).
+- **Problem:** Missing or improperly imported module leading to undefined functions.
 
-## 2) Minimal Fixes
-- Inspect the calendar fetch code (likely in a backend file like `calendarController.js` or `routes/api/calendar.js`) around the GET `/api/calendar/events` handler. Add detailed error logging:  
+### 2) Minimal Fixes
+- Check import line for `ical`; it should likely be:  
+  ```js
+  import ical from 'ical'; // or 
+  const ical = require('ical');
+  ```
+- Correct function usage based on `ical` library docs; for example, replace `ical.parseICS` with `ical.parseICS()` or correct method like:
+  ```js
+  const data = ical.parseICS(icsString); 
+  ```
+  might instead need to be:
+  ```js
+  const data = ical.parseICS(icsString);
+  ```
+  or if unavailable, use the method `ical.parseICS` renamed or replaced.
 
-```js
-try {
-  const events = await fetchCalendarEvents(); // existing call
-  res.json(events);
-} catch(err) {
-  console.error("Calendar fetch error:", err);
-  res.status(502).json({ message: "Calendar fetch failed", error: err.message });
-}
-```
+- If no `parseICS` exists, replace with `ical.parseICS` to `ical.parseICS` or use this common usage pattern:
+  ```js
+  const data = ical.parseICS(icsString); // confirm exact method name with the package docs
+  ```
+- File: **Unknown (likely calendar module file where the error appears)**  
+- Fix import and function call lines to the up-to-date/valid API.
 
-- Verify calendar API endpoint URL and credentials are correct and used properly in the fetch function.
-- If authentication tokens (e.g., OAuth tokens) are involved, renew or inject them properly.
+### 3) Missing Env Vars/Secrets/Configs
+- None indicated from logs related to this issue.
 
-## 3) Missing Environment Variables / Secrets / Config
-- `CALENDAR_API_URL` or equivalent endpoint URL
-- `CALENDAR_API_TOKEN` or OAuth client ID/secret or refresh token
-- Any API keys or credentials related to calendar integration
+### 4) Prompts for Replit’s AI
+1. "How do I correctly import and use the ical library in JavaScript to parse ICS calendar data?"
+2. "What is the correct method name to parse ICS data using the 'ical' NPM package?"
+3. "Show me a minimal example of parsing an .ics calendar file with the 'ical' package in Node.js."
+4. "How do I update old usages of `ical.parseICS` based on the latest 'ical' library API?"
+5. "What does the error `ical.parseICS is not a function` mean and how do I fix it in JavaScript?"
+6. "Checklist to troubleshoot JavaScript errors 'is not a function' in third-party libraries."
 
-## 4) Suggested Prompts for Replit AI
-1. "How can I debug a 502 error when my Express server calls an external calendar API?"
-2. "Show me how to catch and log detailed errors in an async Express route handler."
-3. "What environment variables are typically required for connecting to a calendar API?"
-4. "How to refresh OAuth tokens automatically in a Node.js backend?"
-5. "Example of proper error response structure for REST APIs in Express."
-6. "Common causes of 502 Bad Gateway errors in Node.js API calls."
-
-## 5) Rollback Plan
-Temporarily revert the calendar API integration to a mock response or cached data until the service and credentials are verified and fixed, to restore API stability.
+### 5) Rollback Plan
+Revert to the last working commit that used the prior version or usage of the `ical` package until you verify and fix the API usage, to minimize downtime.
 ```
