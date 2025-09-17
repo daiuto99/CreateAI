@@ -170,12 +170,25 @@ export const airtableSyncLogs = pgTable("airtable_sync_logs", {
   index("idx_airtable_sync_user").on(table.userId, table.createdAt),
 ]);
 
+// Dismissed meetings table for persistent user preferences
+export const dismissedMeetings = pgTable("dismissed_meetings", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  userId: varchar("user_id").references(() => users.id).notNull(),
+  meetingId: varchar("meeting_id").notNull(), // ID of the dismissed meeting
+  createdAt: timestamp("created_at").defaultNow(),
+}, (table) => [
+  // Unique constraint: each user can only dismiss a meeting once
+  uniqueIndex("user_meeting_unique").on(table.userId, table.meetingId),
+  index("idx_dismissed_meetings_user").on(table.userId),
+]);
+
 // Define relations
 export const usersRelations = relations(users, ({ many }) => ({
   userOrganizations: many(userOrganizations),
   integrations: many(userIntegrations),
   contentProjects: many(contentProjects),
   contentItems: many(contentItems),
+  dismissedMeetings: many(dismissedMeetings),
 }));
 
 export const organizationsRelations = relations(organizations, ({ many }) => ({
@@ -239,6 +252,13 @@ export const airtableSyncLogsRelations = relations(airtableSyncLogs, ({ one }) =
   }),
 }));
 
+export const dismissedMeetingsRelations = relations(dismissedMeetings, ({ one }) => ({
+  user: one(users, {
+    fields: [dismissedMeetings.userId],
+    references: [users.id],
+  }),
+}));
+
 // Schema types
 export type UpsertUser = typeof users.$inferInsert;
 export type User = typeof users.$inferSelect;
@@ -263,6 +283,9 @@ export type InsertAnalyticsSnapshot = typeof analyticsSnapshots.$inferInsert;
 
 export type AirtableSyncLog = typeof airtableSyncLogs.$inferSelect;
 export type InsertAirtableSyncLog = typeof airtableSyncLogs.$inferInsert;
+
+export type DismissedMeeting = typeof dismissedMeetings.$inferSelect;
+export type InsertDismissedMeeting = typeof dismissedMeetings.$inferInsert;
 
 // Zod schemas for validation
 export const insertOrganizationSchema = createInsertSchema(organizations).omit({
