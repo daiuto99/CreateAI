@@ -1,62 +1,69 @@
 # Automated Log Summary
 
-**Reason:** error • **Lines:** 3 • **Time (UTC):** 2025-09-17T14:36:09.284228Z
+**Reason:** error • **Lines:** 4 • **Time (UTC):** 2025-09-17T14:36:22.801088Z
 
-<!-- fingerprint:ea25f36064cf -->
+<!-- fingerprint:7e21df1221b6 -->
 
 ```markdown
-# Surgical Report: Express Server Logs
+## Engineering Diagnostic Report
 
-## 1) Top 3–5 Problems with Likely Root Causes
-- **No explicit error messages or stack traces present**: Indicates server started normally, but no logs about actual request handling error or failures.
-- **Limited logs to confirm endpoints working properly**: Only info about route registration, no request success/failure logs.
-- **Possible missing environment variables or secrets**: No logs related to configuration loading or errors about missing keys.
-- **Insufficient monitoring/logging verbosity**: The current logs don't help diagnose runtime issues beyond startup.
-- **Port collision or binding errors are absent, so unlikely root cause in binding.**
+### 1) Top Problems & Likely Root Causes
+- **`ical.parseICS is not a function` error**  
+  Likely cause: Using an outdated or incorrect version of the `ical` library, or the function `parseICS` does not exist/export from the installed package.
+- **Multiple 404 GET / errors from Express**  
+  Cause: The root route `/` is either not defined in the Express app or static files are not properly served.
+- **Duplicate 404 logs for the same route**  
+  Cause: Possible multiple middleware or routes handling root requests incorrectly.
+- **General missing route handling**  
+  No fallback route or static path is configured.
 
-## 2) Exact, Minimal Fixes
-- **Increase logging during request processing to catch errors:**  
-  - File: Unknown (likely `index.js` or server setup file)  
-  - Add middleware to log requests & errors:
-    ```js
-    // Just before app.listen() line
-    app.use((req, res, next) => {
-      console.log(`Incoming request: ${req.method} ${req.url}`);
-      next();
-    });
-
-    app.use((err, req, res, next) => {
-      console.error('Request error:', err);
-      res.status(500).send('Internal Server Error');
-    });
-    ```
-- **Validate environment variable presence at startup:**  
+### 2) Exact, Minimal Fixes
+- **For `ical.parseICS` issue:**  
+  *File:* (likely wherever ical is imported, e.g., `calendar.js` or similar)  
+  *Fix:* Replace `ical.parseICS` with the correct function from the current `ical` package.  
+  Example:  
   ```js
-  if (!process.env.PORT) {
-    console.error('Missing PORT environment variable');
-    process.exit(1);
-  }
+  // Before
+  const ical = require('ical');
+  const data = ical.parseICS(icsString);
+  
+  // After (per 'ical' npm docs)
+  const ical = require('ical');
+  const data = ical.parseICS ? ical.parseICS(icsString) : ical.parseICSFromString(icsString); 
+  // OR (most likely)
+  const data = ical.parseICSFromString(icsString);
+  
+  // If parseICSFromString does not exist, use:
+  const data = ical.parseICS(icsString);
+  // Verify with installed ical version or use alternative like `node-ical.parseICS`
   ```
-- **Add health endpoint to verify service status beyond registration log:**  
-  If not implemented already, ensure `/healthz` handler returns 200 OK.
+  Likely you need to verify the function name; the installed package might use `ical.parseICS` or `ical.parse` or `ical.parseICSFromString`.
 
-## 3) Missing Env Vars/Secrets/Config
-- `PORT` (assumed 5000, but should verify environment variable usage)  
-- Any API keys or database URLs for `/api/calendar/events` endpoint  
-- Secrets/config related to admin routes (`/admin/latest-log-summary`)
+- **For 404 root requests:**  
+  *File:* `app.js` or the main Express server file  
+  *Fix:* Add a route handler for `/` to serve content or redirect. Example:  
+  ```js
+  app.get('/', (req, res) => {
+    res.send('Welcome to the home page');
+  });
+  ```
+  Alternatively, serve static files:  
+  ```js
+  app.use(express.static('public'));
+  ```
+  
+### 3) Missing Env Vars/Secrets/Config
+- No direct reference from logs, but verify:  
+  - Environment config for static file path or base URL is set.  
+  - No secret/env missing related to calendar API (if used).  
 
-## 4) Plain-English Prompts for Replit AI
-1. "How can I add detailed request and error logging in an ExpressJS server?"
-2. "What environment variables are critical to configure for an Express app serving multiple API endpoints?"
-3. "How do I implement a robust health check endpoint in Express?"
-4. "How can I validate environment variables at server startup in Node.js?"
-5. "What changes improve diagnostic logging for an Express app starting normally but not showing request errors?"
-6. "How can I add middleware in Express to catch and log unhandled errors?"
+### 4) AI Prompts for Replit
+1. "Explain why 'ical.parseICS is not a function' occurs and how to fix it in Node.js."  
+2. "How to set up a default route in Express to avoid 404 errors on GET / requests."  
+3. "Show minimal Express middleware to serve static files from a public directory."  
+4. "List common mistakes that lead to duplicate 404 logs in Express apps."  
+5. "How to debug missing or wrong function exports in npm packages."  
 
-## 5) Rollback Plan
-- Restore last known working commit or branch with existing logging and endpoint functionality.  
-- Revert any logging or config changes to quickly return service to stable state for further debugging.
-
----
-This analysis shows the server starts correctly but lacks insight into runtime errors or configuration issues. Enhancing logging and config validation will enable pinpointing actual problems.
+### 5) Rollback Plan
+Revert to last known stable commit before changes to the calendar module and Express routing to restore correct function calls and route handling, minimizing downtime while applying fixes.
 ```
