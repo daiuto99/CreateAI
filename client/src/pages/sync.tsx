@@ -53,6 +53,22 @@ export default function Sync() {
     };
   }
 
+  // Fetch user integrations to show real connection status
+  const { data: integrations = [] } = useQuery<UserIntegration[]>({
+    queryKey: ['/api/integrations'],
+    enabled: isAuthenticated,
+    retry: false,
+  });
+
+  // Fetch actual meeting data with loading state
+  const { data: meetings = [], isLoading: meetingsLoading, refetch: refetchMeetings } = useQuery<any[]>({
+    queryKey: ['/api/meetings'],
+    enabled: isAuthenticated,
+    retry: false,
+    staleTime: 0, // Force fresh data
+    gcTime: 0, // Don't cache (updated from cacheTime)
+  });
+
   // Get the currently selected meeting using improved matching logic
   const selectedMeeting = selectedMeetingId ? findMeetingByIdOrTitle(selectedMeetingId, meetings) : null;
 
@@ -68,22 +84,6 @@ export default function Sync() {
     setIsMeetingModalOpen(false);
     setSelectedMeetingId(null);
   };
-  
-  // Fetch user integrations to show real connection status
-  const { data: integrations = [] } = useQuery<UserIntegration[]>({
-    queryKey: ['/api/integrations'],
-    enabled: isAuthenticated,
-    retry: false,
-  });
-
-  // Fetch actual meeting data with loading state
-  const { data: meetings = [], isLoading: meetingsLoading, refetch: refetchMeetings } = useQuery<any[]>({
-    queryKey: ['/api/meetings'],
-    enabled: isAuthenticated,
-    retry: false,
-    staleTime: 0, // Force fresh data
-    cacheTime: 0, // Don't cache
-  });
 
   // Fetch Otter.ai transcripts with loading state
   const { data: transcripts = [], isLoading: transcriptsLoading, refetch: refetchTranscripts } = useQuery<any[]>({
@@ -91,7 +91,7 @@ export default function Sync() {
     enabled: isAuthenticated,
     retry: false,
     staleTime: 0, // Force fresh data to trigger loading states
-    cacheTime: 0, // Don't cache for testing
+    gcTime: 0, // Don't cache for testing (updated from cacheTime)
   });
 
   // Fetch Airtable contacts with loading state  
@@ -100,7 +100,7 @@ export default function Sync() {
     enabled: isAuthenticated,
     retry: false,
     staleTime: 0, // Force fresh data to trigger loading states
-    cacheTime: 0, // Don't cache for testing
+    gcTime: 0, // Don't cache for testing (updated from cacheTime)
   });
 
   // Debug loading states
