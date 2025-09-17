@@ -18,8 +18,19 @@ export default function Sync() {
   const { isAuthenticated, isLoading } = useAuth();
   const [, setLocation] = useLocation();
   const queryClient = useQueryClient();
-  const [dismissedMeetings, setDismissedMeetings] = useState(new Set<string>());
   const [selectedMeetingId, setSelectedMeetingId] = useState<string | null>(null);
+  
+  // Fetch dismissed meetings from database
+  const { data: dismissedMeetingsData = [] } = useQuery<string[]>({
+    queryKey: ['/api/meetings/dismissed'],
+    enabled: isAuthenticated,
+    select: (data: any) => data.dismissedMeetings || [],
+    retry: false,
+    staleTime: 5 * 60 * 1000, // Cache for 5 minutes
+  });
+  
+  // Convert array to Set for efficient lookup
+  const dismissedMeetings = new Set(dismissedMeetingsData);
   const [isMeetingModalOpen, setIsMeetingModalOpen] = useState(false);
 
   /**
@@ -53,6 +64,22 @@ export default function Sync() {
     };
   }
 
+  // Fetch user integrations to show real connection status
+  const { data: integrations = [] } = useQuery<UserIntegration[]>({
+    queryKey: ['/api/integrations'],
+    enabled: isAuthenticated,
+    retry: false,
+  });
+
+  // Fetch actual meeting data with loading state
+  const { data: meetings = [], isLoading: meetingsLoading, refetch: refetchMeetings } = useQuery<any[]>({
+    queryKey: ['/api/meetings'],
+    enabled: isAuthenticated,
+    retry: false,
+    staleTime: 0, // Force fresh data
+    gcTime: 0, // Don't cache (updated from cacheTime)
+  });
+
   // Get the currently selected meeting using improved matching logic
   const selectedMeeting = selectedMeetingId ? findMeetingByIdOrTitle(selectedMeetingId, meetings) : null;
 
@@ -68,22 +95,6 @@ export default function Sync() {
     setIsMeetingModalOpen(false);
     setSelectedMeetingId(null);
   };
-  
-  // Fetch user integrations to show real connection status
-  const { data: integrations = [] } = useQuery<UserIntegration[]>({
-    queryKey: ['/api/integrations'],
-    enabled: isAuthenticated,
-    retry: false,
-  });
-
-  // Fetch actual meeting data with loading state
-  const { data: meetings = [], isLoading: meetingsLoading, refetch: refetchMeetings } = useQuery<any[]>({
-    queryKey: ['/api/meetings'],
-    enabled: isAuthenticated,
-    retry: false,
-    staleTime: 0, // Force fresh data
-    cacheTime: 0, // Don't cache
-  });
 
   // Fetch Otter.ai transcripts with loading state
   const { data: transcripts = [], isLoading: transcriptsLoading, refetch: refetchTranscripts } = useQuery<any[]>({
@@ -91,7 +102,7 @@ export default function Sync() {
     enabled: isAuthenticated,
     retry: false,
     staleTime: 0, // Force fresh data to trigger loading states
-    cacheTime: 0, // Don't cache for testing
+    gcTime: 0, // Don't cache for testing (updated from cacheTime)
   });
 
   // Fetch Airtable contacts with loading state  
@@ -100,7 +111,7 @@ export default function Sync() {
     enabled: isAuthenticated,
     retry: false,
     staleTime: 0, // Force fresh data to trigger loading states
-    cacheTime: 0, // Don't cache for testing
+    gcTime: 0, // Don't cache for testing (updated from cacheTime)
   });
 
   // Debug loading states
@@ -122,16 +133,29 @@ export default function Sync() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ meetingId })
       });
-      return response.json();
+      
+      if (!response.ok) {
+        throw new Error(`Failed to dismiss meeting: ${response.status}`);
+      }
+      
+      const data = await response.json();
+      
+      if (!data.success) {
+        throw new Error(data.message || 'Failed to dismiss meeting');
+      }
+      
+      return data;
     },
     onSuccess: (data, meetingId) => {
-      setDismissedMeetings(prev => new Set(Array.from(prev).concat(meetingId)));
+      // Invalidate queries to refetch dismissed meetings
+      queryClient.invalidateQueries({ queryKey: ['/api/meetings/dismissed'] });
       toast({
         title: "Meeting Dismissed",
         description: "Meeting has been dismissed and won't appear in sync list.",
       });
     },
-    onError: () => {
+    onError: (error) => {
+      console.error('Dismiss meeting error:', error);
       toast({
         title: "Error",
         description: "Failed to dismiss meeting. Please try again.",

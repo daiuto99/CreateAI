@@ -1,0 +1,53 @@
+Goal: Make startup/health logging solid so I can see exactly what the app is doing at boot and confirm it’s alive.
+
+Context: Node/TS Express app. Entry: server/index.ts. Routes registered via registerRoutes from server/routes.ts. App logs “serving on port 5000” but gives little else.
+
+Do the following changes (be explicit, edit files, and show me diffs):
+
+Load env + print key boot info
+
+In server/index.ts, add import 'dotenv/config' at the very top (or equivalent dotenv.config() before anything else).
+
+After Express is created (and before server.listen), log a single line with: NODE_ENV, PORT, and a short note “booting server”.
+
+Add a simple health endpoint
+
+In server/index.ts, register GET /healthz that returns JSON { ok: true, uptime: process.uptime(), env: process.env.NODE_ENV } with 200.
+
+Ensure it responds even in production (not gated by Vite).
+
+List registered routes at startup
+
+After registerRoutes(app) and after any static/vite setup, introspect app._router.stack (or a safer approach) to collect route method+path pairs.
+
+On boot, log a compact list like: ROUTES: GET /healthz, GET /api/foo, POST /api/bar.
+
+Harden error handling
+
+Add server.on('error', ...) that logs the error code (especially EADDRINUSE) and exits with a non-zero code.
+
+Add top-level process.on('unhandledRejection', ...) and process.on('uncaughtException', ...) to log and exit (so the watcher can see real failures).
+
+Keep the existing Express error middleware but ensure it logs the stack in development.
+
+404 handler
+
+Add a terminal 404 handler that returns JSON { message: 'Not Found' } and logs the req.method + req.path.
+
+Don’t change how the server is created
+
+registerRoutes(app) should continue to return an http.Server and server.listen({ port, host: '0.0.0.0', reusePort: true }, ...) should remain.
+
+Acceptance criteria
+
+When I start the app, the console must show (in order): boot info line (env/port), a line confirming /healthz registration, a single line listing all routes, and finally “serving on port {PORT}”.
+
+curl <repl-url>/healthz must return { ok: true, uptime: <number>, env: "<env>" }.
+
+If port 5000 is taken, I see a clear EADDRINUSE message and the process exits.
+
+Keep code TypeScript-safe and clean.
+
+Tell me what you changed
+
+After edits, print a short summary of files touched, and show me the exact boot output I should expect.
