@@ -18,8 +18,19 @@ export default function Sync() {
   const { isAuthenticated, isLoading } = useAuth();
   const [, setLocation] = useLocation();
   const queryClient = useQueryClient();
-  const [dismissedMeetings, setDismissedMeetings] = useState(new Set<string>());
   const [selectedMeetingId, setSelectedMeetingId] = useState<string | null>(null);
+  
+  // Fetch dismissed meetings from database
+  const { data: dismissedMeetingsData = [] } = useQuery<string[]>({
+    queryKey: ['/api/meetings/dismissed'],
+    enabled: isAuthenticated,
+    select: (data: any) => data.dismissedMeetings || [],
+    retry: false,
+    staleTime: 5 * 60 * 1000, // Cache for 5 minutes
+  });
+  
+  // Convert array to Set for efficient lookup
+  const dismissedMeetings = new Set(dismissedMeetingsData);
   const [isMeetingModalOpen, setIsMeetingModalOpen] = useState(false);
 
   /**
@@ -136,7 +147,8 @@ export default function Sync() {
       return data;
     },
     onSuccess: (data, meetingId) => {
-      setDismissedMeetings(prev => new Set(Array.from(prev).concat(meetingId)));
+      // Invalidate queries to refetch dismissed meetings
+      queryClient.invalidateQueries({ queryKey: ['/api/meetings/dismissed'] });
       toast({
         title: "Meeting Dismissed",
         description: "Meeting has been dismissed and won't appear in sync list.",
