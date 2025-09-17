@@ -14,6 +14,9 @@ app.use(express.urlencoded({ extended: false }));
 // Boot info logging
 const NODE_ENV = process.env.NODE_ENV || 'development';
 const PORT = parseInt(process.env.PORT || "5000", 10);
+
+// Ensure NODE_ENV is set for app.get("env") compatibility
+process.env.NODE_ENV = NODE_ENV;
 log(`🚀 Booting server: NODE_ENV=${NODE_ENV}, PORT=${PORT}`);
 
 // Health endpoint - must respond even in production
@@ -84,7 +87,15 @@ app.use((req, res, next) => {
     }
   });
 
-  // Terminal 404 handler
+  // importantly setup vite in development BEFORE the 404 handler
+  // so vite can serve the frontend routes
+  if (NODE_ENV === "development") {
+    await setupVite(app, server);
+  } else {
+    serveStatic(app);
+  }
+
+  // Terminal 404 handler (must be AFTER vite setup)
   app.use('*', (req: Request, res: Response) => {
     log(`404 ${req.method} ${req.path}`);
     res.status(404).json({ message: 'Not Found' });
@@ -104,15 +115,6 @@ app.use((req, res, next) => {
     
     res.status(status).json({ message });
   });
-
-  // importantly only setup vite in development and after
-  // setting up all the other routes so the catch-all route
-  // doesn't interfere with the other routes
-  if (app.get("env") === "development") {
-    await setupVite(app, server);
-  } else {
-    serveStatic(app);
-  }
 
   // List all registered routes
   function listRoutes() {
