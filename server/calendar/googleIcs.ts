@@ -77,8 +77,9 @@ function eventOverlapsWindow(event: any, windowStart: DateTime, windowEnd: DateT
   const eventStart = event.start ? DateTime.fromJSDate(event.start) : windowStart;
   const eventEnd = event.end ? DateTime.fromJSDate(event.end) : eventStart.plus({ hours: 1 });
   
-  // Check if event overlaps with the time window
-  return eventStart < windowEnd && eventEnd > windowStart;
+  // Only include events that have completely ended (for past meetings only)
+  // Event must start after windowStart and end before windowEnd (now)
+  return eventStart >= windowStart && eventEnd <= windowEnd;
 }
 
 export async function fetchGoogleIcs(url: string, daysBack: number = 60): Promise<CalendarEvent[]> {
@@ -93,10 +94,10 @@ export async function fetchGoogleIcs(url: string, daysBack: number = 60): Promis
     // Parse ICS data
     const parsed = ical.sync.parseICS(icsData);
     
-    // Define time window (UTC)
+    // Define time window (UTC) - only include past events
     const now = DateTime.now().toUTC();
     const windowStart = now.minus({ days: daysBack });
-    const windowEnd = now.plus({ days: 1 });
+    const windowEnd = now; // Only include events up to now, no future events
     
     const events: CalendarEvent[] = [];
     let rawEventCount = 0;
@@ -128,13 +129,16 @@ export async function fetchGoogleIcs(url: string, daysBack: number = 60): Promis
                 
                 const occurrenceEnd = occurrenceDate.plus(duration);
                 
-                events.push({
-                  id: component.uid || createStableId(component.summary, occurrenceDate.toISO()),
-                  title: component.summary || '',
-                  start: occurrenceDate.toUTC().toISO()!,
-                  end: occurrenceEnd.toUTC().toISO()!,
-                  attendees: extractAttendees(component)
-                });
+                // Only include occurrences that have completely ended
+                if (occurrenceEnd <= windowEnd) {
+                  events.push({
+                    id: component.uid || createStableId(component.summary, occurrenceDate.toISO() || ''),
+                    title: component.summary || '',
+                    start: occurrenceDate.toUTC().toISO()!,
+                    end: occurrenceEnd.toUTC().toISO()!,
+                    attendees: extractAttendees(component)
+                  });
+                }
               }
               occurrenceDate = occurrenceDate.plus(interval);
             }
