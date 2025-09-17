@@ -1,52 +1,47 @@
 # Automated Log Summary
 
-**Reason:** error • **Lines:** 3 • **Time (UTC):** 2025-09-17T14:19:13.223377Z
+**Reason:** error • **Lines:** 5 • **Time (UTC):** 2025-09-17T14:25:05.255756Z
 
-<!-- fingerprint:5a0d9ce0e2ca -->
+<!-- fingerprint:8ddade339e85 -->
 
 ```markdown
-# Surgical Report
+# Surgical Report: Express Server Startup Logs
 
-### 1) Top Problems & Likely Root Causes
-- No actual ERROR message shown despite `[ERROR ×1]` label; likely misleading log or missing detail.
-- Health endpoint registered, but no verification of route handlers for `/admin/latest-log-summary`, `/latest-summary.txt`, `/api/calendar/events` — possibly incomplete route implementation.
-- No evidence of connection or API keys for `/api/calendar/events` endpoint, possibly causing silent failures.
-- Port 5000 is in use, but no confirmation of process stability or error handling during startup.
-- Missing detailed logs for error or requests that could clarify failure points.
+## 1) Top 3–5 Problems and Likely Root Causes
+- **No explicit error seen in logs**; only startup info lines provided.
+- Potential silent failure if server stops after boot message (no "listening" confirmation).
+- Missing environment variables or config could cause silent startup issues.
+- Lack of log detail indicates insufficient logging during startup.
+- Possible TypeScript runtime issues if `tsx` is not installed or configured.
 
-### 2) Exact Minimal Fixes
-- **Unknown file**, likely `server.js` or `app.js`: Add proper error logging middleware to capture and log runtime errors with stack traces.
+## 2) Exact, Minimal Fixes
+- Add explicit logging in `server/index.ts` at the end of server setup to confirm listen:
+  
+  In `server/index.ts`, add around line ~30 (where server starts):
+  ```ts
+  app.listen(process.env.PORT || 5000, () => {
+    console.log(`Server listening on port ${process.env.PORT || 5000}`);
+  });
+  ```
+- Verify `tsx` is installed as a dev dependency:
+  ```bash
+  npm install --save-dev tsx
+  ```
+- Add more verbose error handling/logging in `server/index.ts` to catch startup issues.
 
-```javascript
-// Add after route definitions in your Express app:
+## 3) Missing Env Vars / Secrets / Config
+- `PORT` is set but confirm `NODE_ENV` dependent vars, e.g. DB_CONNECTION, API_KEYS.
+- Confirm `.env` or equivalent config file is loaded (using `dotenv` or similar).
+- Missing database connection string or secret keys might cause silent failure.
 
-app.use((err, req, res, next) => {
-  console.error('Runtime error:', err);
-  res.status(500).send('Internal Server Error');
-});
-```
+## 4) Replit AI Plain-English Prompts
+- "Explain how to add startup confirmation logs in an Express.js TypeScript server."
+- "How to ensure environment variables are correctly loaded in a Node.js app?"
+- "List common silent failure causes when booting a Node.js Express server with TypeScript."
+- "How to check if tsx is properly installed and used in a Node.js project?"
+- "Provide examples of robust error handling in Express server startup scripts."
+- "Suggest steps to debug why an Express server logs boot but doesn't respond."
 
-- Verify and implement handlers for all registered routes if missing:
-
-```javascript
-// Example minimal GET handler for /admin/latest-log-summary
-app.get('/admin/latest-log-summary', (req, res) => {
-  res.send('Latest log summary content');
-});
-```
-
-### 3) Missing Env Vars/Secrets/Config
-- Possibly missing calendar API credentials/env vars for `/api/calendar/events` access (e.g., `CALENDAR_API_KEY`, `CALENDAR_API_SECRET`).
-- No confirmation of `PORT` variable usage; if hardcoded to 5000, consider adding `process.env.PORT`.
-
-### 4) Plain-English Prompts for Replit AI
-1. "How to add centralized error-handling middleware in an Express.js server?"
-2. "Sample Express.js route handler for serving latest logs from a file."
-3. "How to configure environment variables for secure API key storage in Node.js?"
-4. "Debugging tips for Express.js server that shows startup logs but no runtime errors."
-5. "Best practices for organizing multiple route handlers in Express.js."
-6. "How to confirm a Node.js Express server is correctly handling all registered routes?"
-
-### 5) Rollback Plan
-- Revert to last known stable commit where error logging and all API routes functioned correctly, restoring previous environment configurations and removing any incomplete route additions.
+## 5) Rollback Plan
+If debugging fails, revert to last successful commit/tag with a confirmed working server. Alternatively, comment out recent changes in `server/index.ts` and retry startup to isolate cause.
 ```
