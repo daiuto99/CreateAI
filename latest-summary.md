@@ -1,45 +1,48 @@
 # Automated Log Summary
 
-**Reason:** error • **Lines:** 1 • **Time (UTC):** 2025-09-27T17:51:57.103911Z
+**Reason:** error • **Lines:** 3 • **Time (UTC):** 2025-09-27T17:52:12.995835Z
 
-<!-- fingerprint:7bc2cc3e2ebf -->
+<!-- fingerprint:4a92175683a8 -->
 
 ```markdown
-### 1) Top Problems & Likely Root Causes
-- No explicit error messages visible, only a log indicating server boot with NODE_ENV=development and PORT=5000.
-- Potential silent failure or missing error logs preventing server startup diagnosis.
-- Possible misconfiguration causing no output/error beyond the initial boot message.
-- Missing or incomplete log/error handling possibly causing crucial errors to not appear.
+### 1) Top 3–5 problems with likely root causes
+- No explicit errors or failures logged other than generic startup info; potential silent startup issue.
+- Possible missing health check response implementation or improper status code (not visible in logs).
+- No indication of middleware or error handlers for the endpoints - could lead to unhandled exceptions at runtime.
+- Unclear if required environment variables (e.g., PORT, API keys) are set, risking runtime failures.
+- Lack of detailed logging for routes could hinder debugging of API failures during requests.
 
-### 2) Exact Minimal Fixes
-- Add or improve error-handling middleware in Express server (likely in `server.js` or `app.js`):
-```js
-// After all route handlers, add:
-app.use((err, req, res, next) => {
-  console.error('Unhandled error:', err);
-  res.status(500).send('Server encountered an error.');
-});
-```
-- Enhance logging at server start to verify successful binding to port 5000:
-```js
-app.listen(PORT, () => {
-  console.log(`Server running on port ${PORT}`);
-});
-```
+### 2) Exact, minimal fixes
+- **Unknown file,** add or verify health endpoint handler returns HTTP 200, e.g. in `server.js` or `routes/health.js`:
+  ```js
+  app.get('/healthz', (req, res) => res.sendStatus(200));
+  ```
+- Add basic error handling middleware (unknown file), typically at end of middleware stack:
+  ```js
+  app.use((err, req, res, next) => {
+    console.error(err);
+    res.status(500).json({ error: 'Internal server error' });
+  });
+  ```
+- Ensure app listens on environment variable `PORT` fallback, e.g., in main server file:
+  ```js
+  const port = process.env.PORT || 5000;
+  app.listen(port, () => console.log(`Serving on port ${port}`));
+  ```
 
-### 3) Missing Env Vars/Secrets/Config
-- Confirm if PORT is set correctly (currently 5000).
-- Verify other essential environment variables for DB connections, API keys, etc., since none shown here.
-- Possibly missing `.env` file or incomplete environment configuration.
+### 3) Missing env vars/secrets/config
+- `PORT` environment variable (default 5000 is in use, but confirm).
+- API keys or tokens for integrations (`/api/integrations`, `/api/otter/transcripts`, `/api/airtable/contacts`).
+- Authentication secrets or session keys for secure endpoints (e.g., `/admin/latest-log-summary`).
 
-### 4) AI Prompts for Replit
-- "How do I add error-handling middleware in Express to catch unhandled server errors?"
-- "Why might an Express server print only a boot message and no other logs or errors?"
-- "How to confirm if my Node.js server is listening on the specified port?"
-- "What environment variables are commonly required for a Node.js/Express app?"
-- "How to improve logging for diagnostics in an Express development server?"
-- "How to handle missing `.env` files in a Node.js application?"
+### 4) 3–6 plain-English Replit AI prompts
+- "Check Node.js Express app startup logs for missing environment variables causing silent crashes."
+- "Suggest minimal Express.js error handling middleware and where to add it."
+- "Explain how to implement a basic healthy status HTTP /healthz endpoint in Express."
+- "How to configure port listening fallback for missing PORT env var in Express server."
+- "Identify common reasons behind Express routes not responding despite server listening."
+- "Verify environment variable usage pattern for third-party API keys in Node.js."
 
-### 5) Rollback Plan
-Revert to the last known working commit where the server booted without silent failures and logs appeared as expected, then incrementally reintroduce changes with enhanced logging and error handling.
+### 5) Rollback plan
+If recent changes introduced instability, revert to the last known working commit or branch where all routes and health endpoint respond correctly, ensuring environment variables are properly configured and error handling is in place before redeploying.
 ```
