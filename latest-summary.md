@@ -1,58 +1,55 @@
 # Automated Log Summary
 
-**Reason:** error • **Lines:** 2 • **Time (UTC):** 2025-10-08T18:14:13.347607Z
+**Reason:** error • **Lines:** 11 • **Time (UTC):** 2025-10-08T18:14:53.127741Z
 
-<!-- fingerprint:9491026d9477 -->
+<!-- fingerprint:48ac724c9b49 -->
 
 ```markdown
-# Surgical Report: API Route 404 Error
+# Surgical Report on API Integration Errors
 
-## 1) Top 3–5 Problems & Likely Root Causes
-1. **Missing API route handler for GET /api/auth/user**  
-   - The server returns 404 indicating the route is not defined or not registered properly.
-2. **Route registration order or middleware issue**  
-   - The route might be defined but not properly attached or overridden by other middleware.
-3. **Typo or path mismatch in route definition**  
-   - Route path in code might not exactly match `/api/auth/user`.
-4. **Missing or misconfigured API file**  
-   - Possible non-existence or misnamed file for auth user API.
-5. **No authentication middleware calling next()**  
-   - Though less likely, missing middleware may prevent route reaching handler.
+## 1) Top 3–5 Problems with Likely Root Causes
+- **Problem:** POST `/api/integrations/test` returns 400 error with message "Missing WordPress..."
+  - **Cause:** Required WordPress integration config or credentials are not included in the test request payload or environment.
+- **Problem:** Frequent 304 (Not Modified) responses on GET endpoints like `/api/integrations`, `/api/otter/transcripts`, `/api/airtable/contacts`, `/api/meetings` 
+  - **Cause:** Caches might be causing stale data or failures to reload; possibly missing cache-control headers or update logic.
+- **Problem:** Inconsistent API responses time; some endpoints respond almost instantly, while others (e.g., GET `/api/meetings`) take 467ms+
+  - **Cause:** Backend query or filtering logic (calendar window filter) might be inefficient or blocking.
+- **Problem:** No explicit error logged except for the integration test failure—lack of detailed error diagnostics at failure points.
+- **Problem:** Potential missing or incomplete environment variables/secrets related to WordPress integration (API keys, URLs).
 
 ## 2) Exact, Minimal Fixes
+- **File:** `api/integrations/test.js` (or similar backend route handler)
+  - Add input validation to ensure WordPress parameters exist before processing:
+    ```js
+    if (!req.body.wordpressUrl || !req.body.wordpressApiKey) {
+      return res.status(400).json({ ok: false, error: "Missing WordPress integration parameters" });
+    }
+    ```
+- **File:** `config/env.js` or `.env`
+  - Add environment variables:
+    ```
+    WORDPRESS_URL=https://yourwordpresssite.com
+    WORDPRESS_API_KEY=your_api_key_here
+    ```
+- **File:** Possibly `cacheMiddleware.js` (if exists)
+  - Ensure cache-control headers are set properly to reduce excessive 304 responses.
+- **File:** `calendarService.js` (or wherever the calendar filtering based on window happens)
+  - Optimize filtering logic (e.g., batch or async filtering) to reduce latency.
 
-- **Check if GET `/api/auth/user` handler exists**  
-  - Likely file: `pages/api/auth/user.js` or `pages/api/auth/user.ts`
-  - Minimal example:
+## 3) Missing Env Vars / Secrets / Config
+- `WORDPRESS_URL` — the WordPress site URL for integration
+- `WORDPRESS_API_KEY` or `WORDPRESS_ACCESS_TOKEN` — API credentials for WordPress API calls
+- Possibly `WORDPRESS_CLIENT_SECRET` if using OAuth
+- Cache expiration policies/config missing or undocumented
 
-```js
-// pages/api/auth/user.js
-export default function handler(req, res) {
-  if (req.method !== 'GET') {
-    return res.status(405).json({ ok: false, error: 'Method not allowed' });
-  }
-  // Replace below with actual user logic
-  res.status(200).json({ ok: true, user: { id: 1, name: 'Demo User' } });
-}
-```
-
-- **Ensure route is properly exported and file is named correctly**  
-- **Restart server after adding the file**
-
-## 3) Missing env vars/secrets/config
-
-- None directly indicated from this log, but if user info depends on secrets (e.g., `JWT_SECRET`, `DATABASE_URL`), verify these exist.
-
-## 4) Plain-English Prompts for Replit AI
-
-1. "How do I create an API route in Next.js that handles GET requests at `/api/auth/user`?"
-2. "Why would my Express or Next.js API return a 404 'API route not found' for a defined route?"
-3. "Show me example code to implement a GET API endpoint that returns mock user data."
-4. "How do I debug route registration issues in a Node.js/Next.js API project?"
-5. "What environment variables are typically needed for user authentication API routes?"
-6. "How do I handle HTTP method validation inside a Next.js API route?"
+## 4) Suggested Replit AI Prompts
+1. "How do I validate required parameters in an Express POST route and return 400 errors when missing?"
+2. "Best practices for managing environment variables for third-party API integrations in Node.js."
+3. "How to set cache-control headers in an Express.js application to avoid excessive 304 responses?"
+4. "Suggestions to optimize filtering large calendar dataset in Node.js for faster API responses."
+5. "Sample Express.js error handler middleware for integration tests returning JSON errors."
+6. "How to securely store and use API keys for WordPress integration in a Node.js project?"
 
 ## 5) Rollback Plan
-
-If the new route was recently added and causes issues, remove or rename the new `user.js` API file and restart the server to revert to the last working state without the missing route error.
+If the integration test failures persist after applying fixes, revert to the last known stable deployment using version control (e.g., git checkout) and disable WordPress integration testing temporarily to restore overall API stability.
 ```
