@@ -1,56 +1,58 @@
 # Automated Log Summary
 
-**Reason:** error • **Lines:** 5 • **Time (UTC):** 2025-10-08T17:47:14.858194Z
+**Reason:** error • **Lines:** 3 • **Time (UTC):** 2025-10-08T17:47:31.506396Z
 
-<!-- fingerprint:1df20537918b -->
+<!-- fingerprint:d62014b11d9f -->
 
 ```markdown
-# Diagnostic Report
+# Surgical Report
 
-## 1) Top Problems & Likely Root Causes
-- **No explicit errors or warnings beyond startup logs**: Implies server attempts to start but no confirmation of success or failure afterward.
-- **No confirmation of server listening on PORT=5000**: Server may be failing silently after boot.
-- **Potential missing environment variables**: Only NODE_ENV and PORT shown; app may require more secrets/config.
-- **No database or external service connection logs**: Could indicate missing configs or incomplete startup.
-- **"tsx server/index.ts" runs, but no build success message**: Possible compilation or runtime issues not surfaced in logs.
+## 1) Top 3–5 Problems & Likely Root Causes
+- **No critical error shown despite [ERROR ×1] label**: The logs show an [ERROR ×1] but no error message is actually printed; likely cause is improper error handling or missing error log detail.
+- **Possible misconfiguration or missing error logs**: The server starts normally and registers routes without errors, suggesting missing logging detail or suppressed errors.
+- **Unverified environment/config variables**: No confirmation that required env vars (e.g., ports, API keys) are loaded, possibly causing silent failures later.
+- **Routes registered but no access logs or traffic info**: Might mean requests are not reaching server or middleware not logging requests properly.
+- **Unknown origin/location of error**: Logs do not specify files or components causing the error.
 
 ## 2) Exact, Minimal Fixes
-- Add explicit server listen confirmation log in `server/index.ts` after `app.listen()`  
-  ```ts
-  // server/index.ts, near line where app.listen is called
-  app.listen(PORT, () => {
-    console.log(`Server is running on port ${PORT}`);
+- **Improve error logging middleware** (likely in `app.js` or main Express setup file):
+  ```js
+  app.use((err, req, res, next) => {
+    console.error('Express error:', err);
+    res.status(500).send('Internal Server Error');
   });
   ```
-- Add error handling for server startup:
-  ```ts
-  app.listen(PORT)
-    .on('error', (err) => {
-      console.error('Server failed to start:', err);
-    });
+- **Add detailed startup error logging** near port listen call (commonly in `server.js` or `index.js`):
+  ```js
+  app.listen(port, () => {
+    console.log(`express serving on port ${port}`);
+  }).on('error', err => {
+    console.error('Failed to start server:', err);
+  });
   ```
-- Verify environment variable loading mechanism (e.g., dotenv):  
-  If not present, add at top of `server/index.ts`:
-  ```ts
-  import dotenv from 'dotenv';
-  dotenv.config();
+- Confirm all needed environment variables are loaded at startup (likely in `.env` or config file), example for port:
+  ```js
+  const port = process.env.PORT || 5000;
   ```
-- Confirm `PORT` and other required env vars in `.env` file.
+- Add basic request logging middleware (`morgan` or custom), e.g. in `app.js`:
+  ```js
+  const morgan = require('morgan');
+  app.use(morgan('tiny'));
+  ```
 
-## 3) Missing Env Vars/Secrets/Config
-- No database URL or credentials (e.g., `DATABASE_URL`, `DB_USER`, `DB_PASS`)
-- No JWT or session secret (e.g., `JWT_SECRET`)
-- Potential missing API keys or ports for external services
-- Verify `.env` file existence and completeness
+## 3) Missing Env Vars / Secrets / Config
+- `PORT` environment variable for runtime port override.
+- API keys or tokens for integrations endpoints (e.g., Airtable, Firebase) missing or not confirmed in logs.
+- Firebase bridge secret/config (for POST `/api/auth/firebase-bridge`).
 
-## 4) Replit AI Prompts
-1. "How do I add a log statement confirming Express server is listening after app.listen()?"
-2. "Show me minimal error handling code for Express server startup failures."
-3. "How to load environment variables from a .env file using dotenv in a TypeScript Express project?"
-4. "What essential environment variables are typically required for an Express REST API backend?"
-5. "Explain why an Express server might start but not respond if no errors are shown."
-6. "How to configure `tsx` to show runtime errors immediately during development?"
+## 4) Plain-English AI Prompts for Replit
+1. "How to add error-handling middleware to an Express app that logs errors and responds with HTTP 500?"
+2. "How do I log startup errors when calling `app.listen` in Express?"
+3. "What environment variables are commonly required for an Express server integrating Airtable and Firebase?"
+4. "How to add request logging to Express server using `morgan`?"
+5. "How can I ensure all API keys are loaded and validated before starting an Express server?"
+6. "How to debug silent errors when Express server shows `[ERROR]` but no error details?"
 
 ## 5) Rollback Plan
-If the recent changes cause issues, revert to the last stable commit that includes working server startup logs and environment variable loading without error handling code. This will restore prior behavior and enable incremental diagnostics.
+If errors persist after fixes, revert to last known good commit and verify server starts without `[ERROR]` in logs and routes respond correctly on port 5000.
 ```
