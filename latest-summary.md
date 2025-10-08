@@ -1,47 +1,62 @@
 # Automated Log Summary
 
-**Reason:** error • **Lines:** 1 • **Time (UTC):** 2025-10-08T16:40:59.154917Z
+**Reason:** error • **Lines:** 3 • **Time (UTC):** 2025-10-08T16:41:16.187502Z
 
-<!-- fingerprint:07d5540c1802 -->
+<!-- fingerprint:616a378a8603 -->
 
 ```markdown
-### 1) Top Problems & Likely Root Causes
-- No actual error messages present in the logs; only a normal server start message.
-- The log shows the server booting but no confirmation of a successful listening event.
-- Missing detailed error logs if the server failed to start; likely logging configuration issue.
-- Possible missing or misconfigured environment variables since only NODE_ENV and PORT are shown.
-- The server might not be binding to the correct interface or port, but no indication here.
+# Surgical Report
 
-### 2) Exact, Minimal Fixes
-- Add explicit error and success logging in the server start code:
+## 1) Top 3–5 Problems & Likely Root Causes
+- **No explicit error messages** in the logs despite an `[ERROR ×1]` tag without details; likely an incomplete or suppressed error log.
+- **App successfully registered routes and started** — suggests basic server functionality is fine.
+- Potential **missing or incomplete log details** may be masking underlying issues.
+- **No indication of crashes or failed endpoints** in the logs; possible silent failures or misconfiguration outside the express app itself.
+- Unclear if **environment variables or secrets needed for API integrations** (e.g., Otter, Airtable, Calendar) are set or missing.
+
+## 2) Exact, Minimal Fixes
+- **Add detailed error logging** to capture and print full error objects:
+
   ```js
-  // likely in server.js or app.js (unknown file)
-  app.listen(process.env.PORT || 3000, (err) => {
-    if (err) {
-      console.error('Server failed to start', err);
-      process.exit(1);
-    } else {
-      console.log(`Server running on port ${process.env.PORT || 3000}`);
+  // In the main Express app file (e.g., app.js or index.js)
+  app.use((err, req, res, next) => {
+    console.error('Express error:', err.stack || err);
+    res.status(500).send('Internal Server Error');
+  });
+  ```
+- **Verify and log environment variables on startup**:
+
+  ```js
+  // early in app.js
+  ['OTTER_API_KEY', 'AIRTABLE_API_KEY', 'CALENDAR_API_KEY'].forEach((envvar) => {
+    if (!process.env[envvar]) {
+      console.warn(`Warning: Missing env var ${envvar}`);
     }
   });
   ```
-- Enhance logging configuration to capture startup errors fully.
 
-### 3) Missing Env Vars / Secrets / Config
-- Potentially missing:
-  - DATABASE_URL or equivalent DB connection string
-  - APP_SECRET or JWT_SECRET for authentication
-  - LOG_LEVEL or similar for controlling verbosity
-- Verify all required variables are set beyond NODE_ENV and PORT.
+- Confirm **port usage** (5000) is free or configurable via:
 
-### 4) AI Prompts for Replit
-- "Why does my Express server log only a boot message but not confirm it's listening?"
-- "How to add error handling when starting an Express app listening on a port?"
-- "What essential environment variables should be set for a Node.js backend?"
-- "How to improve logging in Node.js for startup and runtime errors?"
-- "How to verify and debug a Node.js app that starts but doesn't respond on a port?"
-- "What are minimal startup logs I should have in Express server code?"
+  ```js
+  const port = process.env.PORT || 5000;
+  app.listen(port, () => console.log(`Serving on port ${port}`));
+  ```
 
-### 5) Rollback Plan
-If recent changes introduced logging or environment config, revert to last known good commit to restore visible errors and confirm server listens successfully before reapplying changes incrementally.
+## 3) Missing Env Vars / Secrets / Config
+- `OTTER_API_KEY` (for `/api/otter/transcripts`)
+- `AIRTABLE_API_KEY` (for `/api/airtable/contacts`)
+- `CALENDAR_API_KEY` (for `/api/calendar/events`)
+- Possibly `PORT` if 5000 conflicts on deployment
+- Any **database connection URIs or tokens** not shown in logs but needed for those routes
+
+## 4) Plain-English Prompts for Replit AI
+1. "Help me improve error logging in my Express app to catch and show full stack traces."
+2. "How can I verify and warn about missing environment variables during Express app startup?"
+3. "Generate minimal Express middleware for catching and logging errors with 500 responses."
+4. "Suggest a clean way to configure my Node app to use default port 5000 or override by environment variable."
+5. "Explain best practices for managing API keys and secrets in a Node/Express REST API."
+6. "How can I debug silent failures or missing API responses in my Express backend?"
+
+## 5) Rollback Plan
+Revert to the previously deployed stable version of the code where detailed error handling was working, or deploy a version with enhanced logging added to quickly identify any suppression or silent failures before proceeding with new features or config changes.
 ```
