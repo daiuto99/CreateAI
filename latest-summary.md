@@ -1,46 +1,50 @@
 # Automated Log Summary
 
-**Reason:** error • **Lines:** 6 • **Time (UTC):** 2025-10-08T18:25:18.874503Z
+**Reason:** error • **Lines:** 5 • **Time (UTC):** 2025-10-08T18:35:53.404531Z
 
-<!-- fingerprint:0533248efd7d -->
+<!-- fingerprint:53d1d8769f77 -->
 
 ```markdown
-# Incident Report: /api/integrations/test 400 Error
+# Surgical Report
 
 ## 1) Top Problems & Likely Root Causes
-- **400 Bad Request on POST /api/integrations/test**: Error message indicates "Missing WordPress..." suggesting required WordPress credentials or data are not provided.
-- **Empty GET /api/integrations responses**: Multiple GET requests return empty arrays, implying no saved integrations found or data retrieval failure.
-- **Success on POST /api/integrations but failure on /test**: Integration save works, but test endpoint fails, indicating validation or missing config during test.
-- **Potential missing/incorrect environment variables or config for WordPress provider** needed for the /test endpoint.
+- **No explicit error messages or failures detected:** Logs only show server booting info without errors.
+- **Potential missing clarity on environment setup:** Only `NODE_ENV` and `PORT` are mentioned; other required env vars might be absent.
+- **Uncertainty if server is reachable or serving requests:** No logs on incoming requests or errors during runtime.
+- **Possible missing script configuration:** Running `tsx server/index.ts` is shown, but no confirmation of build steps or dependencies.
+- **Lack of logging detail:** Minimal logs; insufficient for debugging.
 
 ## 2) Exact Minimal Fixes
-- **File: `api/integrations/test.js`** (or relevant route handler file)
-  - Add validation to check presence of WordPress credentials (e.g., URL, API key).
-  - Example minimal fix:
-    ```js
-    if (!req.body.wordpressUrl || !req.body.wordpressApiKey) {
-      return res.status(400).json({ ok: false, error: "Missing WordPress credentials" });
-    }
-    ```
-- **File: integration saving logic** (e.g., `api/integrations/index.js`)
-  - Ensure saved integration data includes all necessary WordPress config to be used in test.
-- **Unknown file**: Code that reads env vars for WordPress credentials; make sure it's reading process.env.WORDPRESS_URL etc.
+- **Add detailed logging to `server/index.ts`** to capture server start confirmation and request handling (line 10–20, approximate).
+```typescript
+console.log(`Express server started on port ${process.env.PORT}`);
+app.use((req, res, next) => {
+  console.log(`[${new Date().toISOString()}] ${req.method} ${req.url}`);
+  next();
+});
+```
+- **Check that `PORT` is properly read from environment in `server/index.ts`** (around server `.listen` call):
+```typescript
+const port = process.env.PORT || 3000;
+app.listen(port, () => console.log(`Server running on port ${port}`));
+```
 
-## 3) Missing env vars / secrets / config
-- `WORDPRESS_URL` (WordPress site URL)
-- `WORDPRESS_API_KEY` or equivalent API token for WordPress integration
-- Any config related to authentication/authorization for WordPress API
+## 3) Missing Env Vars / Secrets / Config
+- Possibly missing:
+  - `PORT` (though shown, confirm it's set properly)
+  - Any database connection string (`DB_CONN` etc.)
+  - API keys or tokens if used
+  - Logging level or debug flags (e.g., `DEBUG=true`)
+- Validate `.env` or environment injection consistency.
 
-## 4) Suggested AI Prompts for Replit
-- "Explain why a 400 error is returned when missing required POST data in an Express API."
-- "Show how to validate presence of WordPress credentials in a Node.js Express route."
-- "Explain environment variable usage to secure WordPress API credentials in Node apps."
-- "How to debug empty GET API responses returning [] when data is expected?"
-- "Suggest code to test WordPress integration API programmatically in Node.js."
-- "How to roll back last integration deployment safely in Express-based app?"
+## 4) Plain-English AI Prompts for Replit
+1. "How do I add detailed logging to an Express server in `server/index.ts` to debug startup and requests?"
+2. "Why might my Node Express app only log server boot messages but no requests?"
+3. "How to ensure environment variables like `PORT` and `NODE_ENV` are correctly loaded and used in a TypeScript Express server?"
+4. "What minimal environment variables are required to run a simple Express app on Replit?"
+5. "How can I improve error handling and logging for Express apps started with `tsx`?"
+6. "What are common reasons an Express server doesn't respond despite showing startup logs?"
 
 ## 5) Rollback Plan
-Revert the last deployment commit that introduced the /api/integrations/test endpoint or related changes, restoring the service to the previously working state where saving integrations did not cause test failures. This ensures the API returns success while root cause is investigated.
-
----
+Revert to the last known working commit that includes explicit startup and request logging plus verified environment configuration to restore observability and functionality quickly.
 ```
